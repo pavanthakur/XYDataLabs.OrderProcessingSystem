@@ -43,6 +43,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             return status.Trim().ToUpperInvariant() switch
             {
                 "COMPLETED" or "SUCCESS" or "PAID" => "completed",
+                "AUTHORIZED" => "authorized",
+                "CREATED" => "created",
                 "CHARGE_PENDING" or "PENDING" or "IN_PROGRESS" => "charge_pending",
                 "FAILED" or "DECLINED" or "ERROR" => "failed",
                 "CANCELLED" or "CANCELED" => "cancelled",
@@ -58,7 +60,9 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             => string.Equals(status, GetEnumDescription(AppMasterConstant.PaymentStatus.Success), StringComparison.Ordinal);
 
         public static bool IsPendingStatus(string? status)
-            => string.Equals(status, GetEnumDescription(AppMasterConstant.PaymentStatus.Pending), StringComparison.Ordinal);
+            => string.Equals(status, GetEnumDescription(AppMasterConstant.PaymentStatus.Pending), StringComparison.Ordinal)
+                || string.Equals(status, "authorized", StringComparison.Ordinal)
+                || string.Equals(status, "created", StringComparison.Ordinal);
 
         public static bool IsFailedStatus(string? status)
             => string.Equals(status, GetEnumDescription(AppMasterConstant.PaymentStatus.Failed), StringComparison.Ordinal);
@@ -84,6 +88,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
 
         public static string ToStatusMessage(string? status, bool remoteStatusConfirmed, string providerDisplayName)
         {
+            if (string.Equals(status, "authorized", StringComparison.Ordinal))
+                return "Payment is authorized but not captured. Final payment confirmation is pending.";
             if (IsSuccessStatus(status))
                 return remoteStatusConfirmed
                     ? $"Payment completed successfully and the final status was confirmed with {providerDisplayName}."

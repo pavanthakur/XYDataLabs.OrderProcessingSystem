@@ -122,6 +122,7 @@ namespace XYDataLabs.OpenPayAdapter
             // it does not need a typed HttpClient and must be registered as a plain scoped service
             // so keyed DI resolution can construct it via normal constructor injection.
             services.AddScoped<IOpenPayAdapterService, OpenPayAdapterService>();
+            services.AddHttpClient("openpay-metadata", client=>client.Timeout=TimeSpan.FromSeconds(30));
             services.AddKeyedScoped<IPaymentProviderGateway, OpenPayPaymentGateway>(PaymentProviderTypes.OpenPay);
             services.AddKeyedScoped<IPaymentProviderAdapter, OpenPayAdapterService>(PaymentProviderTypes.OpenPay);
 

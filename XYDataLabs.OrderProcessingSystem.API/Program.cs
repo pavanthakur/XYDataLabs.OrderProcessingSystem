@@ -163,6 +163,8 @@ var identityProviderSection = builder.Configuration.GetSection("IdentityProvider
 var identityEnabled = identityProviderSection.GetValue("Enabled", false);
 if (identityEnabled)
 {
+    builder.Services.AddAuthorization(options => options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser().Build());
     builder.Services
         .AddAuthentication(options =>
         {
@@ -272,7 +274,8 @@ builder.Services.AddScoped<IPaymentProviderGateway>(sp =>
 {
     var resolver = sp.GetRequiredService<ITenantPaymentProviderResolver>();
     var providerType = resolver.ResolveCurrentTenantProvider().ProviderType;
-    return sp.GetRequiredKeyedService<IPaymentProviderGateway>(providerType);
+    return new ObservedPaymentProviderGateway(sp.GetRequiredKeyedService<IPaymentProviderGateway>(providerType),
+        sp.GetRequiredService<ILogger<ObservedPaymentProviderGateway>>());
 });
 builder.Services.AddPaymentsModule();
 builder.Services.AddScoped<IModuleDatabaseMigrator, OrdersModuleMigrator>();
@@ -486,6 +489,7 @@ else
     });
 }
 
+builder.Services.AddConfiguredEntraIdentity(builder.Configuration);
 var app = builder.Build();
 var disableStartupDdl = app.Configuration.GetValue("Phase10:DisableStartupDdl", true);
 var bootstrapSeedOnly = args.Any(argument =>
@@ -681,6 +685,7 @@ if (identityEnabled)
 
 app.UseAuthorization();
 
+app.UseMiddleware<TenantClaimConsistencyMiddleware>();
 app.UseMiddleware<TenantMiddleware>();
 
 // Rate limiter after TenantMiddleware — tenant is validated first, so the partition key
@@ -706,11 +711,11 @@ var readinessHealthCheckOptions = new HealthCheckOptions
 };
 
 // Liveness — no dependency checks; always 200 if the process is running (App Service liveness probe)
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
 // Readiness — SQL Server + Redis (when configured); degrade/unhealthy both fail HTTP readiness.
-app.MapHealthChecks("/health/ready", readinessHealthCheckOptions);
+app.MapHealthChecks("/health/ready", readinessHealthCheckOptions).AllowAnonymous();
 // Backward-compat alias — used by manage-appservice-slots.ps1 warmup URL
-app.MapHealthChecks("/health", readinessHealthCheckOptions);
+app.MapHealthChecks("/health", readinessHealthCheckOptions).AllowAnonymous();
 
 if (isAzure)
 {

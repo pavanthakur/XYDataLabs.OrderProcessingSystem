@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
-import {
-  createOrderProcessingApiClient,
-  type RuntimeConfiguration
-} from "@xydatalabs/orderprocessing-api-sdk";
+import { useEffect, useRef, useState } from "react";
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { createOrderProcessingApiClient, type RuntimeConfiguration } from "@xydatalabs/orderprocessing-api-sdk";
 import { createTenantSession } from "@xydatalabs/orderprocessing-tenant-session";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { CustomerDirectoryPage } from "./pages/CustomerDirectoryPage";
@@ -12,335 +9,157 @@ import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { PaymentCallbackPage } from "./pages/PaymentCallbackPage";
 import { PaymentPage } from "./pages/PaymentPage";
 import { setAccessToken } from "./payment-flow";
+import { clearApplicationSession, identitySession, requestedEntryTenant } from "./identity-session";
+import { getPublicRuntimeConfig } from "./runtime-config";
 
-const tenantSession = createTenantSession();
-const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "").trim();
-const configuredKeycloakAuthority = (import.meta.env.VITE_KEYCLOAK_AUTHORITY ?? "").trim().replace(/\/$/, "");
-const configuredKeycloakRealm = (import.meta.env.VITE_KEYCLOAK_REALM ?? "").trim();
-const configuredKeycloakClientId = (import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? "").trim();
-const oidcStoragePrefix = "orderprocessing.oidc";
-const apiClient = createOrderProcessingApiClient({
-  baseUrl: configuredApiBaseUrl.length > 0 ? configuredApiBaseUrl.replace(/\/$/, "") : "",
-  getTenantCode: () => tenantSession.getActiveTenantCode(),
-  getTenantHeaderName: () => tenantSession.getTenantHeaderName(),
-  getAccessToken: () => localStorage.getItem("orderprocessing.accessToken")
-});
+export default function App() { return <BrowserRouter><ApplicationShell /></BrowserRouter>; }
 
-type LoadState = "idle" | "loading" | "ready" | "error";
-type BootstrapTokenResult = {
-  accessToken: string | null;
-  authRedirectInitiated: boolean;
-};
-
-export default function App() {
-  const [runtimeConfiguration, setRuntimeConfiguration] = useState<RuntimeConfiguration | null>(null);
+function ApplicationShell() {
+  const navigate = useNavigate();
+  const [tenantSession] = useState(() => createTenantSession());
+  const [apiClient] = useState(() => createOrderProcessingApiClient({
+    baseUrl: getPublicRuntimeConfig().apiBaseUrl,
+    getTenantCode: () => tenantSession.getActiveTenantCode(),
+    getTenantHeaderName: () => tenantSession.getTenantHeaderName(),
+    getAccessToken: () => localStorage.getItem("orderprocessing.accessToken")
+  }));
+  const [configuration, setConfiguration] = useState<RuntimeConfiguration | null>(null);
   const [activeTenantCode, setActiveTenantCode] = useState("");
-  const [bootstrapState, setBootstrapState] = useState<LoadState>("idle");
+  const [state, setState] = useState<"loading" | "ready" | "error" | "signed-out">(location.pathname === "/signed-out" ? "signed-out" : "loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const bootstrapStartedRef = useRef(false);
-  const requestedBootstrapTenantCode = useMemo(
-    () => resolveRequestedBootstrapTenantCode(window.location.pathname, window.location.search),
-    []
-  );
+  const started = useRef(false);
 
   useEffect(() => {
-    if (bootstrapStartedRef.current) {
-      return;
-    }
-
-    bootstrapStartedRef.current = true;
-    let isCancelled = false;
-
-    async function bootstrapShell() {
-      setBootstrapState("loading");
-      setErrorMessage(null);
-
+    if (started.current || location.pathname === "/signed-out") return;
+    started.current = true;
+    let cancelled = false;
+    async function bootstrap() {
       try {
-        const bootstrapTokenResult = await bootstrapLocalAccessToken();
-
-        if (isCancelled) {
-          return;
-        }
-
-        if (bootstrapTokenResult.authRedirectInitiated) {
-          return;
-        }
-
-        setAccessToken(bootstrapTokenResult.accessToken);
-        if (bootstrapTokenResult.accessToken) {
-          localStorage.setItem("orderprocessing.accessToken", bootstrapTokenResult.accessToken);
-        }
-        const bootstrap = await apiClient.getRuntimeConfiguration(requestedBootstrapTenantCode ?? undefined);
-        const sessionState = tenantSession.initialize(bootstrap, requestedBootstrapTenantCode);
-        setRuntimeConfiguration(bootstrap);
-        setActiveTenantCode(sessionState.activeTenantCode);
-        setBootstrapState("ready");
+        const requested = requestedEntryTenant();
+        const token = await identitySession().bootstrap();
+        if (cancelled || token.authRedirectInitiated) return;
+        setAccessToken(token.accessToken);
+        const runtime = await apiClient.getRuntimeConfiguration();
+        if (getPublicRuntimeConfig().mode !== "Disabled" && !runtime.session)
+          throw new Error("The API did not confirm an authenticated session. Please sign in again.");
+        const saved = localStorage.getItem("orderprocessing.activeTenantCode");
+        const authorizedSaved = runtime.session?.canAccessAllTenants
+          && runtime.availableTenants.some(t => t.tenantCode === saved) ? saved : null;
+        const entryTenant = requested ?? authorizedSaved;
+        if (requested && !runtime.availableTenants.some(t => t.tenantCode.toLowerCase() === requested.toLowerCase()))
+          throw new Error("The requested application tenant is not authorized or is not active.");
+        const session = tenantSession.initialize(runtime, entryTenant);
+        if (cancelled) return;
+        setConfiguration(runtime);
+        setActiveTenantCode(session.activeTenantCode);
+        setState("ready");
+        navigate(`${location.pathname}${location.search}`, { replace: true });
       } catch (error) {
-        if (isCancelled) {
-          return;
+        if (!cancelled) {
+          setState("error");
+          setErrorMessage(error instanceof Error ? error.message : "Unable to prepare the tenant session.");
         }
-
-        setBootstrapState("error");
-        setErrorMessage(error instanceof Error ? error.message : "Unable to bootstrap runtime configuration.");
       }
     }
+    void bootstrap();
+    return () => { cancelled = true; };
+  }, [apiClient, navigate, tenantSession]);
 
-    void bootstrapShell();
-
+  useEffect(() => {
+    function invalidate() {
+      apiClient.cancelPendingRequests();
+      setAccessToken(null);
+      setConfiguration(null);
+      setActiveTenantCode("");
+      setState("signed-out");
+      navigate("/signed-out", { replace: true });
+    }
+    function storageChanged(event: StorageEvent) {
+      if (event.key === "orderprocessing.logout" && event.newValue) invalidate();
+    }
+    function expired() {
+      clearApplicationSession();
+      invalidate();
+      setErrorMessage("Your session has expired. Please sign in again.");
+    }
+    window.addEventListener("storage", storageChanged);
+    window.addEventListener("orderprocessing.session-expired", expired);
+    const expiry = Number(localStorage.getItem("orderprocessing.oidc.expiresAt"));
+    const timer = state === "ready" && expiry > 0 ? window.setTimeout(expired, Math.max(0, expiry - Date.now())) : undefined;
     return () => {
-      isCancelled = true;
+      window.removeEventListener("storage", storageChanged);
+      window.removeEventListener("orderprocessing.session-expired", expired);
+      if (timer !== undefined) clearTimeout(timer);
     };
-  }, [requestedBootstrapTenantCode]);
+  }, [apiClient, navigate, state]);
 
-  function handleTenantChange(nextTenantCode: string) {
-    const sessionState = tenantSession.setActiveTenantCode(nextTenantCode);
-    setActiveTenantCode(sessionState.activeTenantCode);
-  }
-
-  return (
-    <BrowserRouter>
-      <main className="app-shell">
-        {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
-
-        <section className="shell-header panel">
-          <div className="shell-copy">
-            <p className="eyebrow">Order Processing Portal</p>
-            <h1>Customers, orders, and card payments</h1>
-            <p className="shell-lede">
-              All actions are scoped to the selected tenant, so agents can move from customer lookup to payment collection without leaving the same browser workspace.
-            </p>
-            <p className="shell-meta">
-              {bootstrapState === "ready"
-                ? `Active tenant: ${activeTenantCode}`
-                : bootstrapState === "loading"
-                  ? "Preparing tenant session..."
-                  : "Tenant session needs attention."}
-            </p>
-          </div>
-
-          <div className="shell-actions shell-actions-compact">
-            <nav className="shell-nav" aria-label="Primary">
-              <NavLink
-                to="/customers"
-                className={({ isActive }) => (isActive ? "nav-link nav-link-active" : "nav-link")}
-              >
-                Customers
-              </NavLink>
-              <NavLink
-                to="/payments/new"
-                className={({ isActive }) => (isActive ? "nav-link nav-link-active" : "nav-link")}
-              >
-                Payments
-              </NavLink>
-            </nav>
-
-            <label className="tenant-picker">
-              <span>Tenant</span>
-              <select
-                value={activeTenantCode}
-                onChange={(event) => handleTenantChange(event.target.value)}
-                disabled={!runtimeConfiguration}
-              >
-                {runtimeConfiguration?.availableTenants.map((tenant) => (
-                  <option key={tenant.tenantCode} value={tenant.tenantCode}>
-                    {tenant.tenantName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <Routes>
-          <Route path="/" element={<Navigate to="/customers" replace />} />
-          <Route
-            path="/payments/new"
-            element={<PaymentPage activeTenantCode={activeTenantCode} apiClient={apiClient} />}
-          />
-          <Route
-            path="/payments/callback"
-            element={
-              <PaymentCallbackPage
-                activeTenantCode={activeTenantCode}
-                apiClient={apiClient}
-                onTenantChange={handleTenantChange}
-              />
-            }
-          />
-          <Route
-            path="/payment/callback"
-            element={
-              <PaymentCallbackPage
-                activeTenantCode={activeTenantCode}
-                apiClient={apiClient}
-                onTenantChange={handleTenantChange}
-              />
-            }
-          />
-          <Route
-            path="/customers"
-            element={
-              <CustomerDirectoryPage
-                activeTenantCode={activeTenantCode}
-                apiClient={apiClient}
-                configuredActiveTenantCode={runtimeConfiguration?.configuredActiveTenantCode ?? "pending"}
-              />
-            }
-          />
-          <Route
-            path="/customers/:customerId"
-            element={<CustomerDetailPage activeTenantCode={activeTenantCode} apiClient={apiClient} />}
-          />
-          <Route
-            path="/customers/:customerId/orders/new"
-            element={<OrderCreatePage activeTenantCode={activeTenantCode} apiClient={apiClient} />}
-          />
-          <Route
-            path="/customers/:customerId/orders/:orderId"
-            element={<OrderDetailPage activeTenantCode={activeTenantCode} apiClient={apiClient} />}
-          />
-          <Route
-            path="/customers/:customerId/orders/:orderId/payment"
-            element={<PaymentPage activeTenantCode={activeTenantCode} apiClient={apiClient} />}
-          />
-        </Routes>
-      </main>
-    </BrowserRouter>
-  );
-}
-
-function resolveRequestedBootstrapTenantCode(pathname: string, search: string): string | null {
-  const callbackSearch = new URLSearchParams(search);
-  if (callbackSearch.has("code")) {
-    const returnUrl = sessionStorage.getItem(`${oidcStoragePrefix}.returnUrl`);
-    if (returnUrl) {
-      const savedUrl = new URL(returnUrl);
-      return resolveRequestedBootstrapTenantCode(savedUrl.pathname, savedUrl.search);
+  async function signOut() {
+    apiClient.cancelPendingRequests();
+    setConfiguration(null);
+    setActiveTenantCode("");
+    setState("signed-out");
+    try { await identitySession().signOut(); }
+    catch {
+      clearApplicationSession();
+      setErrorMessage("Local access cleared. Identity-provider logout could not be confirmed; please retry Sign out before changing accounts.");
+      navigate("/signed-out", { replace: true });
     }
   }
-
-  const trimmedPath = pathname.trim();
-  if (!trimmedPath.startsWith("/payments/") && !trimmedPath.startsWith("/payment/")) {
-    return null;
+  async function signIn() {
+    setErrorMessage(null);
+    try { await identitySession().signIn(); }
+    catch { setErrorMessage("Unable to start sign-in. Check the identity provider and try again."); }
+  }
+  function changeTenant(next: string) {
+    const nextState = tenantSession.setActiveTenantCode(next);
+    if (nextState.activeTenantCode === activeTenantCode) return;
+    apiClient.cancelPendingRequests();
+    setActiveTenantCode(nextState.activeTenantCode);
+    navigate(`/customers?tenantCode=${encodeURIComponent(nextState.activeTenantCode)}`, { replace: true });
   }
 
-  const tenantCode = callbackSearch.get("tenantCode")?.trim();
-  return tenantCode || null;
-}
-
-async function bootstrapLocalAccessToken(): Promise<BootstrapTokenResult> {
-  if (!configuredKeycloakAuthority || !configuredKeycloakRealm || !configuredKeycloakClientId) {
-    return { accessToken: null, authRedirectInitiated: false };
-  }
-
-  const currentToken = localStorage.getItem("orderprocessing.accessToken");
-  const expiresAt = Number(localStorage.getItem(`${oidcStoragePrefix}.expiresAt`) ?? "0");
-  if (currentToken && expiresAt > Date.now() + 30_000) {
-    return { accessToken: currentToken, authRedirectInitiated: false };
-  }
-
-  const currentUrl = new URL(window.location.href);
-  const authorizationCode = currentUrl.searchParams.get("code");
-  const returnedState = currentUrl.searchParams.get("state");
-  if (authorizationCode) {
-    const expectedState = sessionStorage.getItem(`${oidcStoragePrefix}.state`);
-    const verifier = sessionStorage.getItem(`${oidcStoragePrefix}.verifier`);
-    const redirectUri = sessionStorage.getItem(`${oidcStoragePrefix}.redirectUri`);
-    if (!expectedState || expectedState !== returnedState || !verifier || !redirectUri) {
-      throw new Error("The local OIDC callback state is invalid.");
-    }
-
-    const token = await exchangeAuthorizationCode(authorizationCode, verifier, redirectUri);
-    sessionStorage.removeItem(`${oidcStoragePrefix}.state`);
-    sessionStorage.removeItem(`${oidcStoragePrefix}.verifier`);
-    sessionStorage.removeItem(`${oidcStoragePrefix}.redirectUri`);
-    const returnUrl = sessionStorage.getItem(`${oidcStoragePrefix}.returnUrl`) ?? `${window.location.origin}/`;
-    sessionStorage.removeItem(`${oidcStoragePrefix}.returnUrl`);
-    window.history.replaceState({}, document.title, returnUrl);
-    return { accessToken: token, authRedirectInitiated: false };
-  }
-
-  const verifier = createRandomUrlSafeValue(64);
-  const state = createRandomUrlSafeValue(32);
-  const challenge = await createCodeChallenge(verifier);
-  const redirectUri = `${window.location.origin}${window.location.pathname}`;
-  sessionStorage.setItem(`${oidcStoragePrefix}.state`, state);
-  sessionStorage.setItem(`${oidcStoragePrefix}.verifier`, verifier);
-  sessionStorage.setItem(`${oidcStoragePrefix}.redirectUri`, redirectUri);
-  sessionStorage.setItem(`${oidcStoragePrefix}.returnUrl`, window.location.href);
-
-  const authorizationUrl = new URL(
-    `${configuredKeycloakAuthority}/realms/${configuredKeycloakRealm}/protocol/openid-connect/auth`
-  );
-  authorizationUrl.search = new URLSearchParams({
-    client_id: configuredKeycloakClientId,
-    response_type: "code",
-    scope: "openid profile email",
-    redirect_uri: redirectUri,
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    state
-  }).toString();
-  window.location.assign(authorizationUrl);
-  return { accessToken: null, authRedirectInitiated: true };
-}
-
-async function exchangeAuthorizationCode(
-  authorizationCode: string,
-  verifier: string,
-  redirectUri: string
-): Promise<string> {
-  const tokenUrl = `${configuredKeycloakAuthority}/realms/${configuredKeycloakRealm}/protocol/openid-connect/token`;
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    client_id: configuredKeycloakClientId,
-    code: authorizationCode,
-    code_verifier: verifier,
-    redirect_uri: redirectUri
-  });
-
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: body.toString()
-  });
-
-  if (!response.ok) {
-    throw new Error(`Local OIDC token exchange failed with HTTP ${response.status}.`);
-  }
-
-  const payload = await response.json() as { access_token?: string; expires_in?: number };
-  if (!payload.access_token) {
-    throw new Error("Local OIDC token exchange returned no access token.");
-  }
-
-  const expiresInSeconds = Math.max(payload.expires_in ?? 300, 30);
-  localStorage.setItem(
-    `${oidcStoragePrefix}.expiresAt`,
-    String(Date.now() + expiresInSeconds * 1000)
-  );
-  return payload.access_token;
-}
-
-function createRandomUrlSafeValue(byteLength: number): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
-  return toBase64Url(bytes);
-}
-
-async function createCodeChallenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  return toBase64Url(new Uint8Array(digest));
-}
-
-function toBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return <main className="app-shell">
+    {errorMessage ? <p className="error-banner" role="alert">{errorMessage}</p> : null}
+    <section className="shell-header panel">
+      <div className="shell-copy">
+        <p className="eyebrow">Order Processing Portal</p>
+        <h1>Customers, orders, and card payments</h1>
+        <p className="shell-lede">All actions are scoped to the selected tenant, so agents can move from customer lookup to payment collection without leaving the same browser workspace.</p>
+        <p className="shell-meta">{state === "ready" ? `Active tenant: ${activeTenantCode}` : state === "loading" ? "Preparing tenant session..." : "Tenant session needs attention."}</p>
+      </div>
+      <div className="shell-actions shell-actions-compact">
+        {configuration?.session ? <div className="account-summary">
+          <p>Signed in as <strong>{configuration.session.username}</strong></p>
+          <p>{configuration.session.canAccessAllTenants ? "All active tenants" : `Access: ${configuration.session.tenantCode}`}</p>
+        </div> : null}
+        {state === "ready" ? <>
+          <nav className="shell-nav" aria-label="Primary">
+            <NavLink to="/customers" className={({ isActive }) => isActive ? "nav-link nav-link-active" : "nav-link"}>Customers</NavLink>
+            <NavLink to="/payments/new" className={({ isActive }) => isActive ? "nav-link nav-link-active" : "nav-link"}>Payments</NavLink>
+          </nav>
+          <label className="tenant-picker"><span>Tenant</span><select value={activeTenantCode}
+            onChange={event => changeTenant(event.target.value)}
+            disabled={!configuration || configuration.availableTenants.length < 2 || configuration.tenantSelectorEnabled === false}>
+            {configuration?.availableTenants.map(tenant => <option key={tenant.tenantCode} value={tenant.tenantCode}>{tenant.tenantName}</option>)}
+          </select></label>
+        </> : null}
+        {getPublicRuntimeConfig().mode !== "Disabled" ? <button className="action-button" onClick={() => void signOut()}>Sign out</button> : null}
+      </div>
+    </section>
+    {state === "signed-out" || state === "error" ? <section className="panel"><h2>{state === "signed-out" ? "Signed out of the application" : "Sign-in needs attention"}</h2>
+      <button className="action-button action-button-primary" onClick={() => void signIn()}>Sign in</button>
+    </section> : null}
+    {state === "ready" ? <Routes key={activeTenantCode}>
+      <Route path="/" element={<Navigate to="/customers" replace />} />
+      <Route path="/auth/callback" element={<p>Restoring the signed-in page...</p>} />
+      <Route path="/payments/new" element={<PaymentPage activeTenantCode={activeTenantCode} apiClient={apiClient} />} />
+      <Route path="/payments/callback" element={<PaymentCallbackPage activeTenantCode={activeTenantCode} apiClient={apiClient} onTenantChange={changeTenant} />} />
+      <Route path="/payment/callback" element={<PaymentCallbackPage activeTenantCode={activeTenantCode} apiClient={apiClient} onTenantChange={changeTenant} />} />
+      <Route path="/customers" element={<CustomerDirectoryPage activeTenantCode={activeTenantCode} apiClient={apiClient} configuredActiveTenantCode={configuration?.configuredActiveTenantCode ?? "pending"} />} />
+      <Route path="/customers/:customerId" element={<CustomerDetailPage activeTenantCode={activeTenantCode} apiClient={apiClient} />} />
+      <Route path="/customers/:customerId/orders/new" element={<OrderCreatePage activeTenantCode={activeTenantCode} apiClient={apiClient} />} />
+      <Route path="/customers/:customerId/orders/:orderId" element={<OrderDetailPage activeTenantCode={activeTenantCode} apiClient={apiClient} />} />
+      <Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode={activeTenantCode} apiClient={apiClient} />} />
+    </Routes> : null}
+  </main>;
 }

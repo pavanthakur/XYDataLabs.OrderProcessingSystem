@@ -642,10 +642,10 @@ docker ps
 docker logs container-name --follow
 
 # Remove container
-docker rm -f container-name
+# Avoid force-removing running containers; verify Compose ownership first.
 
 # Clean up unused images
-docker image prune -a
+# Use the confirmation-gated Phase 10 image cleanup only for project-labelled images.
 ```
 
 ---
@@ -902,8 +902,8 @@ Reusable agent prompts in `.github/prompts/`. Run in VS Code Chat (`Ctrl+Shift+I
 - **Repository:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem
 - **Actions:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 - **Azure Portal:** https://portal.azure.com
-- **API (dev):** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- **UI (dev):** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+- **API/Gateway (dev):** https://dev.orderprocessing-api.xydatalabs.com
+- **UI (dev):** https://dev.orderprocessing.xydatalabs.com
 
 ---
 
@@ -1083,8 +1083,8 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 - **Repository:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem
 - **Actions:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 - **Azure Portal:** https://portal.azure.com
-- **API (dev):** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- **UI (dev):** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+- **API/Gateway (dev):** https://dev.orderprocessing-api.xydatalabs.com
+- **UI (dev):** https://dev.orderprocessing.xydatalabs.com
 
 ---
 
@@ -1099,3 +1099,21 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 ---
 
 **Remember:** Prevention is cheaper than debugging. Always validate before committing critical changes.
+
+## Phase 10 Docker storage and acceptance
+
+```powershell
+# Daily: preserve application SQL and explicitly run deterministic payment regressions.
+pwsh -NoProfile -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -PaymentSuite deterministic
+
+# Fresh acceptance: prompts before deleting only this project's SQL/Azurite volumes.
+pwsh -NoProfile -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -ResetData -ColdBuild -PaymentSuite both
+
+# Read-only space, SQL allocation, BuildKit GC, and log rotation report.
+pwsh -NoProfile -File scripts/maintain-phase10-docker-storage.ps1 -Action Report
+
+# Explicitly confirmed cleanup targeting only desktop-linux cache.
+pwsh -NoProfile -File scripts/maintain-phase10-docker-storage.ps1 -Action PruneBuildCache
+```
+
+Never use daemon-wide `docker system prune -a --volumes` for this project. See [the G: storage runbook](../runbooks/phase10-docker-fresh-ssd.md) for integration database recovery and separately confirmed manual VHDX compaction.

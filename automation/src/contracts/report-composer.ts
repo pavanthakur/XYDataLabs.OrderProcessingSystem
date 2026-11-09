@@ -14,6 +14,10 @@ export interface ExecutiveSummaryRow {
   orderAmount: number;
   orderCurrencyCode: string;
   threeDsSetting: ThreeDsSetting;
+  adapterMode?: "sandbox" | "deterministic" | "live" | "unknown";
+  collectionMode?: string;
+  observedChallenge?: "presented" | "not-presented" | "unknown";
+  providerVerification?: string;
   journeyOutcome: string;
   challengeOutcome: ChallengeOutcome;
   verificationOutcome: string;

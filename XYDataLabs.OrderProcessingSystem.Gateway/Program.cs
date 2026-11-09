@@ -46,6 +46,7 @@ builder.Services.AddCors(options =>
 
 var identityProviderSection = builder.Configuration.GetSection("IdentityProvider");
 var identityEnabled = identityProviderSection.GetValue("Enabled", false);
+builder.Services.AddAuthorization();
 if (identityEnabled)
 {
     builder.Services
@@ -87,6 +88,7 @@ builder.Services
     .AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
+builder.Services.AddConfiguredEntraIdentity(builder.Configuration);
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -117,6 +119,7 @@ if (identityEnabled)
     });
     app.UseMiddleware<TenantClaimConsistencyMiddleware>();
 }
+app.UseAuthorization();
 
 app.Use(async (context, next) =>
 {

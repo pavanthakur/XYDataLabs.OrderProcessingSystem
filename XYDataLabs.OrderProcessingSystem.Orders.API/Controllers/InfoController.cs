@@ -103,11 +103,14 @@ public sealed class InfoController : ControllerBase
 
         var activeTenantsList = await _tenantRegistry.GetActiveTenantsAsync(cancellationToken);
         var availableTenants = activeTenantsList
+            .Where(t => TenantAccessPolicy.CanDiscover(User, t.TenantCode))
             .Select(t => new AvailableTenantConfiguration(t.TenantId, t.TenantCode, t.TenantName))
             .ToList();
 
         if (availableTenants.Count == 0)
         {
+            if (User?.Identity?.IsAuthenticated == true)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "No authorized active application tenant is available for this account." });
             _logger.LogError("Runtime configuration request failed because no active tenants were found in the database");
 
             return Problem(
@@ -117,6 +120,9 @@ public sealed class InfoController : ControllerBase
         }
 
         var requestedTenantCode = HttpContext?.Request?.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+        if (User?.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(requestedTenantCode)
+            && !TenantAccessPolicy.CanAccess(User, requestedTenantCode))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "The requested application tenant is not authorized for this account." });
         var resolvedTenantCode = ResolveTenantCode(requestedTenantCode, activeTenantCode, availableTenants);
 
         _logger.LogInformation(
@@ -130,7 +136,11 @@ public sealed class InfoController : ControllerBase
             resolvedTenantCode,
             activeTenantCode,
             TenantMiddleware.TenantHeaderName,
-            availableTenants));
+            availableTenants,
+            User?.Identity?.IsAuthenticated == true
+                ? new SessionConfiguration(User.Identity.Name ?? User.FindFirst("preferred_username")?.Value ?? "Signed-in user",
+                    TenantAccessPolicy.AssignedTenant(User), TenantAccessPolicy.IsPlatformAdmin(User)) : null,
+            _tenantConfigurationOptions.UiSelectorEnabled));
     }
 
     [HttpGet("payment-configuration")]
@@ -157,6 +167,7 @@ public sealed class InfoController : ControllerBase
         var activeTenants = await _tenantRegistry.GetActiveTenantsAsync(cancellationToken);
 
         var registry = activeTenants
+            .Where(tenant => TenantAccessPolicy.CanDiscover(User, tenant.TenantCode))
             .Select(tenant =>
             {
                 var entry = _tenantRegistry.FindByCode(tenant.TenantCode);
@@ -254,7 +265,11 @@ public sealed class InfoController : ControllerBase
         string ActiveTenantCode,
         string ConfiguredActiveTenantCode,
         string TenantHeaderName,
-        IReadOnlyList<AvailableTenantConfiguration> AvailableTenants);
+        IReadOnlyList<AvailableTenantConfiguration> AvailableTenants,
+        SessionConfiguration? Session,
+        bool TenantSelectorEnabled);
+
+    private sealed record SessionConfiguration(string Username, string? TenantCode, bool CanAccessAllTenants);
 
     private sealed record PaymentConfigurationResponse(
         string ActiveProviderType,

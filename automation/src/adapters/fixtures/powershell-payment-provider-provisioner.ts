@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -18,6 +19,7 @@ interface ProviderActivationResult {
 export interface PowerShellPaymentProviderProvisionerOptions {
   target: RuntimeTargetDefinition;
   requestedProvider: string;
+  threeDs?: boolean;
   logger?: (message: string) => void;
 }
 
@@ -32,6 +34,14 @@ export class PowerShellPaymentProviderProvisioner implements PaymentFixtureProvi
   }
 
   public async prepare(tenantCode: string): Promise<FixturePrepareResult> {
+    if (this.options.target.runtime === "docker" && this.options.target.environment === "dev") {
+      const manifestPath = path.join(repoRoot, "TestResults", "DockerStorage", "payment-state", `${randomUUID()}.json`);
+      await this.invokePowerShell(["-NoProfile", "-File", path.join(repoRoot,"scripts/local-payment-test-state.ps1"),
+        "-Action","Prepare","-ManifestPath",manifestPath,"-TenantCode",tenantCode,"-ProviderType",this.options.requestedProvider,
+        "-ThreeDs",this.options.threeDs === undefined ? "unchanged" : String(this.options.threeDs)]);
+      return {fixtureIds:[manifestPath],baselineName:"exact-local-snapshot"};
+    }
+    if (this.options.threeDs !== undefined) throw new Error("3DS fixture overrides are supported only on verified local Docker dev.");
     const result = await this.activateProvider(tenantCode, this.options.requestedProvider);
     this.logger(
       `Activated provider ${result.currentProviderType} for ${tenantCode} in ${result.database} (previous: ${result.previousProviderType}).`
@@ -44,6 +54,12 @@ export class PowerShellPaymentProviderProvisioner implements PaymentFixtureProvi
   }
 
   public async cleanup(tenantCode: string, fixtureIds: string[]): Promise<FixtureCleanupResult> {
+    if (this.options.target.runtime === "docker" && this.options.target.environment === "dev") {
+      if (!fixtureIds[0]) throw new Error("Missing local recovery manifest. Manual review required.");
+      await this.invokePowerShell(["-NoProfile","-File",path.join(repoRoot,"scripts/local-payment-test-state.ps1"),
+        "-Action","Restore","-ManifestPath",fixtureIds[0]]);
+      return {outcome:"reset",residualIds:[]};
+    }
     const previousProvider = fixtureIds[0];
     if (!previousProvider || this.providersMatch(previousProvider, this.options.requestedProvider)) {
       return {

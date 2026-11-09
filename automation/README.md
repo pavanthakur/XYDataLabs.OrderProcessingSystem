@@ -23,6 +23,14 @@ Application Insights and Azure SQL.
 - Per-run report composition under `automation/reports/`
 - Service automation adapter registry for later provider/runtime expansion
 
+## Callback acceptance guardrails
+
+- Local Razorpay runs let the application finish `ProcessPayment` and navigate using its persisted provider payment ID. Automation must not invent an ID or force navigation after clicking Pay.
+- A visible callback error is a failed journey, even if database verification would pass. No loading panel, an informational banner, or a pending timeout is not proof of success. Completion requires an explicit settled success banner.
+- Callback readiness is polled for up to 60 seconds. Pending reconciliation is reported as pending rather than completed; local/Docker callbacks receive no special not-found exception.
+- Run `npm --prefix automation run test:callbacks` for browser-free outcome tests and `npm --prefix automation run test:callbacks:browser` for Chromium-backed error, delayed-render, pending-timeout, and conflicting-banner regressions. Install Chromium first with Playwright if absent. PR CI runs the unit guardrails.
+- Then run the Docker provider matrix with physical verification. Deterministic local adapters prove local behavior, not real provider sandbox transactions.
+
 ## Placeholder
 
 ```powershell
@@ -222,5 +230,9 @@ Notes:
 - Azure target and Azure matrix runs assume the selected Azure Container Apps environment is already deployed and reachable, SQL and Redis exist for the target environment, and that `az login` plus Azure SQL/Key Vault access are available for verification
 
 ## Canonical Planning Reference
+
+Local authenticated customer-directory and tenant-isolation regression:
+`npm --prefix automation run test:customer-directory:browser` (from repository root).
+See [the fresh Docker runbook](../docs/runbooks/phase10-docker-fresh-ssd.md#manual-customer-directory-checks-and-tenant-sign-in) for per-tenant sign-in, evidence paths, and expected cross-tenant access denial.
 
 - `docs/guides/development/payment-journey-automation-blueprint.md`

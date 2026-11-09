@@ -444,6 +444,17 @@ Adding a new provider capability is a code-and-contract change, not a tenant ope
 
 **Exit gate:** provider reassignment requires no script edit and can be rolled back without losing payment correlation or reconciliation state.
 
+#### Local Docker carry-forward: recovery and provider acceptance
+
+The owner approved these deferrals on 9 November 2026 for the **bounded local sandbox baseline**, not production readiness. Ownership, review dates and closure triggers are recorded as DW-023 and DW-024 in the [Deferred Work Log](DEFERRED-WORK-LOG.md). Review at Phase 11 entry or 1 December 2026, whichever comes first.
+
+- **DW-023 — payment recovery and edge cases:** add authenticated, tenant-scoped discovery of the saved order's attempts and Check payment status / Resume actions. Reconcile through the original attempt's trusted provider and adapter mode even after registry reassignment. Prove safe pending/ambiguous handling, definitive-failure retry, atomic duplicate-submission protection, callback replay, expiry, refresh/new-session/deep-link and interrupted-callback recovery, plus tenant isolation. Existing currency, signature and duplicate-charge guards remain mandatory. No unresolved attempt may be relabelled Failed just to permit another charge.
+- **DW-024 — capability-dependent provider tests:** verify Razorpay S2S merchant entitlement before enabling/testing direct card submission; obtain provider-documented OpenPay rejection/cancellation fixtures; and explicitly verify OpenPay 3DS-on behavior. For OpenPay 3DS, prove the effective DB/config flag and outbound charge request (`use_3d_secure=true` plus redirect URL), then require a visibly presented provider challenge, challenge submission, authoritative provider confirmation, and matching amount/currency/order/payment SQL evidence. A successful charge or callback without an observed challenge is payment success only—not 3DS acceptance—and remains BLOCKED/unverified. Run real provider acceptance for each enabled path, with authoritative amount/currency/status and physical order/payment evidence. Controlled fixtures cannot satisfy real-sandbox acceptance. Keep unsupported paths unavailable and explicitly excluded rather than force a green result.
+
+The latest Docker evidence proves compatible-currency sandbox success across A/B/C and both providers, currency mismatch rejection, and Razorpay decline/dismissal. It does not prove the deferred recovery, OpenPay 3DS-on challenge, or unsupported provider paths. The user also reported successful manual tests for all tenants and both providers; keep that attribution separate from automated evidence.
+
+This carry-forward does not close server order-state eligibility, historical captured-mismatch disposition, fulfillment or part-payment/installment features. It does not waive the Azure telemetry/entry gates above or authorize Azure deployment. Reset/reseed acceptance remains a separately approved destructive local operation; final evidence must distinguish PASS, approved deferral, BLOCKED and not implemented.
+
 ### P11-W6 Drift Detection And Repair
 
 Implement a scheduled and on-demand reconciler that compares:

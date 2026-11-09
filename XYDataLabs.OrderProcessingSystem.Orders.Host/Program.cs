@@ -126,6 +126,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         tags: ["ready"]);
 }
 
+builder.Services.AddConfiguredEntraIdentity(builder.Configuration);
 var app = builder.Build();
 var bootstrapMigrateOnly = args.Any(argument =>
     string.Equals(argument, "--phase10-bootstrap-migrate-only", StringComparison.OrdinalIgnoreCase))

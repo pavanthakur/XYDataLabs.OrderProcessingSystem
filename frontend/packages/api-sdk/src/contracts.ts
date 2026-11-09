@@ -12,6 +12,8 @@ export interface AvailableTenant {
 }
 
 export interface RuntimeConfiguration {
+  session?: { username: string; tenantCode: string | null; canAccessAllTenants: boolean } | null;
+  tenantSelectorEnabled?: boolean;
   activeTenantCode: string;
   configuredActiveTenantCode: string;
   tenantHeaderName: string;
@@ -19,6 +21,8 @@ export interface RuntimeConfiguration {
 }
 
 export interface PaymentConfiguration {
+  supportedCurrencies?: readonly string[] | null;
+  adapterMode?: "deterministic" | "sandbox" | "live";
   activeProviderType: string;
   activeProviderName: string;
   collectionMode: string;
@@ -26,6 +30,15 @@ export interface PaymentConfiguration {
   browserMerchantId?: string | null;
   isProduction: boolean;
   isThreeDSecure?: boolean;
+}
+
+export interface PaymentRuntime {
+  supportedCurrencies?: readonly string[] | null;
+  adapterMode: "deterministic" | "sandbox" | "live";
+  providerType: string;
+  isProduction: boolean;
+  configuredThreeDs: boolean;
+  collectionMode: string;
 }
 
 export interface OrderSummary {
@@ -113,6 +126,9 @@ export interface PaymentStatusDetails {
   isFinal: boolean;
   callbackRecorded: boolean;
   remoteStatusConfirmed: boolean;
+  providerAmount?: number | null;
+  providerCurrency?: string | null;
+  providerOrderId?: string | null;
   statusSource: string;
   errorMessage?: string | null;
   transactionReferenceId?: string | null;

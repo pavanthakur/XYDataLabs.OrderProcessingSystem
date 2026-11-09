@@ -97,7 +97,7 @@ export function OrderDetailPage({ activeTenantCode, apiClient }: OrderDetailPage
           </div>
           <div>
             <dt>Total price</dt>
-            <dd>{order ? formatCurrency(order.totalPrice) : "pending"}</dd>
+            <dd>{order ? formatCurrency(order.totalPrice, order.currencyCode) : "pending"}</dd>
           </div>
         </dl>
 
@@ -118,7 +118,7 @@ export function OrderDetailPage({ activeTenantCode, apiClient }: OrderDetailPage
                         </div>
                         <div className="order-meta">
                           <span>Qty {item.quantity}</span>
-                          <span>{formatCurrency(item.price)}</span>
+                          <span>{formatCurrency(item.price, order.currencyCode)}</span>
                         </div>
                       </div>
                     </li>
@@ -170,9 +170,10 @@ function formatOrderDate(value: string): string {
   }).format(parsedDate);
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currencyCode?: string): string {
+  if (!currencyCode) return `${value.toFixed(2)} (currency unavailable)`;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD"
+    currency: currencyCode
   }).format(value);
 }

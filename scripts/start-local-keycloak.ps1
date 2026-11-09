@@ -24,7 +24,6 @@ $composeArgs = @(
 Write-Host 'Starting local Keycloak container for Phase 9.5...'
 New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
 $previousDockerConfig = $env:DOCKER_CONFIG
-$env:DOCKER_CONFIG = $dockerConfigRoot
 
 function Get-EnvLocalValue {
     param([Parameter(Mandatory = $true)][string]$Name)
@@ -85,19 +84,22 @@ Set-ProcessEnvIfMissing -Name 'LOCAL_KEYCLOAK_TEST_PASSWORD' -Value $keycloakTen
 Set-ProcessEnvIfMissing -Name 'LOCAL_KEYCLOAK_BACKEND_CLIENT_ID' -Value $keycloakBackendClientId
 Set-ProcessEnvIfMissing -Name 'LOCAL_KEYCLOAK_WEB_CLIENT_ID' -Value $keycloakWebClientId
 
+$reachable = $false
 try
 {
     $response = Invoke-WebRequest -UseBasicParsing -Uri $authorityUrl -TimeoutSec 5
-    if ($response.StatusCode -eq 200)
-    {
-        Write-Host 'Local Keycloak is already reachable; reusing the existing instance.'
-        return
-    }
+    $reachable = $response.StatusCode -eq 200
 }
 catch
 {
 }
+if ($reachable) {
+    Write-Host 'Local Keycloak is already reachable; reusing the existing instance.'
+    & (Join-Path $PSScriptRoot 'sync-local-identity.ps1') -Project Auto
+    return
+}
 
+$env:DOCKER_CONFIG = $dockerConfigRoot
 Push-Location $dockerRoot
 try
 {
@@ -121,17 +123,19 @@ finally
 $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
 while ((Get-Date) -lt $deadline)
 {
+    $reachable = $false
     try
     {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $authorityUrl -TimeoutSec 5
-        if ($response.StatusCode -eq 200)
-        {
-            Write-Host 'Local Keycloak is ready.'
-            return
-        }
+        $reachable = $response.StatusCode -eq 200
     }
     catch
     {
+    }
+    if ($reachable) {
+        Write-Host 'Local Keycloak is ready.'
+        & (Join-Path $PSScriptRoot 'sync-local-identity.ps1') -Project Auto
+        return
     }
 
     Start-Sleep -Seconds 2

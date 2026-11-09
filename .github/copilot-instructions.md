@@ -23,8 +23,8 @@ Enterprise default for workflow and infrastructure changes:
 - prefer ACR for Azure runtime image pulls; treat GHCR as a bridge unless an exception is documented
 - preserve env-suffixed naming, cleanup symmetry, source retention, and summary traceability links
 
-- **Production URL (dev)**: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
-- **UI (dev)**: `https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net`
+- **Public API URL (dev)**: `https://dev.orderprocessing-api.xydatalabs.com`
+- **Public UI URL (dev)**: `https://dev.orderprocessing.xydatalabs.com`
 - **GitHub repository**: `https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem`
 
 ---
@@ -164,7 +164,7 @@ When adding or renaming an Azure runtime dependency used by automation — Conta
 - The owning workflow/script so it reads the value from `runtime-targets.json` or receives it from the workflow topology step.
 - `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` so hardcoded resource-name regressions fail locally.
 
-Never commit generated Azure hostnames, revision URLs, random ACA suffixes, GUID-like names, or one-run discovery output into `runtime-targets.json`. Stable configured names are allowed; generated FQDNs must be discovered at runtime from Azure control plane or workflow outputs.
+Never commit generated Azure hostnames, revision URLs, random ACA suffixes, GUID-like names, or one-run discovery output into `runtime-targets.json`. Azure targets must use stable public custom domains as `baseUrl`/`apiBaseUrl` and `publicUiBaseUrl`/`publicApiBaseUrl`; generated FQDNs may appear only as diagnostic workflow outputs. `allowGeneratedAzureUrlFallback` must stay explicit and defaults to `false`.
 
 Before committing Azure workflow/deployment automation changes, run:
 

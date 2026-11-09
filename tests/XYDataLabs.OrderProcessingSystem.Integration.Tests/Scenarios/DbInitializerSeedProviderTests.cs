@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
@@ -29,6 +30,31 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         _fixture = fixture;
         _emptyRegistry = new IntegrationEventMapperRegistry(
             new IDomainEventToIntegrationEventMapper[] { new OrderCreatedDomainEventMapper() });
+    }
+
+    [Fact]
+    public void PreserveExistingSeedData_DoesNotRewriteProviderMetadata()
+    {
+        using var context = CreateContext();
+        ResetTenantGraph(context, TenantACode, TenantBCode, UnknownTenantCode);
+        SeedBothBaselineTenants(context);
+        DbInitializer.Initialize(context, configuration: null, applyMigrations: false, integrationEventMapperRegistry: _emptyRegistry);
+        var provider = context.PaymentProviders.IgnoreQueryFilters().First(p => p.ProviderType == PaymentProviderTypes.OpenPay);
+        provider.MerchantId = "existing-test-merchant";
+        provider.PublicKey = "existing-test-public";
+        provider.Use3DSecure = false;
+        context.SaveChanges();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Phase10:PreserveExistingSeedData"] = "true",
+            ["OpenPay:MerchantId"] = "different-test-merchant",
+            ["OpenPay:PublicKey"] = "different-test-public"
+        }).Build();
+        DbInitializer.Initialize(context, configuration, applyMigrations: false, integrationEventMapperRegistry: _emptyRegistry);
+        context.Entry(provider).Reload();
+        provider.MerchantId.Should().Be("existing-test-merchant");
+        provider.PublicKey.Should().Be("existing-test-public");
+        provider.Use3DSecure.Should().BeFalse();
     }
 
     [Theory]
@@ -207,6 +233,32 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
                 && !provider.Use3DSecure);
     }
 
+    [Fact]
+    public async Task Initialize_WithStubOrders_LeavesCustomerDirectoryOrdersReadable()
+    {
+        using var context = CreateContext();
+        ResetTenantGraph(context, TenantACode, TenantBCode, UnknownTenantCode);
+        var tenantIds = SeedBothBaselineTenants(context);
+        SeedStubSampleData(context, tenantIds.TenantAId);
+        SeedStubSampleData(context, tenantIds.TenantBId);
+        DbInitializer.Initialize(context, null, false, _emptyRegistry);
+
+        // Force database materialization: tracked entities can conceal invalid enum strings.
+        context.ChangeTracker.Clear();
+        var result = await new GetAllCustomersQueryHandler(context)
+            .HandleAsync(new GetAllCustomersQuery(), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var expectedEmails = new[] { $"stub-{tenantIds.TenantAId}@test.test", $"stub-{tenantIds.TenantBId}@test.test" };
+        var customers = result.Value!.Where(customer => expectedEmails.Contains(customer.Email)).ToList();
+        customers.Should().HaveCount(2);
+        foreach (var customer in customers)
+        {
+            customer.OrderDtos.Should().ContainSingle();
+            customer.OrderDtos.Single().Status.Should().Be(nameof(OrderStatus.Created));
+        }
+    }
+
     private OrderProcessingSystemDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
@@ -379,12 +431,20 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         });
         context.SaveChanges();
 
-        var productId = context.Products.IgnoreQueryFilters().Where(p => p.TenantId == tenantId).Select(p => p.ProductId).First();
-
-        context.Database.ExecuteSqlInterpolated($"""
-            INSERT INTO [orders].[Orders] (CustomerId, TenantId, CreatedBy, CreatedDate, OrderDate, Status, TotalPrice)
-            VALUES ({customerId.Value}, {tenantId}, 1, {DateTime.UtcNow}, {DateTime.UtcNow}, {"Pending"}, {0m})
-            """);
+        var product = context.Products.IgnoreQueryFilters().First(p => p.TenantId == tenantId);
+        var orderResult = Order.Create(customerId, new[] { product });
+        orderResult.IsSuccess.Should().BeTrue();
+        var order = orderResult.Value!;
+        order.TenantId = tenantId;
+        order.CreatedBy = 1;
+        order.CreatedDate = DateTime.UtcNow;
+        foreach (var orderProduct in order.OrderProducts)
+        {
+            orderProduct.TenantId = tenantId;
+            orderProduct.CreatedBy = 1;
+            orderProduct.CreatedDate = order.CreatedDate;
+        }
+        context.Orders.Add(order);
         context.SaveChanges();
     }
 

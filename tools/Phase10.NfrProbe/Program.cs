@@ -13,6 +13,8 @@ internal static class Program
 
     private static async Task<int> Main(string[] args)
     {
+        if (args.FirstOrDefault() == "functions-proof")
+            return await FunctionsAcceptance.RunAsync(ProbeOptions.FromArgs(args.Skip(1).ToArray()));
         var options = ProbeOptions.FromArgs(args);
         var runId = options.RunId ?? $"phase10-nfr-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
         var startedUtc = DateTimeOffset.UtcNow;
@@ -22,6 +24,16 @@ internal static class Program
 
         try
         {
+            await using (var connection = new SqlConnection(options.SqlConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = new SqlCommand("SELECT Id FROM dbo.Tenants WHERE Code=@code AND Status='Active'",connection);
+                command.Parameters.AddWithValue("@code",options.TenantCode);
+                var tenantId=Convert.ToInt32(await command.ExecuteScalarAsync());
+                if(tenantId<=0 || (options.TenantId>0 && options.TenantId!=tenantId))
+                    throw new InvalidOperationException("Tenant ID does not match the active tenant code. Refusing to publish probe messages.");
+                options=options with {TenantId=tenantId};
+            }
             await PublishBurstAsync(options, runId, messageIds).ConfigureAwait(false);
         var result = await WaitForEffectsAsync(options, runId).ConfigureAwait(false);
             result = result with
@@ -430,7 +442,7 @@ internal sealed record ProbeOptions(
             Required(values, "sql-connection-string", "PHASE10_NFR_SQL_CONNECTION_STRING"),
             Get(values, "sql-read-mode", Environment.GetEnvironmentVariable("PHASE10_NFR_SQL_READ_MODE") ?? "docker-compose"),
             Get(values, "topic", "order-events"),
-            int.Parse(Get(values, "tenant-id", "1")),
+            int.Parse(Get(values, "tenant-id", "0")),
             Get(values, "tenant-code", "TenantA"),
             int.Parse(Get(values, "message-count", "100")),
             int.Parse(Get(values, "timeout-seconds", "180")),

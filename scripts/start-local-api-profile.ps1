@@ -17,6 +17,7 @@ param(
 )
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 $apiProjectPath = Join-Path $workspaceRoot 'XYDataLabs.OrderProcessingSystem.API'
 $uiPort = if ($Profile -eq 'https') { 5174 } else { 5173 }
 
@@ -28,37 +29,8 @@ $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 function Get-EnvLocalValue {
     param([Parameter(Mandatory = $true)][string]$Name)
 
-    $environmentValue = [Environment]::GetEnvironmentVariable($Name, 'Process')
-    if (-not [string]::IsNullOrWhiteSpace($environmentValue))
-    {
-        return $environmentValue.Trim()
-    }
-
-    if (-not (Test-Path -LiteralPath $envFile))
-    {
-        return $null
-    }
-
-    $line = Get-Content -LiteralPath $envFile |
-        Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } |
-        Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($line))
-    {
-        return $null
-    }
-
-    $value = (($line -split '=', 2)[1]).Trim()
-    if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2)
-    {
-        $value = $value.Substring(1, $value.Length - 2)
-    }
-
-    if ($value.StartsWith("'") -and $value.EndsWith("'") -and $value.Length -ge 2)
-    {
-        $value = $value.Substring(1, $value.Length - 2)
-    }
-
-    return $value.Trim()
+    $settings = Get-Phase10LocalSettings -Path $envFile
+    return $settings[$Name]
 }
 
 function Set-ProcessEnvironmentValue {
@@ -71,7 +43,7 @@ function Set-ProcessEnvironmentValue {
         [string]$Value
     )
 
-    if ($null -eq $Value)
+    if ([string]::IsNullOrWhiteSpace($Value))
     {
         Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
         return
@@ -87,8 +59,9 @@ function Set-Phase10DockerBackingEnvironment {
         throw "LOCAL_SQL_PASSWORD must be present in Resources\\Docker\\.env.local for the Phase 10 Docker-backed local API profile."
     }
 
-    $sharedConnectionString = "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
-    $dedicatedConnectionString = "Server=localhost,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    $sharedConnectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $localSqlPassword
+    $dedicatedConnectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_TenantC_Dev' -Password $localSqlPassword
+    Assert-Phase10HostSqlIdentity -ConnectionString $sharedConnectionString
 
     Set-ProcessEnvironmentValue -Name 'ConnectionStrings__OrderProcessingSystemDbConnection' -Value $sharedConnectionString
     Set-ProcessEnvironmentValue -Name 'ConnectionStrings__TenantRegistryDbConnection' -Value $sharedConnectionString

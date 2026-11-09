@@ -9,6 +9,12 @@ on:
       uiFqdn:
         description: 'UI ingress FQDN'
         value: ${{ jobs.deploy.outputs.uiFqdn }}
+      apiPublicUrl:
+        description: 'Stable public Gateway/API URL'
+        value: ${{ jobs.deploy.outputs.apiPublicUrl }}
+      uiPublicUrl:
+        description: 'Stable public UI URL'
+        value: ${{ jobs.deploy.outputs.uiPublicUrl }}
       deploymentName:
         description: 'Deployment name'
         value: ${{ jobs.deploy.outputs.deploymentName }}
@@ -208,11 +214,25 @@ jobs:
     needs: route
     if: ${{ needs.route.outputs.run_validate == 'true' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_call' && inputs.environment || 'dev' }}
+    environment: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Validate Entra provisioning before cloud writes
+        if: ${{ inputs.environment != '' }}
+        env:
+          IDENTITY_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+          ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
+          ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
+          ENTRA_SPA_CLIENT_ID: ${{ vars.ENTRA_SPA_CLIENT_ID }}
+          IDENTITY_PUBLIC_WEB_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
+          ENTRA_TENANT_CLAIM_TYPE: ${{ vars.ENTRA_TENANT_CLAIM_TYPE }}
+          ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
+          ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
+          IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
+        run: node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
 
       - name: Guardrail Azure PowerShell switch forwarding
         shell: pwsh
@@ -225,7 +245,7 @@ jobs:
       - name: Determine parameters
         id: params
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+          if [ -n "${{ inputs.environment }}" ]; then
             echo "template=infra/main.phase10.bicep" >> $GITHUB_OUTPUT
             echo "params=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
             echo "phase10=true" >> $GITHUB_OUTPUT
@@ -408,12 +428,28 @@ jobs:
           echo "✅ Phase 10 deploy will use ACR scoped-token authentication unless a managed-identity pull grant is configured separately." >> $GITHUB_STEP_SUMMARY
 
       - name: What-If (subscription scope)
+        env:
+          IDENTITY_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+          ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
+          ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
+          ENTRA_SPA_CLIENT_ID: ${{ vars.ENTRA_SPA_CLIENT_ID }}
+          IDENTITY_PUBLIC_WEB_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
+          ENTRA_TENANT_CLAIM_TYPE: ${{ vars.ENTRA_TENANT_CLAIM_TYPE }}
+          ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
+          ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
+          IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
         run: |
+          IDENTITY_ARGS=()
+          if [ "${{ steps.params.outputs.phase10 }}" = "true" ]; then
+            node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
+            IDENTITY_ARGS=(--parameters @"$RUNNER_TEMP/identity.parameters.json")
+          fi
           ENV_SUFFIX=${{ steps.params.outputs.envSuffix }}
           LOCATION=${{ steps.params.outputs.location }}
           TEMPLATE_FILE="${{ steps.params.outputs.template }}"
           PARAM_FILE="${{ steps.params.outputs.params }}"
           az deployment sub what-if \
+            "${IDENTITY_ARGS[@]}" \
             --location "$LOCATION" \
             --template-file "$TEMPLATE_FILE" \
             --parameters @"${PARAM_FILE}" \
@@ -457,6 +493,8 @@ jobs:
     outputs:
       gatewayFqdn: ${{ steps.outputs.outputs.gatewayFqdn }}
       uiFqdn: ${{ steps.outputs.outputs.uiFqdn }}
+      apiPublicUrl: ${{ steps.aliases.outputs.apiPublicUrl }}
+      uiPublicUrl: ${{ steps.aliases.outputs.uiPublicUrl }}
       sqlServerFqdn: ${{ steps.outputs.outputs.sqlServerFqdn }}
       sqlDatabaseName: ${{ steps.outputs.outputs.sqlDatabaseName }}
       tenantCDatabaseName: ${{ steps.outputs.outputs.tenantCDatabaseName }}
@@ -468,6 +506,20 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Validate Entra provisioning before cloud writes
+        if: ${{ inputs.environment != '' }}
+        env:
+          IDENTITY_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+          ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
+          ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
+          ENTRA_SPA_CLIENT_ID: ${{ vars.ENTRA_SPA_CLIENT_ID }}
+          IDENTITY_PUBLIC_WEB_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
+          ENTRA_TENANT_CLAIM_TYPE: ${{ vars.ENTRA_TENANT_CLAIM_TYPE }}
+          ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
+          ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
+          IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
+        run: node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
 
       - name: Guardrail Azure PowerShell switch forwarding
         shell: pwsh
@@ -780,8 +832,24 @@ jobs:
 
       - name: Deploy (subscription scope)
         id: deploy
+        env:
+          IDENTITY_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+          ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
+          ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
+          ENTRA_SPA_CLIENT_ID: ${{ vars.ENTRA_SPA_CLIENT_ID }}
+          IDENTITY_PUBLIC_WEB_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
+          ENTRA_TENANT_CLAIM_TYPE: ${{ vars.ENTRA_TENANT_CLAIM_TYPE }}
+          ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
+          ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
+          IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
         run: |
+          IDENTITY_ARGS=()
+          if [ "${{ steps.params.outputs.template }}" = "infra/main.phase10.bicep" ]; then
+            node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
+            IDENTITY_ARGS=(--parameters @"$RUNNER_TEMP/identity.parameters.json")
+          fi
           az deployment sub create \
+            "${IDENTITY_ARGS[@]}" \
             --name ${{ steps.params.outputs.deploymentName }} \
             --location ${{ steps.params.outputs.location }} \
             --template-file ${{ steps.params.outputs.template }} \
@@ -1057,23 +1125,15 @@ jobs:
         id: aliases
         shell: bash
         run: |
-          DOMAIN_SUFFIX="${{ inputs.publicDomain }}"
-          if [ -z "$DOMAIN_SUFFIX" ]; then
-            DOMAIN_SUFFIX="yourdomain.com"
-          fi
-
           case "${{ steps.params.outputs.env }}" in
             dev)
-              API_ALIAS="api-dev.${DOMAIN_SUFFIX}"
-              UI_ALIAS="ui-dev.${DOMAIN_SUFFIX}"
+              TARGET_KEY="azure-dev"
               ;;
             staging)
-              API_ALIAS="api-staging.${DOMAIN_SUFFIX}"
-              UI_ALIAS="ui-staging.${DOMAIN_SUFFIX}"
+              TARGET_KEY="azure-stg"
               ;;
             prod)
-              API_ALIAS="api.${DOMAIN_SUFFIX}"
-              UI_ALIAS="ui.${DOMAIN_SUFFIX}"
+              TARGET_KEY="azure-prod"
               ;;
             *)
               echo "Unsupported environment: ${{ steps.params.outputs.env }}"
@@ -1081,12 +1141,62 @@ jobs:
               ;;
           esac
 
+          TARGET_JSON="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc = require("./automation/config/runtime-targets.json"); const target = doc.targets.find((item) => item.key === process.env.TARGET_KEY); if (!target) { throw new Error(`Unknown runtime target ${process.env.TARGET_KEY}`); } process.stdout.write(JSON.stringify(target));')"
+          read_target_field() {
+            TARGET_JSON="$TARGET_JSON" FIELD_NAME="$1" node -e 'const target = JSON.parse(process.env.TARGET_JSON); process.stdout.write(String(target[process.env.FIELD_NAME] || ""));'
+          }
+          url_host() {
+            node -e 'const value = process.argv[1]; if (!value) { process.exit(0); } process.stdout.write(new URL(value).hostname);' "$1"
+          }
+
+          API_PUBLIC_URL="$(read_target_field publicApiBaseUrl | sed 's#/*$##')"
+          UI_PUBLIC_URL="$(read_target_field publicUiBaseUrl | sed 's#/*$##')"
+          ALLOW_GENERATED_FALLBACK="$(read_target_field allowGeneratedAzureUrlFallback)"
+          API_ALIAS="$(url_host "$API_PUBLIC_URL")"
+          UI_ALIAS="$(url_host "$UI_PUBLIC_URL")"
+
+          if [ -z "$API_ALIAS" ] || [ -z "$UI_ALIAS" ]; then
+            DOMAIN_SUFFIX="${{ inputs.publicDomain }}"
+            if [ -z "$DOMAIN_SUFFIX" ]; then
+              echo "Runtime target ${TARGET_KEY} must define publicApiBaseUrl/publicUiBaseUrl. publicDomain fallback was not provided." >&2
+              exit 1
+            fi
+
+            case "${{ steps.params.outputs.env }}" in
+              dev)
+                API_ALIAS="dev.orderprocessing-api.${DOMAIN_SUFFIX}"
+                UI_ALIAS="dev.orderprocessing.${DOMAIN_SUFFIX}"
+                ;;
+              staging)
+                API_ALIAS="staging.orderprocessing-api.${DOMAIN_SUFFIX}"
+                UI_ALIAS="staging.orderprocessing.${DOMAIN_SUFFIX}"
+                ;;
+              prod)
+                API_ALIAS="orderprocessing-api.${DOMAIN_SUFFIX}"
+                UI_ALIAS="orderprocessing.${DOMAIN_SUFFIX}"
+                ;;
+            esac
+            API_PUBLIC_URL="https://${API_ALIAS}"
+            UI_PUBLIC_URL="https://${UI_ALIAS}"
+          fi
+
+          if { [[ "$API_PUBLIC_URL" == *".azurecontainerapps.io"* ]] || [[ "$UI_PUBLIC_URL" == *".azurecontainerapps.io"* ]]; } && [ "$ALLOW_GENERATED_FALLBACK" != "true" ]; then
+            echo "Configured public aliases must not use generated Azure Container Apps FQDNs unless allowGeneratedAzureUrlFallback=true." >&2
+            echo "API public URL: ${API_PUBLIC_URL}" >&2
+            echo "UI public URL: ${UI_PUBLIC_URL}" >&2
+            exit 1
+          fi
+
           echo "apiAlias=${API_ALIAS}" >> $GITHUB_OUTPUT
           echo "uiAlias=${UI_ALIAS}" >> $GITHUB_OUTPUT
+          echo "apiPublicUrl=${API_PUBLIC_URL}" >> $GITHUB_OUTPUT
+          echo "uiPublicUrl=${UI_PUBLIC_URL}" >> $GITHUB_OUTPUT
+          echo "allowGeneratedAzureUrlFallback=${ALLOW_GENERATED_FALLBACK:-false}" >> $GITHUB_OUTPUT
 
           echo "Friendly alias mapping:" >> $GITHUB_STEP_SUMMARY
-          echo "- API: ${API_ALIAS}" >> $GITHUB_STEP_SUMMARY
-          echo "- UI: ${UI_ALIAS}" >> $GITHUB_STEP_SUMMARY
+          echo "- Public API: ${API_PUBLIC_URL}" >> $GITHUB_STEP_SUMMARY
+          echo "- Public UI: ${UI_PUBLIC_URL}" >> $GITHUB_STEP_SUMMARY
+          echo "- Generated URL fallback allowed: ${ALLOW_GENERATED_FALLBACK:-false}" >> $GITHUB_STEP_SUMMARY
 
       - name: Alias Guidance and Binding
         shell: bash
@@ -1122,8 +1232,8 @@ jobs:
             echo "Friendly alias summary:" >> $GITHUB_STEP_SUMMARY
             echo "- API origin: https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
             echo "- UI origin: https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
-            echo "- API public name: https://${API_ALIAS}" >> $GITHUB_STEP_SUMMARY
-            echo "- UI public name: https://${UI_ALIAS}" >> $GITHUB_STEP_SUMMARY
+            echo "- API public name: ${{ steps.aliases.outputs.apiPublicUrl }}" >> $GITHUB_STEP_SUMMARY
+            echo "- UI public name: ${{ steps.aliases.outputs.uiPublicUrl }}" >> $GITHUB_STEP_SUMMARY
             if [ "${{ inputs.bindAliases }}" = "true" ] && [ "${{ inputs.aliasMode }}" = "frontdoor" ]; then
               echo "Use these aliases as the public names for Front Door or DNS CNAMEs." >> $GITHUB_STEP_SUMMARY
             else
@@ -1174,7 +1284,7 @@ jobs:
             -OpenPayPrivateKey $env:OPENPAY_PRIVATE_KEY `
             -OpenPayDeviceSessionId $env:OPENPAY_DEVICE_SESSION_ID `
             -OpenPayWebhookSecret $env:OPENPAY_WEBHOOK_SECRET `
-            -OpenPayRedirectUrl 'https://${{ steps.outputs.outputs.gatewayFqdn }}/payment/callback' `
+            -OpenPayRedirectUrl '${{ steps.aliases.outputs.apiPublicUrl }}/payment/callback' `
             -RazorpayMerchantId $env:RAZORPAY_MERCHANT_ID `
             -RazorpayPrivateKey $env:RAZORPAY_PRIVATE_KEY `
             -RazorpayWebhookSecret $env:RAZORPAY_WEBHOOK_SECRET
@@ -1269,9 +1379,23 @@ jobs:
       - name: Post-Deployment Endpoint Smoke
         shell: bash
         run: |
-          GATEWAY_HEALTH="https://${{ steps.outputs.outputs.gatewayFqdn }}/"
-          ORDERS_SMOKE="https://${{ steps.outputs.outputs.gatewayFqdn }}/api/v1/Info/runtime-configuration"
-          UI_URL="https://${{ steps.outputs.outputs.uiFqdn }}/customers"
+          GATEWAY_HEALTH="${{ steps.aliases.outputs.apiPublicUrl }}/"
+          ORDERS_SMOKE="${{ steps.aliases.outputs.apiPublicUrl }}/api/v1/Info/runtime-configuration"
+          UI_URL="${{ steps.aliases.outputs.uiPublicUrl }}/customers"
+          AZURE_GENERATED_GATEWAY_URL="https://${{ steps.outputs.outputs.gatewayFqdn }}"
+          AZURE_GENERATED_UI_URL="https://${{ steps.outputs.outputs.uiFqdn }}"
+          FALLBACK_USED="false"
+
+          if { [[ "$GATEWAY_HEALTH" == *".azurecontainerapps.io"* ]] || [[ "$UI_URL" == *".azurecontainerapps.io"* ]]; } && [ "${{ steps.aliases.outputs.allowGeneratedAzureUrlFallback }}" != "true" ]; then
+            echo "Configured public smoke URLs must not use generated Azure Container Apps FQDNs unless allowGeneratedAzureUrlFallback=true." >&2
+            echo "Gateway Health: ${GATEWAY_HEALTH}" >&2
+            echo "UI URL: ${UI_URL}" >&2
+            exit 1
+          fi
+
+          if [[ "$GATEWAY_HEALTH" == "$AZURE_GENERATED_GATEWAY_URL"* ]] || [[ "$UI_URL" == "$AZURE_GENERATED_UI_URL"* ]]; then
+            FALLBACK_USED="true"
+          fi
 
           smoke_url() {
             local name="$1"
@@ -1320,6 +1444,9 @@ jobs:
             echo "| Gateway Health | ${GATEWAY_HEALTH} | healthy |"
             echo "| Orders API Smoke | ${ORDERS_SMOKE} | activeTenantCode |"
             echo "| UI Reachability | ${UI_URL} | <!doctype html |"
+            echo "| Azure Generated Gateway Diagnostic | ${AZURE_GENERATED_GATEWAY_URL} | diagnostic only |"
+            echo "| Azure Generated UI Diagnostic | ${AZURE_GENERATED_UI_URL} | diagnostic only |"
+            echo "| Generated URL Fallback Used | ${FALLBACK_USED} | expected false |"
           } >> $GITHUB_STEP_SUMMARY
 
           smoke_url "Gateway Health" "$GATEWAY_HEALTH" "healthy"
@@ -1365,12 +1492,15 @@ jobs:
           echo "- **Inventory Container App:** ${{ steps.outputs.outputs.inventory }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Notifications Container App:** ${{ steps.outputs.outputs.notifications }}" >> $GITHUB_STEP_SUMMARY
           echo "- **UI Container App:** ${{ steps.outputs.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Gateway URL:** https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Orders API Smoke:** https://${{ steps.outputs.outputs.gatewayFqdn }}/api/v1/Info/runtime-configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Public Gateway/API URL:** ${{ steps.aliases.outputs.apiPublicUrl }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Public Orders API Smoke:** ${{ steps.aliases.outputs.apiPublicUrl }}/api/v1/Info/runtime-configuration" >> $GITHUB_STEP_SUMMARY
           echo "- **Swagger:** Not a Phase 10 smoke gate; use the Orders API smoke endpoint for routed API proof." >> $GITHUB_STEP_SUMMARY
-          echo "- **UI URL:** https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **API Alias:** https://${{ steps.aliases.outputs.apiAlias }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **UI Alias:** https://${{ steps.aliases.outputs.uiAlias }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Public UI URL:** ${{ steps.aliases.outputs.uiPublicUrl }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Azure Generated Gateway URL:** https://${{ steps.outputs.outputs.gatewayFqdn }} (diagnostic fallback only)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Azure Generated UI URL:** https://${{ steps.outputs.outputs.uiFqdn }} (diagnostic fallback only)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Generated URL Fallback Allowed:** ${{ steps.aliases.outputs.allowGeneratedAzureUrlFallback }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Alias Host:** ${{ steps.aliases.outputs.apiAlias }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **UI Alias Host:** ${{ steps.aliases.outputs.uiAlias }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Function App:** ${{ steps.outputs.outputs.function }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Key Vault:** ${{ steps.outputs.outputs.keyvault }}" >> $GITHUB_STEP_SUMMARY
           echo "- **App Insights:** ${{ steps.outputs.outputs.insights }}" >> $GITHUB_STEP_SUMMARY

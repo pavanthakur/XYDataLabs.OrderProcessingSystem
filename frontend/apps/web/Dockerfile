@@ -14,14 +14,6 @@ RUN npm ci --ignore-scripts
 
 COPY frontend/ ./
 
-ARG VITE_ORDERPROCESSING_API_BASE_URL=
-ENV VITE_ORDERPROCESSING_API_BASE_URL=$VITE_ORDERPROCESSING_API_BASE_URL
-ARG VITE_KEYCLOAK_AUTHORITY=
-ENV VITE_KEYCLOAK_AUTHORITY=$VITE_KEYCLOAK_AUTHORITY
-ARG VITE_KEYCLOAK_REALM=
-ENV VITE_KEYCLOAK_REALM=$VITE_KEYCLOAK_REALM
-ARG VITE_KEYCLOAK_CLIENT_ID=
-ENV VITE_KEYCLOAK_CLIENT_ID=$VITE_KEYCLOAK_CLIENT_ID
 RUN npm run build --workspace @xydatalabs/orderprocessing-web
 
 FROM cgr.dev/chainguard/node:latest AS final
@@ -35,6 +27,7 @@ ENV USE_HTTPS=false
 
 COPY --from=build /app/apps/web/dist ./dist
 COPY frontend/apps/web/server.mjs ./server.mjs
+COPY frontend/apps/web/public-runtime-config.mjs ./public-runtime-config.mjs
 
 EXPOSE 5022
 

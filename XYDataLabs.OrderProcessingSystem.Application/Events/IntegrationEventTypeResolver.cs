@@ -12,10 +12,17 @@ public class IntegrationEventTypeResolver : IIntegrationEventTypeResolver
 {
     private readonly Dictionary<string, Type> _types;
 
-    public IntegrationEventTypeResolver()
+    public IntegrationEventTypeResolver() : this(AppDomain.CurrentDomain.GetAssemblies())
     {
+    }
+
+    public static IntegrationEventTypeResolver FromAssemblies(params Assembly[] assemblies) => new(assemblies);
+
+    private IntegrationEventTypeResolver(IEnumerable<Assembly> assemblies)
+    {
+        ArgumentNullException.ThrowIfNull(assemblies);
         // Scan all loaded assemblies so module-specific integration events are visible too.
-        _types = AppDomain.CurrentDomain.GetAssemblies()
+        _types = assemblies
             .SelectMany(assembly =>
             {
                 try

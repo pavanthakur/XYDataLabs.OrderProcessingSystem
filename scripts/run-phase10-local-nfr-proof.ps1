@@ -22,6 +22,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
@@ -373,7 +374,8 @@ $previousInventoryImage = $null
 if ([string]::IsNullOrWhiteSpace($topicName)) {
     $topicName = 'order-events'
 }
-$sqlConnectionString = "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=$sqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true"
+$sqlConnectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $sqlPassword
+Assert-Phase10HostSqlIdentity -ConnectionString $sqlConnectionString
 $testProject = 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
 $functionalFilter = 'FullyQualifiedName~Outbox|FullyQualifiedName~Inbox|FullyQualifiedName~Dlq|FullyQualifiedName~Replay'
 $tenantFilter = 'FullyQualifiedName~DedicatedTenant|FullyQualifiedName~TenantMiddleware|FullyQualifiedName~TenantRegistryService|FullyQualifiedName~TenantIsolation'
@@ -395,14 +397,14 @@ if (-not $SkipOperationalChecks) {
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 $previousNfrSqlConnection = $env:PHASE10_NFR_SQL_CONNECTION_STRING
 $previousNfrServiceBusConnection = $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING
-$env:ORDERPROCESSING_TEST_CONNECTION_STRING = $sqlConnectionString
+$previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
+$env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $sqlConnectionString
 $env:PHASE10_NFR_SQL_CONNECTION_STRING = $sqlConnectionString
 $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING = $serviceBusConnectionString
 try {
     $functionalPassed = Invoke-CategoryCommand -Category 'functional' -Name 'Durability and tenant integration tests' -Command {
-        dotnet test $testProject `
-            --filter $functionalFilter `
-            --logger "trx;LogFileName=$nfrRoot\functional-tests.trx"
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1') `
+            -Runtime docker-phase10 -TestFilter $functionalFilter.Split('|') -ResultsDirectory (Join-Path $nfrRoot 'functional')
     }
 }
 finally {
@@ -424,6 +426,8 @@ finally {
     else {
         $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING = $previousNfrServiceBusConnection
     }
+    if ($null -eq $previousProvisioningConnection) { Remove-Item Env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING -ErrorAction SilentlyContinue }
+    else { $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $previousProvisioningConnection }
 }
 $categories.functional.status = if ($functionalPassed) { 'passed' } else { 'failed' }
 Write-CategorySummaryFile -Category 'functional'
@@ -486,7 +490,6 @@ else {
                 --sql-connection-string $sqlConnectionString `
                 --sql-read-mode docker-compose `
                 --topic $topicName `
-                --tenant-id 1 `
                 --tenant-code TenantA `
                 --message-count 1 `
                 --timeout-seconds 900 `
@@ -504,7 +507,6 @@ else {
                     --sql-connection-string $sqlConnectionString `
                     --sql-read-mode docker-compose `
                     --topic $topicName `
-                    --tenant-id 1 `
                     --tenant-code TenantA `
                     --message-count $BurstMessageCount `
                     --timeout-seconds $PerformanceTimeoutSeconds `
@@ -520,11 +522,11 @@ Write-NfrSummary
 
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 try {
-    $env:ORDERPROCESSING_TEST_CONNECTION_STRING = $sqlConnectionString
+    $previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
+    $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $sqlConnectionString
     $tenantPassed = Invoke-CategoryCommand -Category 'tenant' -Name 'Tenant routing and isolation integration tests' -Command {
-        dotnet test $testProject `
-            --filter $tenantFilter `
-            --logger "trx;LogFileName=$nfrRoot\tenant-tests.trx"
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1') `
+            -Runtime docker-phase10 -TestFilter $tenantFilter.Split('|') -ResultsDirectory (Join-Path $nfrRoot 'tenant')
     }
 }
 finally {
@@ -534,6 +536,8 @@ finally {
     else {
         $env:ORDERPROCESSING_TEST_CONNECTION_STRING = $previousTestConnection
     }
+    if ($null -eq $previousProvisioningConnection) { Remove-Item Env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING -ErrorAction SilentlyContinue }
+    else { $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $previousProvisioningConnection }
 }
 $categories.tenant.status = if ($tenantPassed) { 'passed' } else { 'failed' }
 Write-CategorySummaryFile -Category 'tenant'
@@ -542,11 +546,11 @@ Write-NfrSummary
 $paymentsPassed = $false
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 try {
-    $env:ORDERPROCESSING_TEST_CONNECTION_STRING = $sqlConnectionString
+    $previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
+    $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $sqlConnectionString
     $paymentsPassed = Invoke-CategoryCommand -Category 'payments' -Name 'Payment provider integration tests' -Command {
-        dotnet test $testProject `
-            --filter $paymentFilter `
-            --logger "trx;LogFileName=$nfrRoot\payments-tests.trx"
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1') `
+            -Runtime docker-phase10 -TestFilter $paymentFilter.Split('|') -ResultsDirectory (Join-Path $nfrRoot 'payments')
     }
 }
 finally {
@@ -556,6 +560,8 @@ finally {
     else {
         $env:ORDERPROCESSING_TEST_CONNECTION_STRING = $previousTestConnection
     }
+    if ($null -eq $previousProvisioningConnection) { Remove-Item Env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING -ErrorAction SilentlyContinue }
+    else { $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $previousProvisioningConnection }
 }
 
 if ($paymentsPassed) {

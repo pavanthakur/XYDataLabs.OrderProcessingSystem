@@ -3,6 +3,9 @@ import { createServer as createHttpsServer, request as createHttpsRequest } from
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createPublicRuntimeConfig } from "./public-runtime-config.mjs";
+
+const publicRuntimeConfig = createPublicRuntimeConfig(process.env);
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(rootDir, "dist");
@@ -49,6 +52,11 @@ function resolveRequestPath(requestUrl) {
 }
 
 function requestHandler(request, response) {
+  if (new URL(request.url ?? "/", "http://localhost").pathname === "/runtime-config.json") {
+    response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    response.end(JSON.stringify(publicRuntimeConfig));
+    return;
+  }
   if (shouldProxyApiRequest(request.url)) {
     proxyApiRequest(request, response);
     return;

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "scope": "docker-dev",
+  "seedPolicy": "missing-only",
+  "sharedBusinessDatabase": "OrderProcessingSystem_Dev",
+  "requiredBaselineTenants": ["TenantA", "TenantB", "TenantC"],
+  "supportedProviderTypes": ["Razorpay", "OpenPay"],
+  "tenantBaselines": [
+    {
+      "tenantCode": "TenantA",
+      "tenantTier": "SharedPool",
+      "status": "Active",
+      "paymentProviderCode": "Razorpay",
+      "dedicatedDatabaseConfigurationKey": null
+    },
+    {
+      "tenantCode": "TenantB",
+      "tenantTier": "SharedPool",
+      "status": "Active",
+      "paymentProviderCode": "Razorpay",
+      "dedicatedDatabaseConfigurationKey": null
+    },
+    {
+      "tenantCode": "TenantC",
+      "tenantTier": "Dedicated",
+      "status": "Active",
+      "paymentProviderCode": "OpenPay",
+      "dedicatedDatabaseConfigurationKey": "DedicatedTenantConnectionStrings:TenantC"
+    }
+  ],
+  "providerDefaults": {
+    "Razorpay": {
+      "use3DSecure": false,
+      "isProduction": false,
+      "privateKeyConfigurationKeyPattern": "PaymentProviders:{tenantCode}:Razorpay:PrivateKey"
+    },
+    "OpenPay": {
+      "use3DSecure": false,
+      "isProduction": false,
+      "privateKeyConfigurationKeyPattern": "PaymentProviders:{tenantCode}:OpenPay:PrivateKey"
+    }
+  }
+}

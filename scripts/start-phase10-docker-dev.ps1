@@ -1,3 +1,5 @@
+#Requires -Version 7.0
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
     [ValidateSet('up', 'down')]
     [string]$Action = 'up',
@@ -10,16 +12,31 @@ param(
 
     [switch]$CleanImages,
 
-    [switch]$RemoveVolumes
+    [switch]$RemoveVolumes,
+
+    [switch]$ResetData,
+
+    [switch]$ColdBuild
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+Assert-Phase10ComposeProject
+if ($CleanImages) { throw '-CleanImages is retired: use an explicit reviewed image cleanup after stopping the stack. It is not a storage reset.' }
+if ($RemoveVolumes) { throw '-RemoveVolumes is retired. Use -ResetData with confirmation for a project-scoped reset.' }
+if ($WhatIfPreference) { Write-Host "Would $Action project xy-phase10 (reset data: $ResetData). No changes made."; return }
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+$tenantBootstrapContractPath = Join-Path $workspaceRoot 'Resources\Configuration\tenant-bootstrap.local.json'
+if (-not (Test-Path -LiteralPath $tenantBootstrapContractPath)) { throw 'Local tenant bootstrap contract is missing.' }
+$tenantBootstrapContract = Get-Content -LiteralPath $tenantBootstrapContractPath -Raw | ConvertFrom-Json
+if ($tenantBootstrapContract.schemaVersion -ne 1 -or $tenantBootstrapContract.scope -ne 'docker-dev' -or $tenantBootstrapContract.seedPolicy -ne 'missing-only' -or $null -eq $tenantBootstrapContract.providerDefaults.OpenPay.use3DSecure) { throw 'Local tenant bootstrap contract is invalid.' }
+$contractOpenPayThreeDsDefault = ([bool]$tenantBootstrapContract.providerDefaults.OpenPay.use3DSecure).ToString().ToLowerInvariant()
+$previousOpenPayThreeDsDefault = [Environment]::GetEnvironmentVariable('PHASE10_OPENPAY_3DS_DEFAULT')
+Initialize-Phase10LogRedaction -Settings (Get-Phase10LocalSettings -Path $envFile)
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
-$dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $latestPointerPath = Join-Path $logRoot 'latest-playwright-profile.txt'
 $latestFailurePointerPath = Join-Path $logRoot 'latest-playwright-failure.txt'
 $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwright-run.txt'
@@ -37,10 +54,7 @@ $diagnosticsPath = Join-Path $runDir 'profile-diagnostics.json'
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $rootMarkerPath) -Force | Out-Null
-New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
 
-$previousDockerConfig = $env:DOCKER_CONFIG
-$env:DOCKER_CONFIG = $dockerConfigRoot
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
 Set-Content -Path (Join-Path $runDir 'profile-run-plan.txt') -Value @(
@@ -59,6 +73,7 @@ if (-not (Test-Path $composeFile)) {
 }
 
 function Assert-DockerAvailable {
+    Assert-Phase10LocalDockerEndpoint
     try {
         $output = & docker ps 2>&1
         if ($LASTEXITCODE -ne 0) {
@@ -153,81 +168,11 @@ function Wait-ForTcpPort {
     throw "Timed out waiting for TCP $HostName`:$Port after $TimeoutSec seconds."
 }
 
-function Stop-ContainersOnPort {
-    param(
-        [Parameter(Mandatory = $true)]
-        [int]$Port
-    )
-
-    $containers = & docker ps --filter "publish=$Port" --format '{{.ID}} {{.Names}}'
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to inspect Docker containers on port $Port."
-    }
-
-    if ([string]::IsNullOrWhiteSpace($containers)) {
-        return
-    }
-
-    foreach ($line in $containers -split "`r?`n") {
-        if ([string]::IsNullOrWhiteSpace($line)) {
-            continue
-        }
-
-        $containerId = ($line -split '\s+')[0]
-        $containerName = ($line -split '\s+', 2)[1]
-        $stopLogPath = Join-Path $runDir "docker-stop-$Port.log"
-        Add-Content -Path $progressLogPath -Value "Stopping container on port ${Port}: $line"
-        & docker stop -t 30 $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
-        $stopExitCode = $LASTEXITCODE
-
-        $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
-        if ($stopExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
-            Add-Content -Path $progressLogPath -Value "docker stop did not fully clear $containerName on port ${Port}; attempting docker kill."
-            & docker kill $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
-            $killExitCode = $LASTEXITCODE
-            $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
-
-            if ($killExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
-                Add-Content -Path $progressLogPath -Value "docker kill did not fully clear $containerName on port ${Port}; attempting docker rm -f."
-                & docker rm -f $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
-                $removeExitCode = $LASTEXITCODE
-                $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
-
-                if ($removeExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
-                    throw "Failed to stop Docker container $containerId on port $Port."
-                }
-            }
-        }
-    }
-}
 
 function Get-EnvLocalValue {
     param([Parameter(Mandatory = $true)][string]$Name)
-
-    $environmentValue = [Environment]::GetEnvironmentVariable($Name)
-    if (-not [string]::IsNullOrWhiteSpace($environmentValue)) {
-        return $environmentValue.Trim()
-    }
-
-    if (-not (Test-Path $envFile)) {
-        return $null
-    }
-
-    $line = Get-Content -LiteralPath $envFile | Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($line)) {
-        return $null
-    }
-
-    $value = (($line -split '=', 2)[1]).Trim()
-    if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
-        $value = $value.Substring(1, $value.Length - 2)
-    }
-
-    if ($value.StartsWith("'") -and $value.EndsWith("'") -and $value.Length -ge 2) {
-        $value = $value.Substring(1, $value.Length - 2)
-    }
-
-    return $value.Trim()
+    $effectiveSettings = Get-Phase10LocalSettings -Path $envFile
+    return $effectiveSettings[$Name]
 }
 
 function Get-ComposeEnvArguments {
@@ -265,43 +210,6 @@ function Get-ComposeProfileArguments {
     return $arguments
 }
 
-function Test-LocalDockerImageExists {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ImageName
-    )
-
-    & docker image inspect $ImageName *> $null
-    return ($LASTEXITCODE -eq 0)
-}
-
-function Ensure-DockerImageAvailable {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ImageName,
-
-        [int]$MaxAttempts = 3,
-
-        [int]$DelaySeconds = 5
-    )
-
-    $pullLogPath = Join-Path $runDir 'docker-image-pull.log'
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        Add-Content -Path $progressLogPath -Value "Pulling Docker image '$ImageName' (attempt $attempt/$MaxAttempts)."
-        & docker pull $ImageName 2>&1 | Tee-Object -FilePath $pullLogPath -Append | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Add-Content -Path $progressLogPath -Value "Docker image '$ImageName' is available locally."
-            return $true
-        }
-
-        if ($attempt -lt $MaxAttempts) {
-            Start-Sleep -Seconds $DelaySeconds
-        }
-    }
-
-    Add-Content -Path $progressLogPath -Value "Failed to pull Docker image '$ImageName' after $MaxAttempts attempts."
-    return $false
-}
 
 function Escape-SqlLiteral {
     param([Parameter(Mandatory = $false)][string]$Value)
@@ -313,33 +221,6 @@ function Escape-SqlLiteral {
     return $Value.Replace("'", "''")
 }
 
-function Remove-Phase10LocalImages {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ImageTag
-    )
-
-    $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
-    $imageNames = @(
-        "ghcr.io/$imageOwner/orderprocessing-orders:$ImageTag",
-        "ghcr.io/$imageOwner/orderprocessing-payments:$ImageTag",
-        "ghcr.io/$imageOwner/orderprocessing-inventory:$ImageTag",
-        "ghcr.io/$imageOwner/orderprocessing-notifications:$ImageTag",
-        "ghcr.io/$imageOwner/orderprocessing-gateway:$ImageTag",
-        "ghcr.io/$imageOwner/orderprocessing-ui:$ImageTag"
-    )
-
-    foreach ($imageName in $imageNames) {
-        $exists = & docker image inspect $imageName 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($exists)) {
-            Add-Content -Path $progressLogPath -Value "Removing stale local image: $imageName"
-            & docker image rm -f $imageName 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-image-prune.log') | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to remove stale local image $imageName."
-            }
-        }
-    }
-}
 
 function Assert-Phase10RedisAzureParity {
     Write-Host 'Validating Phase 10 local Redis parity...' -ForegroundColor Cyan
@@ -376,6 +257,7 @@ END
 
 Push-Location $workspaceRoot
 try {
+    if ($Action -eq 'up') { $env:PHASE10_OPENPAY_3DS_DEFAULT = $contractOpenPayThreeDsDefault }
     $summary = [ordered]@{
         target = 'phase10-docker-http'
         startedUtc = (Get-Date).ToUniversalTime().ToString('o')
@@ -391,11 +273,13 @@ try {
         $composeProfileArgs = Get-ComposeProfileArguments
         $composeEnvArgs = Get-ComposeEnvArguments
         $downArguments = @('down')
-        if ($RemoveVolumes) {
+        if ($ResetData) {
+            Confirm-Phase10Reset -Approve { $PSCmdlet.ShouldProcess('xy-phase10 containers and named SQL/Azurite volumes', 'Permanently reset local trial data') }
+            Assert-Phase10VolumeOwnership
             $downArguments += '--volumes'
         }
         $downArguments += '--remove-orphans'
-        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
+        & docker compose @composeEnvArgs -f $composeFile --profile '*' @downArguments 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
         }
@@ -405,42 +289,72 @@ try {
     }
 
     Assert-DockerAvailable
+    Assert-Phase10StorageCapacity -Path (Get-Phase10DockerDiskLocation) -ForBuild | Out-Null
+    $localSettings = Get-Phase10LocalSettings -Path $envFile
+    Assert-Phase10LocalSettings -Settings $localSettings -FullStack:((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true' -or $Profile -eq 'messaging')
     Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local container stack.'
-    foreach ($port in @(8081, 1433, 6379, 5022)) {
-        Stop-ContainersOnPort -Port $port
-    }
+    $requiredPorts = @(8081, (Get-Phase10SqlHostPort), 6379, 5022, 5080, 5081, 5082, 5083, 5084, 10000, 10001, 10002)
+    if ((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true' -or $Profile -eq 'messaging') { $requiredPorts += @(5672, 5300, 5085) }
+    Assert-Phase10PortOwnership -Ports $requiredPorts
     $composeProfileArgs = Get-ComposeProfileArguments
     $composeEnvArgs = Get-ComposeEnvArguments
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs config --quiet 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-config.log') | Out-Null
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs config --quiet 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-config.log') | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose config validation failed with exit code $LASTEXITCODE"
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down --remove-orphans 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
-    if ($CleanImages) {
-        $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
-        Remove-Phase10LocalImages -ImageTag $imageTag
+    if ($ColdBuild) {
+        $rollbackImages = @()
+        foreach ($service in @('orders', 'payments', 'inventory', 'notifications', 'gateway', 'ui', 'functions', 'azurite')) {
+            $containerIds = @(& docker ps -a --filter 'label=com.docker.compose.project=xy-phase10' --filter "label=com.docker.compose.service=$service" -q)
+            if ($LASTEXITCODE -ne 0) { throw 'Could not inspect current project image references before cold build.' }
+            foreach ($containerId in $containerIds) {
+                $imageId = [string](& docker inspect --format '{{.Image}}' $containerId)
+                if ($LASTEXITCODE -ne 0 -or -not $imageId) { throw "Could not record the current $service rollback image." }
+                $rollbackImages += [ordered]@{ service = $service; id = $imageId.Trim() }
+            }
+        }
+        $rollbackPath = Join-Path $runDir 'rollback-images.json'
+        Set-Content -LiteralPath $rollbackPath -Value (@{ capturedUtc = [DateTime]::UtcNow.ToString('o'); images = $rollbackImages } | ConvertTo-Json -Depth 5) -Encoding utf8
+        Add-Content -Path $progressLogPath -Value "Recorded $($rollbackImages.Count) pre-cold-build project container image IDs for rollback protection."
+    }
+    if ($ResetData) {
+        Confirm-Phase10Reset -Approve { $PSCmdlet.ShouldProcess('xy-phase10 containers and named SQL/Azurite volumes', 'Permanently reset local trial data') }
+        Assert-Phase10VolumeOwnership
+        & docker compose @composeEnvArgs -f $composeFile --profile '*' down --volumes --remove-orphans 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-reset.log') | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Project reset failed; refusing to rebuild.' }
     }
     $platformServices = @('sql-server', 'redis', 'keycloak-local', 'azurite')
     if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
         $platformServices += @('servicebus-sql', 'servicebus-emulator')
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d @platformServices 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-platform-up.log')
+    $buildArgs = @('build')
+    if ($ColdBuild) { $buildArgs += '--no-cache' }
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs @buildArgs azurite 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-azurite-build.log') | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Local Azurite build failed; no cached-image fallback is permitted.' }
+    if ($ColdBuild) {
+        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions build --no-cache orders payments inventory notifications gateway ui functions 2>&1 |
+            Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-build.log') | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Cold application/Functions image build failed; startup will not fall back to existing images.' }
+    }
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d @platformServices 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-platform-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose platform dependency startup failed with exit code $LASTEXITCODE"
     }
 
     & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'invoke-phase10-database-bootstrap.ps1') `
         -Profile $Profile `
+        -NoBuild:$ColdBuild `
         -RunDir $runDir `
-        -ProgressLogPath $progressLogPath 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'phase10-database-bootstrap.log') | Out-Null
+        -ProgressLogPath $progressLogPath 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'phase10-database-bootstrap.log') | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Phase 10 database bootstrap failed with exit code $LASTEXITCODE."
     }
 
     Assert-Phase10RedisAzureParity
     Wait-ForUrl -Url 'http://localhost:8081/' -TimeoutSec $HealthTimeoutSec
+    & (Join-Path $PSScriptRoot 'sync-local-identity.ps1') -Project xy-phase10
     Wait-ForUrl -Url 'http://localhost:10000/' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:10001/' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:10002/' -TimeoutSec $HealthTimeoutSec
@@ -458,82 +372,27 @@ try {
     }
 
     Add-Content -Path $progressLogPath -Value 'Starting application service image startup.'
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d --build orders payments inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
+    $appUpArguments = @('up', '-d')
+    if ($ColdBuild) { $appUpArguments += '--no-build' } else { $appUpArguments += '--build' }
+    $appUpArguments += @('orders', 'payments', 'inventory', 'notifications', 'gateway', 'ui')
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs @appUpArguments 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose app startup failed with exit code $LASTEXITCODE"
     }
     if ((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
-        Add-Content -Path $progressLogPath -Value 'Starting Functions service image startup.'
         $functionsLogPath = Join-Path $runDir 'docker-compose-functions-up.log'
-        $functionsBaseImage = 'mcr.microsoft.com/azure-functions/dotnet-isolated:4-dotnet-isolated8.0'
-        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --build functions 2>&1 |
-            Tee-Object -FilePath $functionsLogPath
-        if ($LASTEXITCODE -ne 0) {
-            $functionsLog = if (Test-Path -LiteralPath $functionsLogPath) {
-                Get-Content -LiteralPath $functionsLogPath -Raw
-            }
-            else {
-                ''
-            }
-
-            $imageOwner = Get-EnvLocalValue -Name 'PHASE10_IMAGE_OWNER'
-            if ([string]::IsNullOrWhiteSpace($imageOwner)) {
-                $imageOwner = 'pavanthakur'
-            }
-
-            $imageTag = Get-EnvLocalValue -Name 'PHASE10_IMAGE_TAG'
-            if ([string]::IsNullOrWhiteSpace($imageTag)) {
-                $imageTag = 'dev'
-            }
-
-            $functionsImageName = "ghcr.io/$imageOwner/orderprocessing-functions:$imageTag"
-            $isTransientFunctionsBaseResolveFailure =
-                $functionsLog -match 'mcr\.microsoft\.com/azure-functions/dotnet-isolated:4-dotnet-isolated8\.0' -and
-                $functionsLog -match '(failed to resolve source metadata|failed to do request|EOF)'
-
-            if ($isTransientFunctionsBaseResolveFailure) {
-                Add-Content -Path $progressLogPath -Value "Functions image build hit a transient base-image metadata fetch failure for $functionsBaseImage."
-
-                if (Ensure-DockerImageAvailable -ImageName $functionsBaseImage -MaxAttempts 3 -DelaySeconds 5) {
-                    Add-Content -Path $functionsLogPath -Value ([Environment]::NewLine + "RETRY: retrying Functions build after pre-pulling $functionsBaseImage.")
-                    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --build functions 2>&1 |
-                        Tee-Object -FilePath $functionsLogPath -Append
-                    if ($LASTEXITCODE -eq 0) {
-                        Add-Content -Path $progressLogPath -Value 'Functions build succeeded after base-image pre-pull retry.'
-                    }
-                    else {
-                        $functionsLog = if (Test-Path -LiteralPath $functionsLogPath) {
-                            Get-Content -LiteralPath $functionsLogPath -Raw
-                        }
-                        else {
-                            ''
-                        }
-                    }
-                }
-
-                if ($LASTEXITCODE -ne 0 -and (Test-LocalDockerImageExists -ImageName $functionsImageName)) {
-                    Add-Content -Path $progressLogPath -Value "Falling back to cached local Functions image: $functionsImageName"
-                    Add-Content -Path $functionsLogPath -Value ([Environment]::NewLine + "FALLBACK: using cached local Functions image $functionsImageName after transient base-image metadata resolution failure.")
-
-                    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions rm -f -s functions 2>&1 |
-                        Tee-Object -FilePath $functionsLogPath -Append | Out-Null
-                    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --no-build --force-recreate functions 2>&1 |
-                        Tee-Object -FilePath $functionsLogPath -Append
-                    if ($LASTEXITCODE -eq 0) {
-                        Add-Content -Path $progressLogPath -Value 'Functions fallback startup with cached local image succeeded.'
-                    }
-                    else {
-                        throw "Docker compose Functions fallback startup failed with exit code $LASTEXITCODE"
-                    }
-                }
-                elseif ($LASTEXITCODE -ne 0) {
-                    throw "Docker compose Functions startup failed after transient base-image retry handling with exit code $LASTEXITCODE"
-                }
-            }
-            else {
-                throw "Docker compose Functions startup failed with exit code $LASTEXITCODE"
-            }
+        $functionsExitCode = 1
+        foreach ($attempt in 1..3) {
+            $functionUpArguments = @('up', '-d')
+            if ($ColdBuild) { $functionUpArguments += '--no-build' } else { $functionUpArguments += '--build' }
+            $functionUpArguments += 'functions'
+            & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions @functionUpArguments 2>&1 | Protect-Phase10Log |
+                Tee-Object -FilePath $functionsLogPath -Append
+            $functionsExitCode = $LASTEXITCODE
+            if ($functionsExitCode -eq 0) { break }
+            if ($attempt -lt 3) { Start-Sleep -Seconds 5 }
         }
+        if ($functionsExitCode -ne 0) { throw 'Functions build/start failed after 3 attempts. No stale-image fallback is permitted.' }
     }
 
     Add-Content -Path $progressLogPath -Value 'Waiting for application readiness URLs.'
@@ -562,6 +421,8 @@ catch {
     throw
 }
 finally {
+    if ($null -eq $previousOpenPayThreeDsDefault) { Remove-Item Env:PHASE10_OPENPAY_3DS_DEFAULT -ErrorAction SilentlyContinue }
+    else { $env:PHASE10_OPENPAY_3DS_DEFAULT = $previousOpenPayThreeDsDefault }
     $summary.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
     Set-Content -Path $summaryPath -Value ($summary | ConvertTo-Json -Depth 5) -Encoding utf8
     $diagnostics = [ordered]@{
@@ -595,12 +456,6 @@ finally {
     Write-Host "Phase 10 Docker profile diagnostics: $diagnosticsPath" -ForegroundColor Cyan
     if ($summary.status -eq 'failed') {
         Write-Host "Phase 10 Docker profile latest failure pointer: $latestFailurePointerPath" -ForegroundColor Yellow
-    }
-    if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) {
-        Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue
-    }
-    else {
-        $env:DOCKER_CONFIG = $previousDockerConfig
     }
     Pop-Location
 }

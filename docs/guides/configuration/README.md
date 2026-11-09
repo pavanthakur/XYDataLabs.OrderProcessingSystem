@@ -4,6 +4,7 @@ Canonical guidance for application secrets, Azure Key Vault usage, and deploymen
 
 Use these documents:
 
+- [Tenant identity and access](tenant-identity-access.md) — local/Docker Keycloak, Azure Entra, explicit platform administration and login/logout
 - `key-vault-integration.md` — Key Vault integration, secret naming, and runtime loading behavior
 - `appservice-secrets-guide.md` — legacy Azure App Service deployment secrets and OIDC setup expectations; current Phase 10 container-app deployment uses `infra-deploy.yml` plus the image build workflow
 - `app-insights-automated-setup.md` — automated Application Insights setup and telemetry configuration guidance

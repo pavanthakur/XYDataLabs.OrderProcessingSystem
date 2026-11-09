@@ -1,5 +1,8 @@
 targetScope = 'resourceGroup'
 
+@description('Environment-specific Entra API and SPA configuration; no credentials.')
+param identity object
+
 @description('Azure region for Container Apps resources')
 param location string
 
@@ -104,7 +107,7 @@ var paymentsName = '${baseName}-pay-${effectiveResourceSuffix}'
 var inventoryName = '${baseName}-inv-${effectiveResourceSuffix}'
 var notificationsName = '${baseName}-notif-${effectiveResourceSuffix}'
 var uiName = '${baseName}-ui-${effectiveResourceSuffix}'
-var frontendWebBaseUrl = 'https://${uiName}.${acaEnvironment.properties.defaultDomain}'
+var frontendWebBaseUrl = identity.webOrigin
 var commonEnv = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -185,7 +188,16 @@ var publisherEnv = [
     value: 'true'
   }
 ]
-var runtimeCommonEnv = concat(commonEnv, sqlEnv, redisEnv)
+var identityEnv = [
+  { name: 'IdentityProvider__Enabled', value: 'true' }
+  { name: 'IdentityProvider__Mode', value: 'Entra' }
+  { name: 'IdentityProvider__Authority', value: identity.authority }
+  { name: 'IdentityProvider__Audience', value: identity.audience }
+  { name: 'IdentityProvider__RequiredScope', value: identity.requiredScope }
+  { name: 'IdentityProvider__TenantClaimType', value: identity.tenantClaimType }
+  { name: 'TenantConfiguration__UiSelectorEnabled', value: string(identity.selectorEnabled) }
+]
+var runtimeCommonEnv = concat(commonEnv, sqlEnv, redisEnv, identityEnv)
 var ordersEnv = concat(publisherEnv, [
   {
     name: 'ServiceBus__PaymentStateSubscriptionName'
@@ -205,6 +217,12 @@ var notificationsEnv = concat(publisherEnv, [
   }
 ])
 var uiEnv = concat(runtimeCommonEnv, [
+  { name: 'IDENTITY_MODE', value: 'Entra' }
+  { name: 'APP_ENVIRONMENT', value: environment }
+  { name: 'PUBLIC_WEB_ORIGIN', value: identity.webOrigin }
+  { name: 'PUBLIC_IDENTITY_AUTHORITY', value: identity.authority }
+  { name: 'PUBLIC_IDENTITY_CLIENT_ID', value: identity.spaClientId }
+  { name: 'PUBLIC_IDENTITY_SCOPES', value: identity.apiScope }
   {
     name: 'ORDERPROCESSING_API_BASE_URL'
     value: 'http://${gatewayName}'

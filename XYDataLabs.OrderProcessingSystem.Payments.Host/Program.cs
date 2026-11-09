@@ -81,7 +81,8 @@ builder.Services.AddScoped<IPaymentProviderGateway>(serviceProvider =>
 {
     var resolver = serviceProvider.GetRequiredService<ITenantPaymentProviderResolver>();
     var providerType = resolver.ResolveCurrentTenantProvider().ProviderType;
-    return serviceProvider.GetRequiredKeyedService<IPaymentProviderGateway>(providerType);
+    return new ObservedPaymentProviderGateway(serviceProvider.GetRequiredKeyedService<IPaymentProviderGateway>(providerType),
+        serviceProvider.GetRequiredService<ILogger<ObservedPaymentProviderGateway>>());
 });
 builder.Services.AddOpenPayAdapter(builder.Configuration);
 builder.Services.AddRazorpayAdapter(builder.Configuration);
@@ -164,6 +165,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         tags: ["ready"]);
 }
 
+builder.Services.AddConfiguredEntraIdentity(builder.Configuration);
 var app = builder.Build();
 
 app.UseExceptionHandler();

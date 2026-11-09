@@ -10,6 +10,7 @@ public sealed class DeterministicPaymentProviderGateway(string providerType)
         new(StringComparer.Ordinal);
 
     public string ProviderType { get; } = providerType;
+    public bool IsSimulation => true;
 
     public Task<PaymentGatewayCustomer> CreateCustomerAsync(
         PaymentGatewayCreateCustomerRequest request,

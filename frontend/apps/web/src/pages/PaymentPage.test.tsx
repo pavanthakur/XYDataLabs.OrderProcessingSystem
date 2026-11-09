@@ -15,7 +15,31 @@ const openPayConfiguration = {
   isProduction: false
 } satisfies PaymentConfiguration;
 
+const existingOrder = { orderId:42, customerId:7, orderReferenceId:"11111111-1111-1111-1111-111111111111", orderDate:"2026-11-09T00:00:00Z", totalPrice:100, currencyCode:"MXN", status:"Created", isFulfilled:false };
+
 describe("PaymentPage", () => {
+  it("blocks an MXN order when the effective provider supports only INR", async () => {
+    const processPayment=vi.fn();
+    const api={getOrderById:vi.fn().mockResolvedValue(existingOrder),getPaymentConfiguration:vi.fn().mockResolvedValue({
+      activeProviderType:"Razorpay",activeProviderName:"Razorpay",collectionMode:"provider_checkout",isProduction:false,
+      adapterMode:"sandbox",supportedCurrencies:["INR"]}),processPayment} as unknown as OrderProcessingApiClient;
+    render(<MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}><Routes><Route path="/customers/:customerId/orders/:orderId/payment"
+      element={<PaymentPage activeTenantCode="TenantA" apiClient={api} />} /></Routes></MemoryRouter>);
+    expect(await screen.findByText(/Order currency MXN is not supported by Razorpay/)).toBeInTheDocument();
+    expect(screen.getByRole("button",{name:"Continue to Razorpay"})).toBeDisabled();
+    expect(processPayment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {orderReferenceId:""}, {totalPrice:0}, {customerId:8}, {status:"Paid"}, {orderId:99}
+  ])("does not enable payment for invalid or ineligible order data (%j)", async change => {
+    const processPayment=vi.fn();
+    const api={getOrderById:vi.fn().mockResolvedValue({...existingOrder,...change}),getPaymentConfiguration:vi.fn().mockResolvedValue({activeProviderType:"Razorpay",activeProviderName:"Razorpay",collectionMode:"provider_checkout",isProduction:false}),processPayment} as unknown as OrderProcessingApiClient;
+    render(<MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}><Routes><Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode="TenantA" apiClient={api} />} /></Routes></MemoryRouter>);
+    expect(await screen.findByText(/Select an existing created order/)).toBeInTheDocument();
+    expect(screen.getByRole("button",{name:"Continue to Razorpay"})).toBeDisabled();
+    expect(processPayment).not.toHaveBeenCalled();
+  });
   function useNonLocalHostname(): void {
     Object.defineProperty(window.location, "hostname", {
       configurable: true,
@@ -37,13 +61,13 @@ describe("PaymentPage", () => {
     const apiClient = {
       getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
       processPayment: vi.fn(),
-      getOrderById: vi.fn()
+      getOrderById: vi.fn().mockResolvedValue(existingOrder)
     } as unknown as OrderProcessingApiClient;
 
     render(
-      <MemoryRouter initialEntries={["/payments/new"]}>
+      <MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}>
         <Routes>
-          <Route path="/payments/new" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
+          <Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
         </Routes>
       </MemoryRouter>
     );
@@ -105,13 +129,13 @@ describe("PaymentPage", () => {
       getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
       processPayment,
       confirmPaymentStatus,
-      getOrderById: vi.fn()
+      getOrderById: vi.fn().mockResolvedValue(existingOrder)
     } as unknown as OrderProcessingApiClient;
 
     render(
-      <MemoryRouter initialEntries={["/payments/new"]}>
+      <MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}>
         <Routes>
-          <Route path="/payments/new" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
+          <Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
           <Route
             path="/payments/callback"
             element={<PaymentCallbackPage activeTenantCode="TenantA" apiClient={apiClient} onTenantChange={vi.fn()} />}
@@ -145,7 +169,7 @@ describe("PaymentPage", () => {
     expect(await screen.findByText("Confirmed payment status")).toBeInTheDocument();
     expect(screen.getByText("Payment completed successfully.")).toBeInTheDocument();
     expect(screen.getByText("Provider confirmation (OpenPay)")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Start another payment" })).toHaveAttribute("href", "/payments/new");
+    expect(screen.getByRole("link", { name: "Return to order" })).toHaveAttribute("href", "/customers/7/orders/42");
     expect(screen.queryByText("Provider return details")).not.toBeInTheDocument();
   });
 
@@ -181,13 +205,13 @@ describe("PaymentPage", () => {
     const apiClient = {
       getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
       processPayment,
-      getOrderById: vi.fn()
+      getOrderById: vi.fn().mockResolvedValue(existingOrder)
     } as unknown as OrderProcessingApiClient;
 
     render(
-      <MemoryRouter initialEntries={["/payments/new"]}>
+      <MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}>
         <Routes>
-          <Route path="/payments/new" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
+          <Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
         </Routes>
       </MemoryRouter>
     );
@@ -284,13 +308,13 @@ describe("PaymentPage", () => {
       } satisfies PaymentConfiguration),
       processPayment,
       confirmPaymentStatus,
-      getOrderById: vi.fn()
+      getOrderById: vi.fn().mockResolvedValue(existingOrder)
     } as unknown as OrderProcessingApiClient;
 
     render(
-      <MemoryRouter initialEntries={["/payments/new"]}>
+      <MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}>
         <Routes>
-          <Route path="/payments/new" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
+          <Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
           <Route
             path="/payments/callback"
             element={<PaymentCallbackPage activeTenantCode="TenantA" apiClient={apiClient} onTenantChange={vi.fn()} />}

@@ -264,11 +264,11 @@ When the wrapper calls `infra-deploy.yml`, the key inputs are:
 | `environment` | Selects `dev`, `staging`, or `prod` |
 | `location` | Azure region for the deployment |
 | `dryRun` | Runs what-if only when enabled |
-| `publicDomain` | Optional DNS suffix for friendly aliases such as `api-dev.contoso.com` |
+| `publicDomain` | Compatibility DNS suffix fallback. Preferred public names come from `automation/config/runtime-targets.json`, e.g. `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com` |
 | `bindAliases` | Enables alias planning and direct binding checks |
 | `aliasMode` | Chooses either `direct` ACA custom-domain binding or `frontdoor` alias planning |
 
-If `bindAliases=true`, supply a real `publicDomain`. The workflow will fail fast instead of using a placeholder domain.
+If `bindAliases=true`, the workflow binds the stable public hostnames resolved from `automation/config/runtime-targets.json`. Supply `publicDomain` only as a fallback when adding a new environment before the catalog has explicit public URLs. Generated `*.azurecontainerapps.io` hostnames are diagnostic fallback values only.
 
 Workflow YAML still enforces this policy explicitly.
 Azure deployment scripts consume the same defaults from `Resources/Azure-Deployment/branch-policy.json`; if governance changes, update the workflow guards and the shared policy file together.

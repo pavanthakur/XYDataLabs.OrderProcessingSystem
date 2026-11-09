@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
@@ -168,7 +169,9 @@ try {
     }
 
     Write-ProgressLine 'Waiting for SQL, Redis, Keycloak, and Azurite readiness...'
-    Wait-ForTcpPort -HostName 'localhost' -Port 1433 -TimeoutSec 300
+    Wait-ForTcpPort -HostName '127.0.0.1' -Port (Get-Phase10SqlHostPort) -TimeoutSec 300
+    $localSettings = Get-Phase10LocalSettings -Path $envFile
+    Assert-Phase10HostSqlIdentity -ConnectionString (New-Phase10HostSqlConnectionString -Database 'master' -Password $localSettings.LOCAL_SQL_PASSWORD)
     Wait-ForTcpPort -HostName 'localhost' -Port 6379 -TimeoutSec 300
     Wait-ForUrl -Url 'http://localhost:8081/' -TimeoutSec 300
     Wait-ForUrl -Url 'http://localhost:10000/' -TimeoutSec 300

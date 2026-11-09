@@ -1,11 +1,20 @@
 #Requires -Version 7.0
 
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
     [ValidateRange(60, 900)]
     [int]$StabilizationDelaySeconds = 120,
 
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
     [string]$IntegrationConsoleVerbosity = 'minimal',
+
+    [ValidateSet('sandbox', 'deterministic', 'both')]
+    [string]$PaymentSuite = 'sandbox',
+
+    [ValidateSet('baseline','extended')]
+    [string]$AcceptanceProfile = 'baseline',
+
+    [switch]$VerifyPersistence,
 
     [switch]$CleanupOnExit,
 
@@ -15,10 +24,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+. (Join-Path $PSScriptRoot 'phase10-acceptance-report.ps1')
+Assert-Phase10ComposeProject
+if ($RemoveImages) { throw '-RemoveImages is retired. Review image cleanup separately; shared tags must not be force-deleted.' }
+if ($RemoveVolumes -and -not $CleanupOnExit) { throw '-RemoveVolumes requires -CleanupOnExit.' }
+if ($WhatIfPreference) { Write-Host 'Would validate xy-phase10. No changes made.'; return }
+if ($RemoveVolumes) { Confirm-Phase10Reset -Approve { $PSCmdlet.ShouldProcess('xy-phase10 SQL/Azurite volumes', 'Delete trial data after E2E validation') } }
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+Initialize-Phase10LogRedaction -Settings (Get-Phase10LocalSettings -Path $envFile)
 $databaseBootstrapScript = Join-Path $workspaceRoot 'scripts\invoke-phase10-database-bootstrap.ps1'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
@@ -53,7 +70,7 @@ Set-Content -Path (Join-Path $runDir 'end-to-end-run-plan.txt') -Value @(
     '1. Confirm gateway and UI readiness.',
     '2. Run smoke validation.',
     '3. Run integration suite.',
-    '4. Re-apply the Phase 10 database baseline after integration tests.',
+    '4. Verify integration left application metadata unchanged; apply only the approved OpenPay 3DS-off baseline.',
     '5. Discover active tenant topology from runtime/registry data and run the provider matrix across the resolved tenants.',
     '6. Preserve the stack by default so NFR and rollback proof can run.',
     '7. Tear down only when CleanupOnExit is explicitly selected.',
@@ -70,6 +87,7 @@ function Write-ProgressLine {
 }
 
 function Assert-DockerAvailable {
+    Assert-Phase10PortOwnership -Ports @(5080, 5022, (Get-Phase10SqlHostPort))
     try {
         $output = & docker ps 2>&1
         if ($LASTEXITCODE -ne 0) {
@@ -118,7 +136,7 @@ function Invoke-LoggedCommand {
     $logPath = Join-Path $runDir (($Name -replace '[^a-z0-9-]+', '-').ToLowerInvariant() + '.log')
     Write-ProgressLine "Running $Name..."
     try {
-        & $Script 2>&1 | Tee-Object -FilePath $logPath
+        & $Script 2>&1 | Protect-Phase10Log | Tee-Object -FilePath $logPath
         if ($LASTEXITCODE -ne 0) {
             throw "$Name failed with exit code $LASTEXITCODE"
         }
@@ -127,6 +145,9 @@ function Invoke-LoggedCommand {
     }
     catch {
         Write-ProgressLine "$Name failed: $($_.Exception.Message)"
+        if (-not @($summary.steps | Where-Object name -eq $Name).Count) {
+            $summary.steps += @{name=$Name;status='failed';log=[IO.Path]::GetFileName($logPath);error=$_.Exception.Message}
+        }
         throw
     }
 }
@@ -141,6 +162,10 @@ $summary = [ordered]@{
     steps = @()
 }
 $runFailed = $false
+$runPartial = $false
+$previousPaymentReportRoot = $env:PHASE10_PAYMENT_REPORT_ROOT
+$paymentReportRoot = Join-Path $runDir 'payments'
+$env:PHASE10_PAYMENT_REPORT_ROOT = $paymentReportRoot
 $dockerAvailable = $false
 
 try {
@@ -156,6 +181,10 @@ try {
         log = [IO.Path]::GetFileName($startupLogPath)
     }
 
+    Invoke-LoggedCommand -Name 'foundations' -Script {
+        & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-phase10-foundation-tests.ps1') -ArtifactDirectory (Join-Path $runDir 'foundations')
+    } | Out-Null
+    $summary.steps += @{name='foundations';status='passed'}
     Start-Sleep -Seconds $StabilizationDelaySeconds
 
     Invoke-LoggedCommand -Name 'smoke' -Script {
@@ -191,45 +220,94 @@ try {
         log = 'integration.log'
     }
 
-    Invoke-LoggedCommand -Name 'baseline-restore' -Script {
-        $baselineExitCode = 1
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
-            & pwsh -NoProfile -ExecutionPolicy Bypass -File $databaseBootstrapScript -Profile apps -RunDir $runDir -ProgressLogPath $progressLogPath
-            $baselineExitCode = $LASTEXITCODE
-            if ($baselineExitCode -eq 0) {
-                break
-            }
+    Invoke-LoggedCommand -Name 'openpay-local-baseline' -Script {
+        & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'set-local-openpay-3ds-baseline.ps1') -ArtifactPath (Join-Path $runDir 'openpay-3ds-baseline.json')
+        if ($LASTEXITCODE -ne 0) { throw 'OpenPay 3DS-off baseline could not be applied and verified.' }
+    } | Out-Null
+    $summary.steps += @{name='openpay-local-baseline';status='passed';report='openpay-3ds-baseline.json'}
 
-            if ($attempt -lt 3) {
-                Write-ProgressLine "Baseline restore attempt $attempt failed after integration cleanup; retrying in 5 seconds."
-                Start-Sleep -Seconds 5
-            }
-        }
+    Invoke-LoggedCommand -Name 'baseline-validation' -Script {
+        & pwsh -NoProfile -File $databaseBootstrapScript -Profile apps -ValidateOnly -RunDir $runDir -ProgressLogPath $progressLogPath
+        if ($LASTEXITCODE -ne 0) { throw 'Read-only database validation failed; no reseeding is permitted.' }
+        & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'test-phase10-local-seed-contract.ps1') -OutputPath (Join-Path $runDir 'seed-contract.json')
+    } | Out-Null
+    $summary.steps += @{name='baseline-validation';status='passed'}
 
-        if ($baselineExitCode -ne 0) {
-            throw "Baseline restore failed after 3 attempts with exit code $baselineExitCode."
-        }
+    Invoke-LoggedCommand -Name 'customer-directory' -Script {
+        npm --prefix (Join-Path $workspaceRoot 'automation') run test:customer-directory:browser
     } | Out-Null
     $summary.steps += [ordered]@{
-        name = 'baseline-restore'
+        name = 'customer-directory'
         status = 'passed'
         startedUtc = (Get-Date).ToUniversalTime().ToString('o')
         finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
-        log = 'baseline-restore.log'
+        log = 'customer-directory.log'
     }
 
-    Invoke-LoggedCommand -Name 'matrix' -Script {
-        npm --prefix (Join-Path $workspaceRoot 'automation') run run:docker:dev:http:playwright-matrix -- `
-            --provider Razorpay `
-            --provider OpenPay
-    } | Out-Null
-    $summary.steps += [ordered]@{
-        name = 'matrix'
-        status = 'passed'
-        startedUtc = (Get-Date).ToUniversalTime().ToString('o')
-        finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
-        log = 'matrix.log'
+    if ($PaymentSuite -in @('deterministic', 'both')) {
+        Invoke-LoggedCommand -Name 'tenantc-routing-regression' -Script {
+            & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-local-payment-tests.ps1') -Mode deterministic -TenantCode TenantC -ProviderType Razorpay
+        } | Out-Null
+        $summary.steps += @{name='tenantc-routing-regression';status='passed'}
+        Invoke-LoggedCommand -Name 'payments-deterministic' -Script {
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/run-local-payment-tests.ps1') -Mode deterministic -AcceptanceProfile $AcceptanceProfile
+        } | Out-Null
+        $summary.steps += [ordered]@{ name = 'payments-deterministic'; status = 'passed'; startedUtc = [DateTime]::UtcNow.ToString('o'); finishedUtc = [DateTime]::UtcNow.ToString('o'); log = 'payments-deterministic.log' }
     }
+    if ($PaymentSuite -in @('sandbox', 'both')) {
+        & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-phase10-sandbox-gates.ps1') -ArtifactDirectory $paymentReportRoot -AcceptanceProfile $AcceptanceProfile 2>&1 |
+            Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'payments-sandbox.log')
+        $sandboxCode=$LASTEXITCODE
+        if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'A provider fixture needs recovery. Stop all further mutations.' }
+        $sandbox=Get-Content (Join-Path $paymentReportRoot 'sandbox-gates.json') -Raw | ConvertFrom-Json
+        $summary.steps += @{name='sandbox-payments';status=$sandbox.status;rawExitCode=$sandboxCode;primaryPassed=$sandbox.primaryPassed;report='payments/sandbox-gates.json'}
+        if ($sandbox.status -eq 'failed') { $runFailed=$true } elseif ($sandbox.status -ne 'passed') { $runPartial=$true }
+    }
+    if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Fixture lock remains; refuse messaging/restart.' }
+    try {
+        Invoke-LoggedCommand -Name 'currency-order-entry' -Script { npm --prefix (Join-Path $workspaceRoot 'automation') run test:payment-currency:browser } | Out-Null
+        $summary.steps += @{name='currency-order-entry';status='passed'}
+    } catch { $runFailed=$true }
+    if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Currency fixture needs recovery; stop further mutations.' }
+    if ($PaymentSuite -in @('sandbox','both')) {
+        $sources=@(Get-ChildItem $paymentReportRoot -Directory -Filter 'payment-acceptance-sandbox-*' | ForEach-Object {Join-Path $_.FullName 'summary.json'} | Where-Object {Test-Path $_})
+        $hasCases=@($sources | Where-Object { $j=Get-Content $_ -Raw|ConvertFrom-Json; @($j.results.rows|Where-Object journeyOutcome -eq 'completed').Count -gt 0 }).Count -gt 0
+        if ($hasCases) {
+            $previousContinuation=$env:PHASE10_CONTINUATION_SOURCES
+            $previousContinuationArtifact=$env:PHASE10_CONTINUATION_ARTIFACT
+            try {
+                $env:PHASE10_CONTINUATION_SOURCES=$sources-join';'
+                $env:PHASE10_CONTINUATION_ARTIFACT=Join-Path $runDir 'continuation'
+                Invoke-LoggedCommand -Name 'order-continuation' -Script { npm --prefix (Join-Path $workspaceRoot 'automation') run test:order-continuation:browser } | Out-Null
+                $continuationPath=Join-Path $env:PHASE10_CONTINUATION_ARTIFACT 'summary.json'
+                if(-not(Test-Path $continuationPath)){throw 'Order continuation runner exited successfully without a structured summary.'}
+                $continuation=Get-Content $continuationPath -Raw|ConvertFrom-Json
+                $continuationDecision=Resolve-Phase10ContinuationDecision -Summary $continuation
+                $summary.steps += @{name='order-continuation';status=$continuationDecision.Status;structuredStatus=$continuationDecision.StructuredStatus;deferredCount=$continuationDecision.DeferredCount;deferrals=$continuationDecision.Deferrals;report='continuation/summary.json'}
+            } catch { $runFailed=$true }
+            finally { $env:PHASE10_CONTINUATION_SOURCES=$previousContinuation; $env:PHASE10_CONTINUATION_ARTIFACT=$previousContinuationArtifact }
+        } else { $runPartial=$true; $summary.steps += @{name='order-continuation';status='blocked';reason='No completed real-sandbox case exists for order-state evidence.'} }
+    }
+    try {
+        Invoke-LoggedCommand -Name 'messaging-functions' -Script {
+            & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'test-local-messaging.ps1') -ArtifactDirectory (Join-Path $runDir 'messaging')
+        } | Out-Null
+        $summary.steps += @{name='messaging-functions';status='passed'}
+    } catch { $runFailed=$true }
+    $replayProof=Join-Path $runDir 'messaging/replay-restoration.json'
+    if (-not (Test-Path $replayProof) -or (Get-Content $replayProof -Raw | ConvertFrom-Json).status -ne 'passed') { throw 'Replay restoration is not proven; refuse further mutations.' }
+    if ($VerifyPersistence) {
+        try {
+            Invoke-LoggedCommand -Name 'persistence' -Script {
+                & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'test-phase10-docker-persistence.ps1') -RestartDesktop -ArtifactDirectory (Join-Path $runDir 'persistence')
+            } | Out-Null
+            $summary.steps += @{name='persistence';status='passed'}
+        } catch { $runFailed=$true }
+    } else { $summary.steps += @{name='persistence';status='not-run';reason='Select -VerifyPersistence for the explicit Desktop restart gate.'} }
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'test-phase10-local-seed-contract.ps1') -OutputPath (Join-Path $runDir 'restoration-contract.json')
+    if ($LASTEXITCODE -ne 0) { throw 'Final provider restoration contract failed.' }
+    $summary.steps += @{name='provider-restoration';status='passed'}
+
 }
 catch {
     $runFailed = $true
@@ -262,36 +340,14 @@ finally {
                 '--remove-orphans'
             )
             if ($RemoveVolumes) {
+                Assert-Phase10VolumeOwnership
                 $downArguments += '--volumes'
             }
-            & docker @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
+            & docker @downArguments 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "Docker compose down failed with exit code $LASTEXITCODE"
             }
 
-            if ($RemoveImages) {
-                $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
-                $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
-                $images = @(
-                    "ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag",
-                    "ghcr.io/$imageOwner/orderprocessing-orders:$imageTag",
-                    "ghcr.io/$imageOwner/orderprocessing-payments:$imageTag",
-                    "ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag",
-                    "ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag",
-                    "ghcr.io/$imageOwner/orderprocessing-ui:$imageTag"
-                )
-
-                foreach ($image in $images) {
-                    $imageId = docker images -q $image 2>$null
-                    if ($imageId) {
-                        docker rmi -f $image | Out-Null
-                        Write-ProgressLine "Removed image $image"
-                    }
-                    else {
-                        Write-ProgressLine "Image not found: $image"
-                    }
-                }
-            }
         }
         elseif ($dockerAvailable) {
             Write-ProgressLine 'Preserving the running stack, volumes, and image tags for NFR/rollback proof.'
@@ -329,7 +385,9 @@ finally {
     }
 
     $summary.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
-    $summary.status = if ($runFailed) { 'failed' } else { 'passed' }
+    $summary.status = if ($runFailed) { 'failed' } elseif ($runPartial) { 'partial' } else { 'passed' }
+    $summary.deferrals = @('DW-023','DW-024')
+    $env:PHASE10_PAYMENT_REPORT_ROOT = $previousPaymentReportRoot
     Set-Content -Path $summaryPath -Value ($summary | ConvertTo-Json -Depth 6) -Encoding utf8
     $diagnostics = [ordered]@{
         target = $summary.target
@@ -375,3 +433,4 @@ finally {
         Write-Host "Phase 10 Docker end-to-end latest failure pointer: $latestFailurePointerPath" -ForegroundColor Yellow
     }
 }
+if ($runFailed -or $runPartial) { exit 1 }

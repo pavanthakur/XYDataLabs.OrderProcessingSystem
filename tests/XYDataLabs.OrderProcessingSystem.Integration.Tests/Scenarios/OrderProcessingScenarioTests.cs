@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using Xunit;
@@ -59,6 +60,27 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
             var response = await _client.GetAsync("/api/v1/Customer/GetAllCustomers");
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        [Fact]
+        public async Task GetAllCustomers_AfterCreatingOrder_ReturnsCreatedOrderStatus()
+        {
+            var createResponse = await _client.PostAsJsonAsync("/api/v1/Order", new CreateOrderRequestDto
+            {
+                CustomerId = _scenarioSeed.CustomerId,
+                ProductIds = new List<int> { _scenarioSeed.ProductId }
+            });
+            createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+            var createdOrder = await createResponse.Content.ReadFromJsonAsync<ApiResponse<OrderDto>>();
+            createdOrder!.Data.Should().NotBeNull();
+
+            var response = await _client.GetAsync("/api/v1/Customer/GetAllCustomers");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var payload = await response.Content.ReadFromJsonAsync<ApiResponse<List<CustomerDto>>>();
+            payload!.Data.Should().NotBeNull();
+            var customer = payload.Data!.Single(item => item.CustomerId == _scenarioSeed.CustomerId);
+            customer.OrderDtos.Should().Contain(item =>
+                item.OrderId == createdOrder.Data!.OrderId && item.Status == nameof(OrderStatus.Created));
         }
 
         [Fact]

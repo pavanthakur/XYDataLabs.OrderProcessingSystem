@@ -31,6 +31,7 @@ function Assert-DockerRuntimeSqlGuardrail {
     $dataSource = [string]$builder.DataSource
     $database = [string]$builder.InitialCatalog
     $serverHost = ($dataSource -split ',', 2)[0].Trim().ToLowerInvariant()
+    $serverHost = $serverHost -replace '^tcp:', ''
     $normalizedSourceDescription = $SourceDescription.Trim().ToLowerInvariant()
 
     if ([string]::IsNullOrWhiteSpace($serverHost)) {

@@ -4,6 +4,7 @@ import type {
   CustomerSummary,
   OrderDetail,
   PaymentConfiguration,
+  PaymentRuntime,
   PaymentStatusDetails,
   PaymentStatusLookupRequest,
   PaymentResult,
@@ -32,6 +33,12 @@ export class ApiRequestError extends Error {
 }
 
 export class OrderProcessingApiClient {
+  private requestController = new AbortController();
+
+  cancelPendingRequests(): void {
+    this.requestController.abort();
+    this.requestController = new AbortController();
+  }
   private readonly baseUrl: string;
   private readonly getTenantCode: () => string | null;
   private readonly getTenantHeaderName: () => string | null;
@@ -51,9 +58,25 @@ export class OrderProcessingApiClient {
   }
 
   async getPaymentConfiguration(requestedTenantCode?: string): Promise<PaymentConfiguration> {
-    return this.requestJson<PaymentConfiguration>("/api/v1/Info/payment-configuration", {
+    const configuration = await this.requestJson<PaymentConfiguration>("/api/v1/Info/payment-configuration", {
       headers: this.buildHeaders(requestedTenantCode)
     });
+    const runtime = await this.getPaymentRuntime(requestedTenantCode);
+    if (!["sandbox","live","deterministic"].includes(runtime.adapterMode)) throw new Error("Payment runtime adapter mode is missing or unrecognized.");
+    if (runtime.providerType !== configuration.activeProviderType || runtime.collectionMode !== configuration.collectionMode
+      || runtime.isProduction !== configuration.isProduction || runtime.configuredThreeDs !== configuration.isThreeDSecure) {
+      throw new Error("Orders and Payments runtime configuration disagree. Reload after restoring tenant settings.");
+    }
+    if (runtime.providerType.toLowerCase() === "razorpay"
+      && (!Array.isArray(runtime.supportedCurrencies) || runtime.supportedCurrencies.length === 0
+        || runtime.supportedCurrencies.some(currency => typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)))) {
+      throw new Error("Razorpay runtime currency capabilities are unavailable. Reload after updating the Payments service.");
+    }
+    return { ...configuration, adapterMode: runtime.adapterMode, supportedCurrencies: runtime.supportedCurrencies };
+  }
+
+  async getPaymentRuntime(requestedTenantCode?: string): Promise<PaymentRuntime> {
+    return this.requestEnvelope<PaymentRuntime>("/api/v1/Payments/runtime", { headers: this.buildHeaders(requestedTenantCode) });
   }
 
   async getAllCustomers(): Promise<CustomerSummary[]> {
@@ -148,6 +171,7 @@ export class OrderProcessingApiClient {
 
   private async requestJson<TResponse>(path: string, init?: RequestInit): Promise<TResponse> {
     const response = await fetch(`${this.baseUrl}${path}`, {
+      signal: this.requestController.signal,
       credentials: "include",
       ...init,
       headers: {
@@ -158,6 +182,7 @@ export class OrderProcessingApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event("orderprocessing.session-expired"));
       throw new ApiRequestError(await this.getRequestErrorMessage(response), response.status);
     }
 
@@ -166,19 +191,29 @@ export class OrderProcessingApiClient {
 
   private async getRequestErrorMessage(response: Response): Promise<string> {
     const contentType = response.headers.get("content-type") ?? "";
+    // Consume the stream once: JSON errors may be empty, malformed, or use
+    // an unrecognized shape. Falling back must not read the body again.
+    const errorText = await response.text();
 
-    if (contentType.includes("application/json")) {
-      const payload = await response.json().catch(() => null);
+    if (contentType.includes("application/json") || contentType.includes("+json")) {
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(errorText);
+      } catch {
+        // Preserve non-JSON response text below.
+      }
       if (payload && typeof payload === "object") {
         const errorPayload = payload as {
           detail?: unknown;
           title?: unknown;
           message?: unknown;
           errors?: unknown;
+          error?: unknown;
         };
 
         if (Array.isArray(errorPayload.errors) && errorPayload.errors.length > 0) {
-          return errorPayload.errors.filter((value): value is string => typeof value === "string").join(" ");
+          const messages = errorPayload.errors.filter((value): value is string => typeof value === "string" && value.length > 0);
+          if (messages.length > 0) return messages.join(" ");
         }
 
         if (typeof errorPayload.detail === "string" && errorPayload.detail.length > 0) {
@@ -192,10 +227,12 @@ export class OrderProcessingApiClient {
         if (typeof errorPayload.title === "string" && errorPayload.title.length > 0) {
           return errorPayload.title;
         }
+        if (typeof errorPayload.error === "string" && errorPayload.error.length > 0) {
+          return errorPayload.error;
+        }
       }
     }
 
-    const errorText = await response.text();
     return errorText || `Request failed with status ${response.status}.`;
   }
 

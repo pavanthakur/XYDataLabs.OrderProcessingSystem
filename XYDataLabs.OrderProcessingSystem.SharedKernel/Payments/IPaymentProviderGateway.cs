@@ -2,6 +2,9 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 public interface IPaymentProviderGateway : IPaymentProviderAdapter
 {
+    // Implementation identity, not inferred from hostname or configuration files.
+    bool IsSimulation => false;
+
     Task<PaymentGatewayCustomer> CreateCustomerAsync(PaymentGatewayCreateCustomerRequest request, CancellationToken cancellationToken = default);
 
     Task<PaymentGatewayCardToken> CreateCardTokenAsync(PaymentGatewayCreateCardTokenRequest request, CancellationToken cancellationToken = default);
@@ -56,4 +59,6 @@ public sealed record PaymentGatewayChargeResult(
     DateTime? CreatedAt,
     string? Authorization,
     string? ErrorMessage,
-    string? RedirectUrl);
+    string? RedirectUrl,
+    string? Currency = null,
+    string? ProviderOrderId = null);

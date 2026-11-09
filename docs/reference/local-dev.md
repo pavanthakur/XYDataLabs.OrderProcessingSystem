@@ -152,9 +152,9 @@ Preferred Phase 10 Docker E2E references:
 - VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
 - Direct script equivalent: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
 - Docker NFR proof wrapper: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-nfr-proof.ps1`
-- Use this when you want one command that recreates the stack in clean Azure-parity mode, applies EF migrations, verifies SQL/Redis/payment-provider baseline readiness, runs ready/smoke/integration/matrix/full validation, writes the log trail, and cleans up the local stack.
+- Use this to start/update the stack, apply EF migrations and baseline seeds, and run smoke/integration/payment matrix validation. SQL storage and the stack are preserved by default. See the [fresh SSD and reset runbook](../runbooks/phase10-docker-fresh-ssd.md) for the G: setup and explicit destructive reset.
 - Use `-ReuseExistingStack` on the direct script only when you intentionally want a faster debugging pass against the current local containers and database state.
-- Clean Docker run: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
+- Explicit reset/reseed (confirmation required): `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60 -ResetData`
 - Reuse Docker stack: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60 -ReuseExistingStack`
 - Reuse Docker stack without auto-start: add `-SkipStartIfNeeded`
 
@@ -164,7 +164,7 @@ Shared local/Azure contract:
 - The runtime payload is service-specific in both places: gateway, Orders, Inventory, Notifications, and UI each get their own image or container artifact rather than a single shared image.
 - The clean local Phase 10 hook is the pre-Azure parity gate: if migrations, active dedicated-tenant database contracts, payment-provider baseline rows, tenant payment routing, or Redis readiness are broken locally, do not run Azure `01` yet.
 - Local HTTP payment validation uses deterministic local payment-provider adapters so the currently active tenant topology can be exercised without the live OpenPay or Razorpay sandbox; Docker Dev HTTP remains the full parity lane.
-- For the local container-stack and Docker Dev HTTP lanes, the recommended operating pattern is: make `00` the clean setup/start step, then let `01` through `05` reuse that same running stack. Use the explicit reuse variants only when you are intentionally debugging startup or want to skip the teardown/rebuild cycle.
+- For Docker Dev HTTP, normal startup preserves SQL storage; use confirmed `-ResetData` only for a disposable clean baseline, then let later validation steps reuse that stack. Native local-profile reset behavior is separate.
 - Azure keeps the public ingress hostnames platform-generated unless a friendly alias is explicitly bound. That means the operator flow is still the same even though the public URL is different: deploy, verify outputs, smoke, then promote or alias.
 - The preferred automation rule is the same across both platforms: keep the compute names deterministic, keep the environment suffix explicit, and keep cleanup keyed off the exact names created by the deployment.
 
@@ -294,7 +294,7 @@ docker logs container-name --follow       # Follow logs in real-time
 
 # Remove container
 docker rm container-name
-docker rm -f container-name               # Force remove running container
+# Avoid force-removing running containers; verify Compose ownership first.
 ```
 
 ### **Docker Image Management**
@@ -309,7 +309,7 @@ docker build -t app-name:tag .
 docker rmi image-name:tag
 
 # Clean up unused images
-docker image prune -a
+# Use the confirmation-gated Phase 10 image cleanup only for project-labelled images.
 ```
 
 ### **Docker Compose**

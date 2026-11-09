@@ -32,7 +32,8 @@
         "https://localhost:5023"
       ],
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/signed-out##https://localhost:5174/signed-out##http://localhost:5022/signed-out##https://localhost:5023/signed-out"
       },
       "protocolMappers": [
         {
@@ -82,6 +83,13 @@
   ],
   "users": [
     {
+      "username": "tenant-a-user", "enabled": true, "emailVerified": true,
+      "email": "tenant-a-user@example.local", "firstName": "Tenant A", "lastName": "User",
+      "attributes": { "tenant_code": ["TenantA"] },
+      "credentials": [{ "type": "password", "value": "${KEYCLOAK_TENANT_ADMIN_PASSWORD}", "temporary": false }],
+      "realmRoles": ["offline_access", "tenant-user"]
+    },
+    {
       "username": "tenant-admin",
       "enabled": true,
       "emailVerified": true,
@@ -103,6 +111,7 @@
       "realmRoles": [
         "offline_access",
         "tenant-admin",
+        "platform-admin",
         "phase10-operator"
       ]
     },
@@ -181,6 +190,7 @@
   ],
   "roles": {
     "realm": [
+      { "name": "platform-admin", "description": "Explicit access to all active application tenants; does not bypass tenant isolation." },
       {
         "name": "tenant-admin",
         "description": "Local tenant administrator role"

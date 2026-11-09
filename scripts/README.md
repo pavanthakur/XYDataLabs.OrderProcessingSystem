@@ -4,6 +4,20 @@
 
 This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management, including GitHub App automation tools.
 
+## Phase 10 fresh SSD storage and safe reset
+
+See the [fresh G: setup runbook](../docs/runbooks/phase10-docker-fresh-ssd.md) before moving or resetting Docker storage.
+
+- `inspect-phase10-docker-storage.ps1`: read-only `-Mode BeforeSwitch|AfterSwitch|Report`; optional `-ManifestPath` writes a new allowlisted inventory under repository `TestResults` only. Defaults to `G:\DockerStorage\DockerDesktopWSL`. Never moves, purges, or deletes disks.
+- `test-phase10-docker-safety.ps1`: dependency-free mocked safety regressions; no Docker daemon required. Also runs in PR CI.
+- `retain-phase10-docker-storage.ps1`: separately confirmed offline F: retention only; requires a passed preflight manifest, a procedure evidence file, and exactly one of `-ResetProcedureVerified` or `-ReinstallProcedureApproved`. The reinstall lane requires separate approval and does not assert purge safety. Refuses active Docker/WSL, existing destination, reparse paths, or unrecorded disks; records a new retention receipt. Never resets Docker or deletes F:.
+- `phase10-docker-safety.ps1`: shared ownership, configuration, disk-capacity, reset-approval, bounded read-only diagnostics, and physical host SQL identity helpers. Docker SQL host port defaults to 14330 via `LOCAL_SQL_HOST_PORT`; internal SQL remains 1433. Host-side database work must verify it reaches the labeled container, not native Windows SQL.
+- `start-phase10-docker-dev.ps1`: project `xy-phase10`; normal startup preserves SQL storage. `-ResetData` requires confirmation; `-WhatIf` previews without mutation. Build blocked below 50 GiB free, warning below 100 GiB. Old forced cleanup shortcuts are rejected.
+- `run-phase10-docker-dev-e2e-hook.ps1`: optional confirmed `-ResetData`; otherwise starts/updates without deleting SQL. Never combine reset with `-ReuseExistingStack`.
+- `integration-test-database.ps1` and `invoke-integration-tests-isolated.ps1`: create unique shared/dedicated run-owned test databases, record ownership, and clean only that run's pair. `cleanup-integration-test-databases.ps1` is a separate confirmation-gated interrupted-run recovery command.
+- `maintain-phase10-docker-storage.ps1`: read-only report by default; explicitly targets the `desktop-linux` BuildKit cache or unreferenced project-labelled application images while preserving current and recorded rollback image IDs.
+- The E2E hook accepts `-ColdBuild` and `-PaymentSuite sandbox|deterministic|both`; full acceptance still requires separate confirmation for `-ResetData`.
+
 ---
 
 ## 🖥️ Local Development Bootstrap

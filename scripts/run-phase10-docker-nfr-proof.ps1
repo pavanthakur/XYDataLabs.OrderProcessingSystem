@@ -19,6 +19,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+Assert-Phase10ComposeProject
+Assert-Phase10PortOwnership -Ports @(5080, 5022, (Get-Phase10SqlHostPort))
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $stackStartScript = Join-Path $PSScriptRoot 'start-phase10-docker-dev.ps1'
 $localProofScript = Join-Path $PSScriptRoot 'run-phase10-local-nfr-proof.ps1'

@@ -35,10 +35,10 @@
     "IsProduction": false
   },
   "PaymentProviders": {
-    "UseDeterministicAdapters": true
+    "UseDeterministicAdapters": false
   },
   "Observability": {
-    "EnableEfSensitiveDataLogging": true
+    "EnableEfSensitiveDataLogging": false
   },
   "TenantConfiguration": {
     "ActiveTenantCode": "TenantA",

@@ -150,7 +150,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
    - Gateway, Orders, Inventory, Notifications, and UI are deployed as separate Container Apps with separate images, matching the split-service Docker validation lane
    - The workflow summary shows transport-stack outputs and any wrapper-owned shared foundation outputs we choose to keep in scope
-   - If `Bind Aliases` is enabled, provide a real `Public Domain` so the workflow can derive env-aware public names like `api-dev.contoso.com`
+   - If `Bind Aliases` is enabled, the workflow binds the stable public names from `automation/config/runtime-targets.json`, such as `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com`; `Public Domain` is only a compatibility fallback for newly cataloged environments
    - The wrapper execution order is intentionally `preflight -> build images -> internal deploy or cleanup -> summary`, so a real run should show the image job before the internal infra workflow in Actions
    - The wrapper summary is only the top-level checkpoint; detailed logs and outputs live in the nested build and infra jobs under the run
    - If you need per-service image logs or deployment traceability, open the child jobs under the wrapper rather than relying on the top-level summary alone

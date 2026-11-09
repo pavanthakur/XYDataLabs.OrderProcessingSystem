@@ -34,7 +34,7 @@ public static class ServiceDefaultsExtensions
         app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             Predicate = check => check.Tags.Contains("ready", StringComparer.OrdinalIgnoreCase)
-        });
+        }).AllowAnonymous();
 
         return app;
     }

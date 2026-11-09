@@ -74,13 +74,20 @@ public sealed class RazorpayPaymentGateway : IPaymentProviderGateway
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var currency = request.Currency?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!PaymentCurrencyPolicy.IsSupported(ProviderType, currency))
+            throw new PaymentProviderCustomerActionException(PaymentCurrencyPolicy.GetUnsupportedCurrencyMessage(ProviderType, currency));
+
         try
         {
             var order = await _razorpayService.CreateOrderAsync(new RazorpayCreateOrderRequest(
                 Amount: request.Amount,
-                Currency: request.Currency,
+                Currency: currency,
                 Receipt: request.AttemptOrderId,
                 Notes: request.Description), cancellationToken);
+
+            if (order.Amount != request.Amount || !string.Equals(order.Currency, currency, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Razorpay order amount or currency does not match the saved payment terms. Checkout was not started; check the existing attempt before retrying.");
 
             // --- Razorpay Checkout JS path (Use3DSecure = false) ---
             // Return the order_id so the frontend can open the Razorpay Checkout popup.
@@ -94,7 +101,9 @@ public sealed class RazorpayPaymentGateway : IPaymentProviderGateway
                     CreatedAt: order.CreatedAt,
                     Authorization: null,
                     ErrorMessage: null,
-                    RedirectUrl: request.RedirectUrl);
+                    RedirectUrl: request.RedirectUrl,
+                    Currency: order.Currency,
+                    ProviderOrderId: order.OrderId);
             }
 
             // --- Razorpay S2S JSON v2 path (Use3DSecure = true) ---
@@ -104,7 +113,7 @@ public sealed class RazorpayPaymentGateway : IPaymentProviderGateway
             var s2s = await _razorpayService.CreateS2SPaymentAsync(new RazorpayS2SPaymentRequest(
                 OrderId: order.OrderId,
                 Amount: request.Amount,
-                Currency: request.Currency,
+                Currency: currency,
                 Email: request.Customer.Email,
                 // TODO: Add a phone field to the payment form and pass it here.
                 // Razorpay requires contact for S2S; using a placeholder for now.
@@ -183,7 +192,9 @@ public sealed class RazorpayPaymentGateway : IPaymentProviderGateway
             CreatedAt: payment.CreatedAt,
             Authorization: null,
             ErrorMessage: errorMessage,
-            RedirectUrl: null);
+            RedirectUrl: null,
+            Currency: payment.Currency,
+            ProviderOrderId: payment.OrderId);
     }
 
     private static bool IsValidRazorpayPaymentId(string? paymentId)

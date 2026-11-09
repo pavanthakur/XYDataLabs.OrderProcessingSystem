@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { CustomerSummary, OrderProcessingApiClient } from "@xydatalabs/orderprocessing-api-sdk";
+import { ApiRequestError, type CustomerSummary, type OrderProcessingApiClient } from "@xydatalabs/orderprocessing-api-sdk";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -55,7 +55,9 @@ export function CustomerDirectoryPage({
 
         setCustomers([]);
         setLoadState("error");
-        setErrorMessage(error instanceof Error ? error.message : "Unable to load customers.");
+        setErrorMessage(error instanceof ApiRequestError && error.statusCode === 403
+          ? `Access denied for ${activeTenantCode}. Use Sign out, then Sign in with an account authorized for this tenant. The tenant selector does not change your signed-in account. ${error.message}`
+          : error instanceof Error ? error.message : "Unable to load customers.");
       }
     }
 
@@ -154,7 +156,9 @@ export function CustomerDirectoryPage({
           <p className="empty-state">
             {loadState === "loading"
               ? "Loading customer data for the selected tenant."
-              : "No customers matched the current filter for this tenant."}
+              : loadState === "error"
+                ? "Customer data could not be loaded. See the error above."
+                : "No customers matched the current filter for this tenant."}
           </p>
         )}
       </article>

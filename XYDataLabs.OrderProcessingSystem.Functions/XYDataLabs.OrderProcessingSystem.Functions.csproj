@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Contracts\XYDataLabs.OrderProcessingSystem.Orders.Contracts.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Contracts\XYDataLabs.OrderProcessingSystem.Payments.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

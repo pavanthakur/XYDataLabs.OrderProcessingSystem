@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { VerificationAdapter, VerificationRequest, VerificationResult } from "../contracts/verification-adapter.js";
+import {pollVerification} from "./verification-polling.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDirectory, "../../..");
@@ -13,10 +14,10 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       return this.executeAzure(request);
     }
 
-    return this.executePhysical(request);
+    return pollVerification(remaining=>this.executePhysical(request,remaining));
   }
 
-  private async executePhysical(request: VerificationRequest): Promise<VerificationResult> {
+  private async executePhysical(request: VerificationRequest, timeoutMs:number): Promise<VerificationResult> {
     const scriptPath = path.join(repoRoot, "scripts", "verify-payment-run-physical.ps1");
     const explicitCustomerOrderId = request.customerOrderId?.trim();
     const runAnchor = explicitCustomerOrderId && explicitCustomerOrderId.length > 0
@@ -37,7 +38,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       runAnchor,
       "-OutputFormat",
       "Json"
-    ]);
+    ],timeoutMs);
 
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
     const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
@@ -114,12 +115,16 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     };
   }
 
-  private async invokePowerShell(argumentsList: string[]): Promise<string> {
+  private async invokePowerShell(argumentsList: string[], timeoutMs?:number): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn("pwsh", argumentsList, {
         cwd: repoRoot,
         stdio: ["ignore", "pipe", "pipe"]
       });
+      const timer=timeoutMs===undefined?undefined:setTimeout(()=>{
+        child.kill();
+        reject(new Error("Read-only verification exceeded its deadline; payment submission was not retried."));
+      },timeoutMs);
 
       let stdout = "";
       let stderr = "";
@@ -133,10 +138,12 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       });
 
       child.on("error", (error) => {
+        if(timer) clearTimeout(timer);
         reject(error);
       });
 
       child.on("exit", (exitCode) => {
+        if(timer) clearTimeout(timer);
         if (exitCode === 0) {
           resolve(stdout.trim());
           return;

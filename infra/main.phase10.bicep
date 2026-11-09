@@ -1,5 +1,8 @@
 targetScope = 'subscription'
 
+@description('Validated public Entra identity contract supplied by prepare-entra-deployment.mjs. No credentials.')
+param applicationIdentity object
+
 @description('Azure region for all resources')
 param location string = 'centralindia'
 
@@ -222,6 +225,7 @@ module containerApps 'modules/containerapps.bicep' = {
     inventoryImage: inventoryImage
     notificationsImage: notificationsImage
     uiImage: uiImage
+    identity: applicationIdentity
     sqlConnectionString: sqlConnectionString
     redisConnectionString: redisConnectionString
     acrLoginServer: platformAcrLoginServer

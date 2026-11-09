@@ -33,9 +33,11 @@ public static class CustomerMappings
     private static AppOrderDto ToCustomerOrderDto(this Order order) => new()
     {
         OrderId = order.OrderId,
+        OrderReferenceId = order.OrderReferenceId,
         OrderDate = order.OrderDate,
         CustomerId = order.CustomerId,
         TotalPrice = order.TotalPrice,
+        CurrencyCode = order.CurrencyCode,
         Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled
     };

@@ -406,11 +406,13 @@ jobs:
           echo "| Platform Resource Group | ${{ needs.resolve_platform.outputs.platformResourceGroup || '(not resolved)' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Platform ACR | ${{ needs.resolve_platform.outputs.acrName || '(not resolved)' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ACR Login Server | ${{ needs.resolve_platform.outputs.acrLoginServer || '(not resolved)' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gateway URL | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public Gateway/API URL | ${{ needs.deploy_or_cleanup.outputs.apiPublicUrl || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public Gateway Health | ${{ needs.deploy_or_cleanup.outputs.apiPublicUrl || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public Orders API Smoke | ${{ needs.deploy_or_cleanup.outputs.apiPublicUrl || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
           echo "| Swagger | Reference only; use the routed Orders API smoke endpoint for Phase 10 proof. |" >> $GITHUB_STEP_SUMMARY
-          echo "| UI URL | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public UI URL | ${{ needs.deploy_or_cleanup.outputs.uiPublicUrl || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Generated Gateway URL | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Generated UI URL | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Child Summary Links" >> $GITHUB_STEP_SUMMARY
           echo "- Open the Build Phase 10 Images job for the per-service image logs." >> $GITHUB_STEP_SUMMARY
@@ -428,9 +430,9 @@ jobs:
             echo "1. Review the what-if delta and compare it to the expected resource changes." >> $GITHUB_STEP_SUMMARY
             echo "2. Re-run the wrapper with dryRun=false when the plan is approved." >> $GITHUB_STEP_SUMMARY
           else
-            echo "1. Open the Gateway Health URL and confirm the accepted Azure host is shown." >> $GITHUB_STEP_SUMMARY
-            echo "2. Open the Orders API smoke URL through the gateway and confirm the API route resolves." >> $GITHUB_STEP_SUMMARY
-            echo "3. Open the UI URL and confirm the frontend resolves successfully." >> $GITHUB_STEP_SUMMARY
+            echo "1. Open the public Gateway Health URL and confirm the accepted Azure host is shown." >> $GITHUB_STEP_SUMMARY
+            echo "2. Open the public Orders API smoke URL through the gateway and confirm the API route resolves." >> $GITHUB_STEP_SUMMARY
+            echo "3. Open the public UI URL and confirm the frontend resolves successfully." >> $GITHUB_STEP_SUMMARY
             echo "4. Run the **02 Phase 10 Azure Runtime Smoke** workflow for Gateway/API/UI proof." >> $GITHUB_STEP_SUMMARY
             echo "5. Run the **03 Phase 10 Azure Transport Smoke** workflow for publish/consume, DLQ, and replay proof." >> $GITHUB_STEP_SUMMARY
           fi
@@ -439,10 +441,12 @@ jobs:
           echo "| Target | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Run URL | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public Gateway Health | ${{ needs.deploy_or_cleanup.outputs.apiPublicUrl || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public Orders API Smoke | ${{ needs.deploy_or_cleanup.outputs.apiPublicUrl || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
           echo "| Swagger | Reference only; validate the routed Orders API smoke URL instead. |" >> $GITHUB_STEP_SUMMARY
-          echo "| UI | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Public UI | ${{ needs.deploy_or_cleanup.outputs.uiPublicUrl || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Generated Gateway Diagnostic | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Generated UI Diagnostic | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🏗️ What Gets Created Automatically" >> $GITHUB_STEP_SUMMARY
           echo "| Resource | Automated? | Trigger |" >> $GITHUB_STEP_SUMMARY
@@ -482,7 +486,7 @@ jobs:
             echo "1. Run Azure Initial Setup / prerequisite provisioning." >> $GITHUB_STEP_SUMMARY
             echo "2. Re-run the wrapper after the missing environment resources exist." >> $GITHUB_STEP_SUMMARY
           else
-            echo "1. Verify the output URLs against the runbook." >> $GITHUB_STEP_SUMMARY
+            echo "1. Verify the public output URLs against the runbook; generated Azure URLs are diagnostic fallback only." >> $GITHUB_STEP_SUMMARY
             echo "2. Run the **02 Phase 10 Azure Runtime Smoke** workflow." >> $GITHUB_STEP_SUMMARY
             echo "3. Confirm Gateway/API/UI runtime checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
             echo "4. Run the **03 Phase 10 Azure Transport Smoke** workflow." >> $GITHUB_STEP_SUMMARY
