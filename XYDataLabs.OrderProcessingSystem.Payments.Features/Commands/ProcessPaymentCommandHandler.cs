@@ -103,6 +103,11 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 command.OrderReferenceId,
                 cancellationToken);
             var customerOrderId = paymentTerms.CustomerOrderId;
+            if (await _context.PaymentAttempts.AnyAsync(attempt=>attempt.CustomerOrderId==customerOrderId
+                && attempt.Status!=PaymentAttemptStatus.Failed,cancellationToken))
+                return Error.Create("Validation", "This order already has a successful or unresolved payment attempt. Check its status before starting another payment.");
+            if (!PaymentCurrencyPolicy.IsSupported(_paymentProvider.ProviderType, paymentTerms.CurrencyCode))
+                return Error.Create("Validation", PaymentCurrencyPolicy.GetUnsupportedCurrencyMessage(_paymentProvider.ProviderType, paymentTerms.CurrencyCode));
             var paymentTraceId = GeneratePaymentTraceId();
             var attemptNumber = await GetNextAttemptNumberAsync(customerOrderId, cancellationToken);
             var attemptOrderId = GenerateAttemptOrderId(customerOrderId, attemptNumber);
@@ -366,7 +371,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         var targetStatus = ResolvePaymentAttemptStatus(normalizedChargeStatus);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        paymentAttempt.Status = targetStatus;
+        if(targetStatus==PaymentAttemptStatus.Succeeded) paymentAttempt.MarkAsSucceeded(_paymentProvider.Name);
+        else if(targetStatus==PaymentAttemptStatus.Failed) paymentAttempt.MarkAsFailed(_paymentProvider.Name,errorMessage);
+        else paymentAttempt.Status = targetStatus;
         paymentAttempt.ProviderStatus = normalizedChargeStatus;
         paymentAttempt.ProviderChargeId = charge.Id;
         paymentAttempt.ProviderReferenceId = charge.Authorization;
@@ -421,7 +428,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        paymentAttempt.Status = PaymentAttemptStatus.Failed;
+        paymentAttempt.MarkAsFailed(_paymentProvider.Name,errorMessage);
         paymentAttempt.LastErrorMessage = errorMessage;
         paymentAttempt.UpdatedDate = now;
 

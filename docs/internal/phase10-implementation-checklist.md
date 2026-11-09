@@ -366,6 +366,8 @@ Use this placement rule so the current Phase 10 closure remains narrow and futur
 | Tenant lifecycle operations: onboarding, activation, shared/dedicated moves, provider reassignment, rollback | Phase 11 | Follow `phase11-implementation-plan.md`: provision and validate DB, migrations, secrets, provider contracts, and identity grants before the final registry activation |
 | Discovery = registry truth; validation = infra/secret/runtime contract | Phase 11 | This becomes a governed operator workflow once transport closeout is done |
 | Drift detection and repair between registry, secrets, DB topology, and runtime execution | Phase 11 | Reconciliation belongs with service autonomy and topology operations |
+| Order-based pending-payment recovery and adversarial browser coverage | Phase 11 | Owner-approved local sandbox carry-forward DW-023; original-provider recovery and edge cases remain unverified, not production-ready |
+| Razorpay S2S entitlement and real OpenPay negative fixtures | Phase 11 | Owner-approved carry-forward DW-024; unsupported paths remain unavailable and cannot be reported as real-provider PASS |
 | Observability dashboards, alerting, provider rotation, DR, quotas, noisy-neighbor policy, security hardening closure | Phase 12 | These are platform-operability concerns, not Phase 10 transport/runtime exit criteria |
 
 ### Verified Azure Dev Proof

@@ -24,9 +24,16 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         //   The Checkout JS popup handles 3DS internally (SAQ A, no PCI scope) and requires no
         //   Razorpay account activation. S2S direct charge (Use3DSecure = true) requires the merchant
         //   to raise a Razorpay support ticket — not available on our sandbox account.
-        // OpenPay: Use3DSecure = true (direct_card_form) — OpenPay uses server-side 3DS natively.
-        private static bool GetUse3DSecureSeedDefault(string tenantCode, string providerType)
-            => providerType != PaymentProviderTypes.Razorpay;
+        // The local Docker composition opts into OpenPay 3DS-off through configuration.
+        // Other hosts retain the historical default until their environment is explicitly changed.
+        private static bool GetUse3DSecureSeedDefault(IConfiguration? configuration, string tenantCode, string providerType)
+        {
+            if (string.Equals(providerType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (configuration is not null && bool.TryParse(configuration["Phase10:LocalOpenPayThreeDsDefault"], out var localOpenPayDefault))
+                return localOpenPayDefault;
+            return true;
+        }
         private const int SeededCustomerCountPerTenant = 120;
 
         public static void Initialize(
@@ -75,7 +82,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 context.Database.Migrate();
             }
 
-            var startupSeedTenants = GetStartupSeedTenants(context);
+            var startupSeedTenants = GetStartupSeedTenants(context, configuration);
 
             SeedOpenpayProviders(context, startupSeedTenants, configuration);
             SeedRazorpayProviders(context, startupSeedTenants, configuration);
@@ -108,15 +115,18 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 seedOrders);
         }
 
-        private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
+        private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context, IConfiguration? configuration)
         {
-            var tenants = context.Tenants
-                .AsNoTracking()
-                .Where(tenant => StartupSeedTenantCodes.Contains(tenant.Code))
+            var allActive = configuration?.GetValue<bool>("Phase10:SeedAllActiveTenants") == true;
+            var tenantsQuery = context.Tenants.AsNoTracking();
+            tenantsQuery = allActive
+                ? tenantsQuery.Where(tenant => tenant.Status == "Active" && tenant.TenantTier == TenantTierConstants.SharedPool)
+                : tenantsQuery.Where(tenant => StartupSeedTenantCodes.Contains(tenant.Code));
+            var tenants = tenantsQuery
                 .Select(tenant => new StartupSeedTenant(tenant.Id, tenant.Code, tenant.Name))
                 .ToList();
 
-            var missingTenantCodes = StartupSeedTenantCodes
+            var missingTenantCodes = allActive ? Array.Empty<string>() : StartupSeedTenantCodes
                 .Except(tenants.Select(tenant => tenant.TenantCode), StringComparer.Ordinal)
                 .ToArray();
 
@@ -216,6 +226,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
                 var existing = existingProviders.FirstOrDefault();
 
+                if (configuration?.GetValue<bool>("Phase10:PreserveExistingSeedData") == true)
+                {
+                    if (existingProviders.Count > 1)
+                        throw new InvalidOperationException("Duplicate provider seed records require operator review.");
+                    if (existing is not null)
+                        continue;
+                }
+
                 if (existingProviders.Count > 1)
                 {
                     context.PaymentProviders.RemoveRange(existingProviders.Skip(1));
@@ -244,7 +262,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     MerchantId = merchantId,
                     PublicKey = publicKey,
                     PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
-                    Use3DSecure = GetUse3DSecureSeedDefault(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
+                    Use3DSecure = GetUse3DSecureSeedDefault(configuration, seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow
@@ -275,6 +293,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
                 var existing = existingProviders.FirstOrDefault();
 
+                if (configuration?.GetValue<bool>("Phase10:PreserveExistingSeedData") == true)
+                {
+                    if (existingProviders.Count > 1)
+                        throw new InvalidOperationException("Duplicate provider seed records require operator review.");
+                    if (existing is not null)
+                        continue;
+                }
+
                 if (existingProviders.Count > 1)
                 {
                     context.PaymentProviders.RemoveRange(existingProviders.Skip(1));
@@ -302,7 +328,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     ProviderType = PaymentProviderTypes.Razorpay,
                     MerchantId = merchantId,
                     PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
-                    Use3DSecure = GetUse3DSecureSeedDefault(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
+                    Use3DSecure = GetUse3DSecureSeedDefault(configuration, seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow

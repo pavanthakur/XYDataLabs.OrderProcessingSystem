@@ -15,6 +15,24 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 
 public class InfoControllerTests
 {
+    [Theory]
+    [InlineData(false, "TenantB", 1)]
+    [InlineData(false, "RandomTenant42", 1)]
+    [InlineData(true, "TenantA", 3)]
+    public async Task AuthenticatedDiscovery_ReturnsOnlyAuthorizedActiveTenants(bool admin, string tenant, int count)
+    {
+        var controller = CreateController("TenantA", [new TenantInfo(1,"TenantA","A"),new TenantInfo(2,"TenantB","B"),new TenantInfo(3,"RandomTenant42","Random")]);
+        var claims = new List<System.Security.Claims.Claim> { new("tenant_code",tenant), new(System.Security.Claims.ClaimTypes.Name,"fixture-user") };
+        if (admin) claims.Add(new(System.Security.Claims.ClaimTypes.Role,"platform-admin"));
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new(new System.Security.Claims.ClaimsIdentity(claims,"test")) } };
+        var result = Assert.IsType<OkObjectResult>(await controller.GetRuntimeConfiguration(CancellationToken.None));
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(result.Value);
+        json.GetProperty("AvailableTenants").GetArrayLength().Should().Be(count);
+        json.GetProperty("Session").GetProperty("CanAccessAllTenants").GetBoolean().Should().Be(admin);
+        json.GetProperty("ActiveTenantCode").GetString().Should().Be(admin ? "TenantA" : tenant);
+        var registry = Assert.IsType<OkObjectResult>(await controller.GetTenantRegistry(CancellationToken.None));
+        System.Text.Json.JsonSerializer.SerializeToElement(registry.Value).GetArrayLength().Should().Be(count);
+    }
     [Fact]
     public void GetPaymentConfiguration_ReturnsRazorpayCheckoutContract()
     {

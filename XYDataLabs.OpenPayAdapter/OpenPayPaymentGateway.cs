@@ -103,6 +103,7 @@ public sealed class OpenPayPaymentGateway : IPaymentProviderGateway
     public async Task<PaymentGatewayChargeResult> GetChargeAsync(string chargeId, string? customerId = null, CancellationToken cancellationToken = default)
     {
         var charge = await _openPayAdapterService.GetChargeAsync(chargeId, customerId);
+        var currency = await _openPayAdapterService.GetChargeCurrencyAsync(chargeId, customerId, cancellationToken);
 
         return new PaymentGatewayChargeResult(
             charge.Id,
@@ -111,7 +112,8 @@ public sealed class OpenPayPaymentGateway : IPaymentProviderGateway
             charge.CreationDate,
             charge.Authorization,
             charge.ErrorMessage,
-            charge.PaymentMethod?.Url);
+            charge.PaymentMethod?.Url,
+            Currency: currency);
     }
 
     /// <summary>

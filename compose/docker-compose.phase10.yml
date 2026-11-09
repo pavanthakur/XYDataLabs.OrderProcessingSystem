@@ -1,13 +1,28 @@
+name: xy-phase10
+
+x-local-logging: &local-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-project-image-labels: &project-image-labels
+  org.xydatalabs.project: xy-phase10
+  org.xydatalabs.image-kind: application
+
 services:
   sql-server:
+    logging: *local-logging
     image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
       SA_PASSWORD: ${LOCAL_SQL_PASSWORD}
       MSSQL_SA_PASSWORD: ${LOCAL_SQL_PASSWORD}
       MSSQL_PID: Express
+    volumes:
+      - phase10-sql-data:/var/opt/mssql
     ports:
-      - "1433:1433"
+      - "127.0.0.1:${LOCAL_SQL_HOST_PORT:-14330}:1433"
     networks:
       - xy-phase10-network
     profiles: ["data"]
@@ -23,6 +38,7 @@ services:
       start_period: 120s
 
   redis:
+    logging: *local-logging
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -31,10 +47,12 @@ services:
     profiles: ["data"]
 
   azurite:
+    logging: *local-logging
     image: ${AZURITE_IMAGE:-xydatalabs/phase10-azurite:3.35.0-local}
     build:
       context: ..
       dockerfile: Resources/Docker/Azurite/Dockerfile
+      labels: *project-image-labels
       args:
         AZURITE_NPM_VERSION: ${AZURITE_NPM_VERSION:-3.35.0}
     command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /data
@@ -49,6 +67,7 @@ services:
     profiles: ["storage"]
 
   servicebus-sql:
+    logging: *local-logging
     image: ${SERVICEBUS_EMULATOR_SQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04}
     environment:
       ACCEPT_EULA: ${SERVICEBUS_EMULATOR_ACCEPT_EULA:-N}
@@ -70,6 +89,7 @@ services:
       start_period: 600s
 
   servicebus-emulator:
+    logging: *local-logging
     image: ${SERVICEBUS_EMULATOR_IMAGE:-mcr.microsoft.com/azure-messaging/servicebus-emulator:1.1.2}
     ports:
       - "5672:5672"
@@ -90,6 +110,7 @@ services:
     profiles: ["messaging"]
 
   keycloak-local:
+    logging: *local-logging
     image: quay.io/keycloak/keycloak:25.0.6
     command: start-dev --import-realm
     ports:
@@ -115,11 +136,13 @@ services:
     profiles: ["identity"]
 
   orders:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-orders:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Orders.Host/Dockerfile
       target: final
+      labels: *project-image-labels
     ports:
       - "5081:8080"
     environment:
@@ -138,6 +161,8 @@ services:
       ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
       ServiceBus__MessageTtl: 01:00:00
       ServiceBus__ReplayEnabled: "false"
+      Phase10__SeedAllActiveTenants: "true"
+      Phase10__LocalOpenPayThreeDsDefault: ${PHASE10_OPENPAY_3DS_DEFAULT:-false}
       OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
       OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
       OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -171,11 +196,13 @@ services:
     profiles: ["apps"]
 
   payments:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-payments:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Payments.Host/Dockerfile
       target: final
+      labels: *project-image-labels
     ports:
       - "5084:8080"
     environment:
@@ -204,7 +231,8 @@ services:
       Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
       Webhooks__Razorpay__Secret: ${LOCAL_RAZORPAY_WEBHOOK_SECRET}
       Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
-      PaymentProviders__UseDeterministicAdapters: ${LOCAL_DETERMINISTIC_PAYMENT_ADAPTERS:-true}
+      PaymentProviders__UseDeterministicAdapters: ${LOCAL_DETERMINISTIC_PAYMENT_ADAPTERS:-false}
+      Observability__EnableEfSensitiveDataLogging: "false"
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
       IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
@@ -230,11 +258,13 @@ services:
     profiles: ["apps"]
 
   inventory:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-inventory:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.Host/Dockerfile
       target: final
+      labels: *project-image-labels
     ports:
       - "5082:8080"
     environment:
@@ -287,11 +317,13 @@ services:
     profiles: ["apps"]
 
   notifications:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-notifications:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.Host/Dockerfile
       target: final
+      labels: *project-image-labels
     ports:
       - "5083:8080"
     environment:
@@ -344,11 +376,13 @@ services:
     profiles: ["apps"]
 
   gateway:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-gateway:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
       target: final
+      labels: *project-image-labels
     ports:
       - "5080:8080"
     environment:
@@ -393,22 +427,24 @@ services:
     profiles: ["apps"]
 
   ui:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-ui:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: frontend/apps/web/Dockerfile
       target: final
-      args:
-        VITE_ORDERPROCESSING_API_BASE_URL: http://localhost:5080
-        VITE_KEYCLOAK_AUTHORITY: http://localhost:8081
-        VITE_KEYCLOAK_REALM: xy-phase9
-        VITE_KEYCLOAK_CLIENT_ID: xy-order-processing-local-web
+      labels: *project-image-labels
     ports:
       - "5022:5022"
     environment:
       HOST: 0.0.0.0
       PORT: 5022
       USE_HTTPS: "false"
+      IDENTITY_MODE: KeycloakLocal
+      APP_ENVIRONMENT: docker
+      PUBLIC_WEB_ORIGIN: http://localhost:5022
+      PUBLIC_IDENTITY_AUTHORITY: http://localhost:8081/realms/xy-phase9
+      PUBLIC_IDENTITY_CLIENT_ID: xy-order-processing-local-web
       ORDERPROCESSING_API_BASE_URL: http://orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}:8080
     volumes:
       - ../logs:/logs
@@ -422,11 +458,13 @@ services:
     profiles: ["apps"]
 
   functions:
+    logging: *local-logging
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-functions:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Functions/Dockerfile
       target: final
+      labels: *project-image-labels
     ports:
       - "5085:80"
     environment:
@@ -459,4 +497,5 @@ networks:
     driver: bridge
 
 volumes:
+  phase10-sql-data:
   phase10-azurite-data:

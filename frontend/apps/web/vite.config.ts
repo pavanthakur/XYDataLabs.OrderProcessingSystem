@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { createPublicRuntimeConfig } from "./public-runtime-config.mjs";
 
 const apiProxyTarget = process.env.ORDERPROCESSING_API_BASE_URL ?? process.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "http://localhost:5010";
 const useHttpsDevServer = /^true$/i.test(process.env.ORDERPROCESSING_DEV_SERVER_USE_HTTPS ?? "false");
@@ -18,7 +19,18 @@ const httpsOptions = useHttpsDevServer && devServerPfxPath
   : undefined;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), {
+    name: "public-runtime-identity",
+    configureServer(server) {
+      if (process.env.VITEST) return;
+      const configuration = createPublicRuntimeConfig(process.env);
+      server.middlewares.use("/runtime-config.json", (_request, response) => {
+        response.setHeader("Content-Type", "application/json");
+        response.setHeader("Cache-Control", "no-store");
+        response.end(JSON.stringify(configuration));
+      });
+    }
+  }],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src")

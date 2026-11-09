@@ -1,6 +1,7 @@
 import process from "node:process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const customerRequestPathFragment = "/api/v1/Customer/GetAllCustomers";
@@ -96,7 +97,7 @@ async function main() {
     );
 
     console.log(`Discovered expected tenant: ${expectedTenantCode}`);
-    console.log(`Injecting stale tenant candidate into localStorage: ${staleTenantCode}`);
+    console.log(`Injecting stored tenant ${staleTenantCode}; explicitly requesting authorized tenant ${expectedTenantCode}.`);
 
     const smokeResult = await verifyTenantBootstrap(browser, {
       artifactRoot,
@@ -122,6 +123,7 @@ async function main() {
     console.log("Tenant bootstrap smoke test passed.");
     summary.status = "passed";
   } finally {
+    if (summary.status !== "passed") summary.status = "failed";
     summary.finishedUtc = new Date().toISOString();
     summary.finishedIst = formatIstTimestamp(new Date());
     summary.currentStep = summary.status === "passed" ? "completed" : summary.currentStep;
@@ -204,7 +206,7 @@ function printHelp() {
 Required:
   --url <route-url>                Full UI route URL, for example https://localhost:5022/customers
   --target <target-key>            Logical target name used in the run summary
-  --artifact-root <path>           Directory for trace/screenshot/html artifacts
+  --artifact-root <path>           Directory for sanitized reports and masked screenshots
   --latest-pointer-path <path>     File that records the latest artifact root
 
 Optional:
@@ -218,7 +220,7 @@ Optional:
 async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
   return withRetry("Runtime configuration discovery", async attempt => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+    // Do not retain network traces containing authentication/token exchanges.
 
     try {
       const page = await context.newPage();
@@ -227,6 +229,9 @@ async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
         candidate => candidate.url().includes(runtimeConfigurationPathFragment),
         { timeout: timeoutMs }
       );
+      // Login/navigation can fail before this promise is awaited. Keep that
+      // original failure reportable when finally closes the browser context.
+      void runtimeConfigurationResponsePromise.catch(() => {});
 
       await page.goto(url, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
       await completeLocalKeycloakLoginIfNeeded(page, timeoutMs, diagnostics, attempt, url);
@@ -245,7 +250,6 @@ async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
         runtimeConfiguration
       };
     } finally {
-      await context.tracing.stop({ path: path.join(process.cwd(), "test-results", defaultArtifactDirectoryName, `runtime-config-attempt-${attempt}.zip`) }).catch(() => {});
       await context.close();
     }
   });
@@ -280,15 +284,20 @@ function resolveStaleTenantCode(availableTenants, expectedTenantCode, requestedS
 async function verifyTenantBootstrap(browser, options) {
   return withRetry("Tenant bootstrap verification", async attempt => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+    // Diagnostics below use masked screenshots, not credential-bearing traces.
 
     try {
       const page = await context.newPage();
       const diagnostics = attachPageDiagnostics(page);
+      const customerRequests = [];
+      page.on("request", request => {
+        if (new URL(request.url()).pathname.toLowerCase().includes("/customer/getallcustomers")) customerRequests.push(request);
+      });
       const runtimeConfigurationResponsePromise = page.waitForResponse(
         candidate => candidate.url().includes(runtimeConfigurationPathFragment),
         { timeout: options.timeoutMs }
       );
+      void runtimeConfigurationResponsePromise.catch(() => {});
 
       await page.addInitScript(({ nextTenantCode, storageKey }) => {
         window.localStorage.setItem(storageKey, nextTenantCode);
@@ -297,7 +306,9 @@ async function verifyTenantBootstrap(browser, options) {
         storageKey: localStorageKey
       });
 
-      await page.goto(options.url, { timeout: options.timeoutMs, waitUntil: "domcontentloaded" });
+      const requestedUrl=new URL(options.url);
+      requestedUrl.searchParams.set("tenantCode",options.expectedTenantCode);
+      await page.goto(requestedUrl.toString(), { timeout: options.timeoutMs, waitUntil: "domcontentloaded" });
       await completeLocalKeycloakLoginIfNeeded(page, options.timeoutMs, diagnostics, attempt, options.url);
       const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(
         runtimeConfigurationResponsePromise,
@@ -332,9 +343,14 @@ async function verifyTenantBootstrap(browser, options) {
         emptyState.waitFor({ state: "visible", timeout: options.timeoutMs }).then(() => "empty")
       ]);
 
+      const customerRequest = customerRequests.at(-1);
+      const observedCustomerTenant = customerRequest ? await customerRequest.headerValue(runtimeConfiguration.tenantHeaderName) : null;
+      if (!equalsIgnoreCase(observedCustomerTenant ?? "", options.expectedTenantCode)) {
+        throw new Error("Captured customer request did not carry the expected tenant header value.");
+      }
       return {
         activeTenantCode,
-        customerRequestTenantCode: runtimeConfiguration.tenantHeaderName,
+        customerRequestTenantCode: observedCustomerTenant,
         tenantHeaderName: runtimeConfiguration.tenantHeaderName,
         customerDirectoryState
       };
@@ -342,7 +358,6 @@ async function verifyTenantBootstrap(browser, options) {
       await captureFailureArtifacts(context, options.artifactRoot, `tenant-bootstrap-attempt-${attempt}`, error);
       throw error;
     } finally {
-      await context.tracing.stop({ path: path.join(options.artifactRoot, `tenant-bootstrap-attempt-${attempt}.zip`) }).catch(() => {});
       await context.close();
     }
   });
@@ -377,7 +392,6 @@ async function withRetry(operationName, operation, attemptCount = defaultAttempt
 async function captureFailureArtifacts(context, artifactRoot, name, error) {
   const safeName = name.replace(/[^a-z0-9-_]+/gi, "-");
   const screenshotPath = path.join(artifactRoot, `${safeName}.png`);
-  const htmlPath = path.join(artifactRoot, `${safeName}.html`);
 
   try {
     const pages = context.pages();
@@ -386,8 +400,7 @@ async function captureFailureArtifacts(context, artifactRoot, name, error) {
       return;
     }
 
-    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
-    await fs.writeFile(htmlPath, await page.content(), "utf8").catch(() => {});
+    await page.screenshot({ path: screenshotPath, fullPage: true,mask:page.frames().map(frame=>frame.locator("input,textarea")) }).catch(() => {});
     console.warn(`Captured failure artifacts for ${safeName}: ${screenshotPath}`);
     if (error instanceof Error) {
       console.warn(error.message);
@@ -451,7 +464,7 @@ function attachPageDiagnostics(page) {
 
   page.on("console", message => {
     if (consoleMessages.length < 10) {
-      consoleMessages.push(`${message.type()}: ${message.text()}`);
+        consoleMessages.push(`${message.type()}: raw console content omitted`);
     }
   });
 
@@ -463,7 +476,8 @@ function attachPageDiagnostics(page) {
 
   page.on("requestfailed", request => {
     if (failedRequests.length < 10) {
-      failedRequests.push(`${request.url()} -> ${request.failure()?.errorText ?? "unknown failure"}`);
+        const url=new URL(request.url());
+        failedRequests.push(`${url.origin}${url.pathname} -> ${request.failure()?.errorText ?? "unknown failure"}`);
     }
   });
 
@@ -477,7 +491,7 @@ function attachPageDiagnostics(page) {
 async function buildRuntimeConfigurationDiagnostics(page, diagnostics, attempt, error) {
   const shellState = await page.evaluate(() => ({
     errorBanner: document.querySelector(".error-banner")?.textContent ?? null,
-    location: window.location.href,
+    location: `${window.location.origin}${window.location.pathname}`,
     rootPresent: Boolean(document.getElementById("root")),
     shellMeta: document.querySelector(".shell-meta")?.textContent ?? null,
     title: document.title,
@@ -583,7 +597,7 @@ async function resolveLocalKeycloakPassword() {
     return environmentPassword.trim();
   }
 
-  const repoRoot = path.resolve(process.cwd(), "..", "..", "..");
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
   const envLocalPath = path.join(repoRoot, "Resources", "Docker", ".env.local");
   const envLocalText = await fs.readFile(envLocalPath, "utf8").catch(() => "");
   const passwordLine = envLocalText
@@ -594,7 +608,7 @@ async function resolveLocalKeycloakPassword() {
     throw new Error("KEYCLOAK_TENANT_ADMIN_PASSWORD is required for the local Keycloak smoke login.");
   }
 
-  return passwordLine.split("=", 2)[1].trim().replace(/^["']|["']$/g, "");
+  return passwordLine.slice(passwordLine.indexOf("=") + 1).trim().replace(/^["']|["']$/g, "");
 }
 
 main().catch(error => {

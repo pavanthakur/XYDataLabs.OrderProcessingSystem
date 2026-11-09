@@ -7,6 +7,35 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Middleware;
 
 public sealed class TenantClaimConsistencyMiddlewareTests
 {
+    [Theory]
+    [InlineData("platform-admin", "TenantB", true)]
+    [InlineData("platform-admin", "RandomTenant42", true)]
+    [InlineData("platform-admin", null, false)]
+    [InlineData("tenant-admin", "TenantB", false)]
+    [InlineData("phase10-operator", "TenantB", false)]
+    [InlineData("tenant-user", "TenantA", true)]
+    public async Task InvokeAsync_UsesExplicitGlobalRoleOnly(string role, string? selectedTenant, bool allowed)
+    {
+        var context = CreateAuthenticatedContext("TenantA", selectedTenant);
+        ((ClaimsIdentity)context.User.Identity!).AddClaim(new Claim(ClaimTypes.Role, role));
+        context.Response.Body = new MemoryStream();
+        var reached = false;
+        await new TenantClaimConsistencyMiddleware(_ => { reached = true; return Task.CompletedTask; }).InvokeAsync(context);
+        reached.Should().Be(allowed);
+    }
+
+    [Fact]
+    public void Discovery_FiltersTenantUserAndDoesNotTrustUsernameOrDirectoryId()
+    {
+        var context = CreateAuthenticatedContext(null, "TenantB");
+        var identity = (ClaimsIdentity)context.User.Identity!;
+        identity.AddClaim(new Claim(ClaimTypes.Name, "tenant-admin"));
+        identity.AddClaim(new Claim("tid", "TenantB"));
+        TenantAccessPolicy.CanDiscover(context.User, "TenantB").Should().BeFalse();
+        identity.AddClaim(new Claim("tenant_code", "TenantB"));
+        TenantAccessPolicy.CanDiscover(context.User, "TenantB").Should().BeTrue();
+        TenantAccessPolicy.CanDiscover(context.User, "TenantC").Should().BeFalse();
+    }
     [Fact]
     public async Task InvokeAsync_WithMatchingAuthenticatedTenant_ContinuesPipeline()
     {

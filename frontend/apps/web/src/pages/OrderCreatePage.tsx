@@ -16,6 +16,8 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
   const customerId = Number(params.customerId);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [availableCurrencies, setAvailableCurrencies] = useState<string[]>([]);
+  const [currencyCode, setCurrencyCode] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -36,15 +38,27 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
     async function loadProducts() {
       setLoadState("loading");
       setErrorMessage(null);
+      setProducts([]);
+      setSelectedProductIds([]);
+      setAvailableCurrencies([]);
+      setCurrencyCode("");
 
       try {
-        const nextProducts = await apiClient.getAllProducts();
+        const [nextProducts, paymentConfiguration] = await Promise.all([
+          apiClient.getAllProducts(), apiClient.getPaymentConfiguration(activeTenantCode)
+        ]);
 
         if (isCancelled) {
           return;
         }
 
         setProducts(nextProducts);
+        // Retain the existing MXN order-entry default for adapters without an
+        // explicit capability list; Razorpay publishes INR from Payments.
+        const currencies = paymentConfiguration.supportedCurrencies?.length
+          ? [...paymentConfiguration.supportedCurrencies] : ["MXN"];
+        setAvailableCurrencies(currencies);
+        setCurrencyCode(currencies[0]!);
         setLoadState("ready");
       } catch (error) {
         if (isCancelled) {
@@ -85,6 +99,11 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (loadState !== "ready" || !availableCurrencies.includes(currencyCode)) {
+      setErrorMessage("Load the tenant currency configuration before creating an order.");
+      return;
+    }
+
     if (!Number.isInteger(customerId) || customerId <= 0) {
       setErrorMessage("The requested customer id is invalid.");
       return;
@@ -101,7 +120,8 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
     try {
       const order = await apiClient.createOrder({
         customerId,
-        productIds: selectedProductIds
+        productIds: selectedProductIds,
+        currencyCode
       });
 
       navigate(`/customers/${customerId}/orders/${order.orderId}`);
@@ -167,7 +187,7 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
                           <strong>{product.name}</strong>
                           <p>{product.description || "No description provided."}</p>
                         </div>
-                        <span>{formatCurrency(product.price)}</span>
+                        <span>{formatCurrency(product.price, currencyCode)}</span>
                       </label>
                     </li>
                   );
@@ -182,6 +202,12 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
 
           <aside className="detail-card order-summary-card">
             <h3>Order summary</h3>
+            <label className="search-field"><span>Order currency</span>
+              <select value={currencyCode} disabled={loadState !== "ready"} onChange={event => setCurrencyCode(event.target.value)}>
+                {!currencyCode ? <option value="">Loading currency...</option> : null}
+                {availableCurrencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+              </select>
+            </label>
             <p className="subtle-copy">
               The browser selects products, but order creation still posts to the server-owned Order API.
             </p>
@@ -197,11 +223,11 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
               </div>
               <div>
                 <dt>Projected total</dt>
-                <dd>{formatCurrency(totalPrice)}</dd>
+                <dd>{currencyCode ? formatCurrency(totalPrice, currencyCode) : "pending"}</dd>
               </div>
             </dl>
 
-            <button type="submit" className="action-button action-button-primary" disabled={submitState === "submitting"}>
+            <button type="submit" className="action-button action-button-primary" disabled={submitState === "submitting" || loadState !== "ready" || !currencyCode}>
               {submitState === "submitting" ? "Creating order..." : "Create order"}
             </button>
           </aside>
@@ -211,9 +237,9 @@ export function OrderCreatePage({ activeTenantCode, apiClient }: OrderCreatePage
   );
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currencyCode: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD"
+    currency: currencyCode
   }).format(value);
 }

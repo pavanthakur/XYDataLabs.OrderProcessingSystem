@@ -46,7 +46,9 @@ Actions → "Azure Bootstrap & Deploy" → Run workflow:
 - Every Azure runtime dependency used by Actions 2/3/4 or verifier scripts must have explicit metadata for `azure-dev`, `azure-stg`, and `azure-prod` before the workflow/script consumes it.
 - Required examples include Container Apps, Azure Functions, SQL, Redis, Key Vault, Application Insights, Service Bus, broker suffixes, gateway URLs, and UI URLs.
 - Do not hardcode `rg-orderprocessing-*`, `orderprocessing-*-{env}`, `kv-orderprocessing-*`, `ai-orderprocessing-*`, or `sb-orderprocessing-*` in runtime smoke, transport smoke, payment matrix, or verifier workflows when the value can be read from `runtime-targets.json`.
-- Do not commit generated Azure Container Apps FQDNs, revision names, random suffixes, GUIDs, or discovery output into `runtime-targets.json`; discover generated values at runtime from Azure control plane or workflow outputs.
+- Do not commit generated Azure Container Apps FQDNs, revision names, random suffixes, GUIDs, or discovery output into `runtime-targets.json`; discover generated values at runtime from Azure control plane or workflow outputs and label them diagnostic/fallback only.
+- Azure `baseUrl`/`apiBaseUrl` and `publicUiBaseUrl`/`publicApiBaseUrl` must be stable custom domains: `dev.orderprocessing.xydatalabs.com`, `staging.orderprocessing.xydatalabs.com`, `orderprocessing.xydatalabs.com`, and their `orderprocessing-api` equivalents.
+- Smoke tests must fail closed when a selected Azure target would use a generated `azurecontainerapps.io` hostname unless `allowGeneratedAzureUrlFallback=true` is explicitly present for a temporary diagnostic run.
 - When a new Azure service is added, update `automation/config/runtime-targets.json`, `automation/src/contracts/runtime-target-catalog.ts`, the owning workflow/script, and `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` in the same change.
 - Keep deployment/IaC resource creation parameterized by environment/resource suffix, but keep post-deploy automation validation driven by `runtime-targets.json`.
 

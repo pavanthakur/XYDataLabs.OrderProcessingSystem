@@ -368,6 +368,8 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             AttemptOrderId = "attempt-001",
             CustomerOrderId = "ORDER-001",
             PaymentTraceId = "trace-001",
+            Amount = 100m,
+            CurrencyCode = "MXN",
             TransactionStatus = "charge_pending",
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             IsTransactionSuccess = false,

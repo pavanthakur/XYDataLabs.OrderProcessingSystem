@@ -63,10 +63,33 @@ jobs:
           NOTIFICATIONS_APP="$(read_target_field azureNotificationsContainerAppName)"
           UI_APP="$(read_target_field azureUiContainerAppName)"
           FUNCTION_APP="$(read_target_field azureFunctionAppName)"
+          GATEWAY_BASE_URL="$(read_target_field publicApiBaseUrl | sed 's#/*$##')"
+          UI_BASE_URL="$(read_target_field publicUiBaseUrl | sed 's#/*$##')"
+          ALLOW_GENERATED_FALLBACK="$(read_target_field allowGeneratedAzureUrlFallback)"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 
           if [ -z "$RG_NAME" ] || [ -z "$GATEWAY_APP" ] || [ -z "$ORDERS_APP" ] || [ -z "$PAYMENTS_APP" ] || [ -z "$INVENTORY_APP" ] || [ -z "$NOTIFICATIONS_APP" ] || [ -z "$UI_APP" ] || [ -z "$FUNCTION_APP" ]; then
             echo "Selected runtime target ${TARGET_KEY} is missing Azure runtime host metadata in automation/config/runtime-targets.json." >&2
+            exit 1
+          fi
+
+          if [ -z "$GATEWAY_BASE_URL" ]; then
+            GATEWAY_BASE_URL="$(read_target_field apiBaseUrl | sed 's#/*$##')"
+          fi
+
+          if [ -z "$UI_BASE_URL" ]; then
+            UI_BASE_URL="$(read_target_field baseUrl | sed 's#/*$##')"
+          fi
+
+          if [ -z "$GATEWAY_BASE_URL" ] || [ -z "$UI_BASE_URL" ]; then
+            echo "Selected runtime target ${TARGET_KEY} is missing publicApiBaseUrl/publicUiBaseUrl in automation/config/runtime-targets.json." >&2
+            exit 1
+          fi
+
+          if { [[ "$GATEWAY_BASE_URL" == *".azurecontainerapps.io"* ]] || [[ "$UI_BASE_URL" == *".azurecontainerapps.io"* ]]; } && [ "$ALLOW_GENERATED_FALLBACK" != "true" ]; then
+            echo "Configured public smoke URLs must not use generated Azure Container Apps FQDNs unless allowGeneratedAzureUrlFallback=true." >&2
+            echo "Gateway Base URL: ${GATEWAY_BASE_URL}" >&2
+            echo "UI Base URL: ${UI_BASE_URL}" >&2
             exit 1
           fi
 
@@ -89,6 +112,9 @@ jobs:
           echo "notificationsApp=${NOTIFICATIONS_APP}" >> "$GITHUB_OUTPUT"
           echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
           echo "functionApp=${FUNCTION_APP}" >> "$GITHUB_OUTPUT"
+          echo "gatewayBaseUrl=${GATEWAY_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "uiBaseUrl=${UI_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "allowGeneratedAzureUrlFallback=${ALLOW_GENERATED_FALLBACK:-false}" >> "$GITHUB_OUTPUT"
 
           {
             echo "## 02 Phase 10 Azure Runtime Smoke Context"
@@ -105,6 +131,9 @@ jobs:
             echo "| Notifications Container App | ${NOTIFICATIONS_APP} |"
             echo "| UI Container App | ${UI_APP} |"
             echo "| Function App | ${FUNCTION_APP} |"
+            echo "| Public Gateway Base URL | ${GATEWAY_BASE_URL} |"
+            echo "| Public UI Base URL | ${UI_BASE_URL} |"
+            echo "| Generated URL Fallback Allowed | ${ALLOW_GENERATED_FALLBACK:-false} |"
             echo ""
             echo "### Azure Links"
             echo ""
@@ -171,6 +200,9 @@ jobs:
           & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-runtime-smoke.ps1 `
             -Environment '${{ inputs.environment }}' `
             -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -GatewayBaseUrl '${{ steps.topology.outputs.gatewayBaseUrl }}' `
+            -UiBaseUrl '${{ steps.topology.outputs.uiBaseUrl }}' `
+            -AllowGeneratedAzureUrlFallback $${{ steps.topology.outputs.allowGeneratedAzureUrlFallback }} `
             -SummaryPath $summaryPath
 
           $smokeExitCode = $LASTEXITCODE

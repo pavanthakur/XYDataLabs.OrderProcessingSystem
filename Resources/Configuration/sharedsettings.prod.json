@@ -124,13 +124,13 @@
       "WebApps": {
         "API": {
           "Name": "wa-orderprocessing-api-prod",
-          "Url": "https://api.xydatalabs.com",
-          "CustomDomain": "api.xydatalabs.com"
+          "Url": "https://orderprocessing-api.xydatalabs.com",
+          "CustomDomain": "orderprocessing-api.xydatalabs.com"
         },
         "UI": {
           "Name": "wa-orderprocessing-ui-prod",
-          "Url": "https://ui.xydatalabs.com",
-          "CustomDomain": "ui.xydatalabs.com"
+          "Url": "https://orderprocessing.xydatalabs.com",
+          "CustomDomain": "orderprocessing.xydatalabs.com"
         }
       },
       "Database": {

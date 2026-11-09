@@ -13,8 +13,8 @@ import {
 
 type CallbackState = "idle" | "loading" | "ready" | "error";
 
-const callbackRetryDelayMs = 2500;
-const maxPendingConfirmationAttempts = 4;
+const callbackRetryDelayMs = 5000;
+const maxPendingConfirmationAttempts = 24;
 const receivedCallbackTelemetryKeys = new Set<string>();
 const inFlightReconciliations = new Map<string, Promise<PaymentStatusDetails>>();
 
@@ -73,7 +73,7 @@ export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChang
   );
   const isDirectStatusEntry = (callbackSource ?? "").toLowerCase() === "direct";
   const visibleCallbackEntries = useMemo(
-    () => Object.entries(callbackParameters).filter(([key]) => key !== "source"),
+    () => Object.entries(callbackParameters).filter(([key]) => ["id","transaction_id","payment_id","razorpay_payment_id","razorpay_order_id","tenantCode","status"].includes(key)),
     [callbackParameters]
   );
 

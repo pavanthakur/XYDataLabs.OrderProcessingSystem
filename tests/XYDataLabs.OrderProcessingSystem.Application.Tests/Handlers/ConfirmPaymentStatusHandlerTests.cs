@@ -14,6 +14,21 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 /// </summary>
 public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
 {
+    [Theory]
+    [InlineData(101,"MXN")]
+    [InlineData(100,"USD")]
+    public async Task ProviderAmountOrCurrencyMismatch_CannotConfirmPayment(decimal amount,string currency)
+    {
+        var transaction=BuildStubCardTransaction();
+        SetupConfirmPaymentDbSets(existingTransaction:transaction);
+        MockPaymentGateway.Setup(g=>g.GetChargeAsync(It.IsAny<string>(),It.IsAny<string?>(),It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayChargeResult("charge-001","completed",amount,UtcNow,null,null,null,Currency:currency));
+        var result=await CreateConfirmPaymentHandler(providerType:PaymentProviderTypes.Razorpay).HandleAsync(BuildConfirmPaymentCommand());
+        result.IsFailure.Should().BeTrue();
+        result.Error.Description.Should().Contain("amount or currency");
+        MockDbContext.Verify(db=>db.SaveChangesAsync(It.IsAny<CancellationToken>()),Times.Never);
+    }
+
     // ------------------------------------------------------------------ validation guard
 
     [Fact]

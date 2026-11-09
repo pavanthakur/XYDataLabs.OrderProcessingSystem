@@ -10,6 +10,7 @@ on:
       - '.github/workflows/**'
       - '.github/workflows/ci.yml'
       - '.gitignore'
+      - '.dockerignore'
       - 'infra/**'
       - 'Resources/Azure-Deployment/**'
       - 'XYDataLabs.OrderProcessingSystem.API/**'
@@ -20,11 +21,16 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
       - 'XYDataLabs.OpenPayAdapter/**'
       - 'frontend/**'
+      - 'automation/**'
       - 'frontend/.gitignore'
       - 'scripts/**'
+      - 'compose/docker-compose.phase10.yml'
       - 'scripts/validate-tracked-generated-artifacts.ps1'
       - 'tests/**'
       - 'Resources/Configuration/**'
+      - 'Resources/Identity/**'
+      - 'Resources/Keycloak/**'
+      - 'Resources/Docker/.env.local.example'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - '*.sln'
@@ -49,6 +55,10 @@ jobs:
         shell: pwsh
         run: scripts/validate-tracked-generated-artifacts.ps1
 
+      - name: Test local Docker safety guardrails (no daemon required)
+        shell: pwsh
+        run: scripts/test-phase10-docker-safety.ps1
+
       - name: Validate Phase 10 environment contract
         shell: pwsh
         run: Resources/Azure-Deployment/validate-phase10-environment-contract.ps1
@@ -69,6 +79,14 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Install payment automation dependencies
+        working-directory: automation
+        run: npm ci
+
+      - name: Test payment callback outcome guardrails
+        working-directory: automation
+        run: npm run test:callbacks
+
       - name: Validate frontend type safety
         working-directory: frontend
         run: npm run typecheck
@@ -76,6 +94,9 @@ jobs:
       - name: Test frontend workspace
         working-directory: frontend
         run: npm run test:web
+
+      - name: Validate public identity and Entra deployment contracts
+        run: node --test scripts/identity-config.test.mjs
 
       - name: Build frontend workspace
         working-directory: frontend

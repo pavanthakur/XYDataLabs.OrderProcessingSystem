@@ -12,6 +12,38 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Payments;
 /// </summary>
 public class RazorpayPaymentGatewayTests
 {
+    [Theory]
+    [InlineData("MXN")]
+    [InlineData("USD")]
+    [InlineData("GBP")]
+    public async Task CreateChargeAsync_RejectsUnsupportedCurrencyBeforeAdapterCalls(string currency)
+    {
+        var request = new PaymentGatewayCreateChargeRequest("source", 1m, currency, "Test", "device", "ORDER-1-1", false,
+            "http://localhost:5022/payments/callback", new PaymentGatewayCustomer("customer", "Fixture", "fixture@example.test"));
+
+        var act = () => _sut.CreateChargeAsync(request);
+
+        await act.Should().ThrowAsync<PaymentProviderCustomerActionException>();
+        _mockAdapter.Verify(adapter => adapter.CreateOrderAsync(It.IsAny<RazorpayCreateOrderRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockAdapter.Verify(adapter => adapter.CreateS2SPaymentAsync(It.IsAny<RazorpayS2SPaymentRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(1, "MXN")]
+    [InlineData(2, "INR")]
+    public async Task CreateChargeAsync_RejectsMismatchedProviderOrderBeforeCheckoutOrS2S(decimal amount, string currency)
+    {
+        _mockAdapter.Setup(adapter => adapter.CreateOrderAsync(It.IsAny<RazorpayCreateOrderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RazorpayOrderResult("order_fixture", "created", amount, currency, DateTime.UtcNow));
+        var request = new PaymentGatewayCreateChargeRequest("source", 1m, "INR", "Test", "device", "ORDER-1-1", false,
+            "http://localhost:5022/payments/callback", new PaymentGatewayCustomer("customer", "Fixture", "fixture@example.test"));
+
+        var act = () => _sut.CreateChargeAsync(request);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*amount or currency*");
+        _mockAdapter.Verify(adapter => adapter.CreateS2SPaymentAsync(It.IsAny<RazorpayS2SPaymentRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private readonly Mock<IRazorpayAdapterService> _mockAdapter;
     private readonly RazorpayPaymentGateway _sut;
 
@@ -78,13 +110,13 @@ public class RazorpayPaymentGatewayTests
                 OrderId: "order_ABC123",
                 Status: "created",
                 Amount: 100.00m,
-                Currency: "USD",
+                Currency: "INR",
                 CreatedAt: createdAt));
 
         var request = new PaymentGatewayCreateChargeRequest(
             SourceId: "token-abc",
             Amount: 100.00m,
-            Currency: "USD",
+            Currency: "INR",
             Description: "Test order",
             DeviceSessionId: "dev-session",
             AttemptOrderId: "ORD-001-1",
@@ -142,7 +174,7 @@ public class RazorpayPaymentGatewayTests
         var request = new PaymentGatewayCreateChargeRequest(
             SourceId: "token-abc",
             Amount: 100.00m,
-            Currency: "USD",
+            Currency: "INR",
             Description: "Test",
             DeviceSessionId: "dev-session",
             AttemptOrderId: "ORD-001-1",
@@ -167,7 +199,7 @@ public class RazorpayPaymentGatewayTests
         var request = new PaymentGatewayCreateChargeRequest(
             SourceId: "token-abc",
             Amount: 100.00m,
-            Currency: "USD",
+            Currency: "INR",
             Description: "Test",
             DeviceSessionId: "dev-session",
             AttemptOrderId: "ORD-001-1",

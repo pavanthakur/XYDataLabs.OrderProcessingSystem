@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 
 $testProject = Join-Path $WorkspaceRoot 'tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
 $resultsRoot = Join-Path $WorkspaceRoot 'TestResults\Integration'
@@ -20,7 +21,6 @@ $runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
 else {
     Join-Path $env:PHASE10_RUN_ROOT 'integration'
 }
-$trxName = 'integration-tests-docker.trx'
 $logName = 'integration-tests-docker.log'
 $envLocalPath = Join-Path $WorkspaceRoot 'Resources\Docker\.env.local'
 $statusWriter = Join-Path $WorkspaceRoot 'scripts\write-playwright-run-status.ps1'
@@ -40,17 +40,15 @@ if (-not (Test-Path -LiteralPath $dockerSqlGuardrailScript)) {
 
 . $dockerSqlGuardrailScript
 
-$sqlPasswordLine = Get-Content -LiteralPath $envLocalPath | Where-Object { $_ -match '^LOCAL_SQL_PASSWORD=' } | Select-Object -First 1
-if ([string]::IsNullOrWhiteSpace($sqlPasswordLine)) {
-    throw "LOCAL_SQL_PASSWORD was not found in $envLocalPath"
+$effectiveSettings = Get-Phase10LocalSettings -Path $envLocalPath
+$sqlPassword = $effectiveSettings.LOCAL_SQL_PASSWORD
+if ([string]::IsNullOrWhiteSpace($sqlPassword) -or $sqlPassword -match '^<.*>$') {
+    throw 'LOCAL_SQL_PASSWORD is missing or a placeholder; credentials omitted.'
 }
 
-$sqlPassword = $sqlPasswordLine.Split('=', 2)[1].Trim()
-if ([string]::IsNullOrWhiteSpace($sqlPassword)) {
-    throw "LOCAL_SQL_PASSWORD in $envLocalPath is empty."
-}
-
-$connectionString = "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=$sqlPassword;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+$connectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $sqlPassword
+Assert-Phase10HostSqlIdentity -ConnectionString $connectionString
+Initialize-Phase10LogRedaction -Settings (Get-Phase10LocalSettings -Path $envLocalPath)
 Assert-DockerRuntimeSqlGuardrail `
     -ScriptName (Split-Path -Leaf $PSCommandPath) `
     -ConnectionString $connectionString `
@@ -60,28 +58,26 @@ Assert-DockerRuntimeSqlGuardrail `
 
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 
-$env:ORDERPROCESSING_TEST_CONNECTION_STRING = $connectionString
+$previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
+$env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $connectionString
 
 Push-Location $WorkspaceRoot
 try {
-    Write-Host "Using Docker SQL test connection: $connectionString"
+    Write-Host "Using verified Docker SQL host endpoint tcp:127.0.0.1,$(Get-Phase10SqlHostPort); credentials omitted."
     Add-Content -Path (Join-Path $runDir 'integration-tests-docker.log') -Value "[$(Get-IstTimestamp)] Integration test run started."
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'docker-http' -TaskName 'docker-http-integration' -Status started -Message "runDir=$runDir"
-    dotnet restore $testProject --ignore-failed-sources 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'restore.log')
+    dotnet restore $testProject --ignore-failed-sources 2>&1 | Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir 'restore.log')
     if ($LASTEXITCODE -ne 0) {
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'docker-http' -TaskName 'docker-http-integration' -Status failed -Message "restore failed"
         exit $LASTEXITCODE
     }
 
-    dotnet test $testProject `
-        --no-restore `
-        --filter Category=Integration `
-        --results-directory $runDir `
-        --logger "trx;LogFileName=$trxName" `
-        --logger "console;verbosity=$ConsoleVerbosity" 2>&1 | Tee-Object -FilePath (Join-Path $runDir $logName)
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $WorkspaceRoot 'scripts\invoke-integration-tests-isolated.ps1') `
+        -Runtime docker-phase10 -TestFilter 'Category=Integration' -ResultsDirectory $runDir -ConsoleVerbosity $ConsoleVerbosity 2>&1 |
+        Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir $logName)
     $exitCode = $LASTEXITCODE
     if ($exitCode -eq 0) {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'docker-http' -TaskName 'docker-http-integration' -Status passed -Message "trx=$trxName"
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'docker-http' -TaskName 'docker-http-integration' -Status passed -Message "results=$runDir"
     } else {
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'docker-http' -TaskName 'docker-http-integration' -Status failed -Message "exitCode=$exitCode"
     }
@@ -89,4 +85,6 @@ try {
 }
 finally {
     Pop-Location
+    if ($null -eq $previousProvisioningConnection) { Remove-Item Env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING -ErrorAction SilentlyContinue }
+    else { $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $previousProvisioningConnection }
 }

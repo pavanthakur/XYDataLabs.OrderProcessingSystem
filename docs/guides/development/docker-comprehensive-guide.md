@@ -657,7 +657,7 @@ docker network ls              # Verify network isolation
 ```powershell
 # Enterprise cleanup
 .\start-docker.ps1 -Environment dev -Profile http -Down -ConservativeClean
-docker system prune -f --volumes  # Clean up unused resources
+pwsh -NoProfile -File scripts/maintain-phase10-docker-storage.ps1 -Action Report  # Read-only; see the Phase 10 runbook for cleanup.
 ```
 
 ---
@@ -1034,7 +1034,7 @@ Rationale: These granular resilience flags were consolidated to reduce cognitive
 .\start-docker.ps1 -Environment dev -Profile https
 
 # This automatically runs:
-# 1. docker system prune -f --volumes
+# Do not run daemon-wide prune automatically; use the confirmation-gated Phase 10 storage procedure.
 # 2. Starts the specified environment
 ```
 
@@ -1447,7 +1447,7 @@ docker exec orderprocessing-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localh
 #### **Complete Clean State Recovery**
 ```powershell
 # Nuclear option - complete clean rebuild
-docker system prune -a -f --volumes
+pwsh -NoProfile -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -ResetData -ColdBuild -PaymentSuite both
 .\start-docker.ps1 -Environment dev -Profile http
 ```
 
@@ -1461,7 +1461,7 @@ docker system prune -a -f --volumes
 #### **Network Recreation Test**
 ```powershell
 # Remove networks and verify auto-recreation
-docker network ls | Select-String "xy-" | ForEach-Object { $_.ToString().Split()[0] } | ForEach-Object { docker network rm $_ }
+pwsh -NoProfile -File scripts/start-phase10-docker-dev.ps1 -Action up -Profile apps
 .\start-docker.ps1 -Environment dev -Profile http
 ```
 
@@ -1595,7 +1595,7 @@ taskkill /PID 1234 /F
 docker network ls
 
 # Remove problematic network
-docker network rm xynetwork
+# Do not remove daemon resources as a troubleshooting shortcut; follow the Phase 10 runbook.
 
 # Script will recreate automatically on next run
 ```

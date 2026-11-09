@@ -9,6 +9,9 @@ export interface RuntimeTargetDefinition {
   key: string;
   baseUrl: string;
   apiBaseUrl?: string;
+  publicUiBaseUrl?: string;
+  publicApiBaseUrl?: string;
+  allowGeneratedAzureUrlFallback?: boolean;
   verificationMode: VerificationMode;
   browserMode: BrowserMode;
   expectedTenantSource: ExpectedTenantSource;

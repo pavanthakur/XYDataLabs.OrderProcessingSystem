@@ -176,11 +176,11 @@ This section provides a complete walkthrough for executing your first manual inf
 # Check resources via CLI
 az resource list -g rg-orderprocessing-dev -o table
 
-# Test API endpoint (may return 404 until code deployed)
-curl https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
+# Test API/Gateway endpoint through the stable public custom domain
+curl https://dev.orderprocessing-api.xydatalabs.com/api/v1/Info/runtime-configuration
 
-# Test UI endpoint
-curl https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+# Test UI endpoint through the stable public custom domain
+curl https://dev.orderprocessing.xydatalabs.com/customers
 ```
 
 ---
@@ -419,33 +419,34 @@ These are legacy App Service endpoints retained for historical reference. Phase 
 
 For a friendlier server URL experience, prefer one of these patterns:
 
-- Custom domains on the Container Apps themselves, such as `api-dev.<your-domain>` and `ui-dev.<your-domain>`
+- Custom domains on the Container Apps themselves, such as `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com`
 - Azure Front Door or Application Gateway in front of the Container Apps, with `/` routed to UI and `/api` routed to the gateway
 
-The default `azurecontainerapps.io` hostnames are fine for initial validation, but custom domains or a front door are the right fix if you want URLs that feel like the local Docker ingress.
+The default `azurecontainerapps.io` hostnames are diagnostic fallback values only for Phase 10 automation. Custom domains or a front door are the right fix if you want URLs that feel like the local Docker ingress.
 
 For the cleanest operator experience, treat the generated ACA hostname as an internal deployment detail and publish one of these friendlier patterns instead:
 
-- `api-dev.<your-domain>` and `ui-dev.<your-domain>` for direct custom-domain bindings
-- `api-dev.<your-domain>` and `ui-dev.<your-domain>` behind Azure Front Door or Application Gateway
+- `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com` for direct custom-domain bindings
+- `staging.orderprocessing-api.xydatalabs.com` and `staging.orderprocessing.xydatalabs.com` for staging
+- `orderprocessing-api.xydatalabs.com` and `orderprocessing.xydatalabs.com` for prod
 - a single front-door hostname with `/api` routed to the gateway and `/` routed to the UI
 
 The Phase 10 deployment workflow supports both approaches through the same alias planning step:
 
 - `bindAliases=false` keeps the run as a summary-only deployment and prints the friendly aliases in the deployment summary.
-- `bindAliases=true` requires a real `publicDomain` value and enables environment-aware alias binding or alias guidance.
+- `bindAliases=true` binds the stable public hostnames resolved from `automation/config/runtime-targets.json`; `publicDomain` is only a compatibility fallback for a newly added environment without explicit catalog URLs.
 - `aliasMode=direct` attempts direct custom-domain binding against the Container Apps.
 - `aliasMode=frontdoor` keeps the workflow in alias-planning mode for a front door or DNS layer you manage separately.
 
-If you are not ready to own DNS and certificate validation yet, leave alias binding disabled and use the generated ACA hostname for verification.
+If you are not ready to own DNS and certificate validation yet, leave alias binding disabled. Generated ACA hostnames may still be inspected for diagnostics, but stable-domain smoke is the acceptance gate.
 
 If you want the same "clean name" experience you had in App Service, keep the Container App names as-is and add friendly public aliases:
 
 | Environment | API alias | UI alias |
 |------------|-----------|----------|
-| dev | `api-dev.yourdomain.com` | `ui-dev.yourdomain.com` |
-| staging | `api-staging.yourdomain.com` | `ui-staging.yourdomain.com` |
-| prod | `api.yourdomain.com` | `ui.yourdomain.com` |
+| dev | `dev.orderprocessing-api.xydatalabs.com` | `dev.orderprocessing.xydatalabs.com` |
+| staging | `staging.orderprocessing-api.xydatalabs.com` | `staging.orderprocessing.xydatalabs.com` |
+| prod | `orderprocessing-api.xydatalabs.com` | `orderprocessing.xydatalabs.com` |
 
 Use either:
 - direct custom domain bindings on the Container Apps, or
@@ -457,7 +458,7 @@ That gives you the same naming convenience as the old App Service setup. The bet
 
 1. Open the Container App in Azure Portal.
 2. Go to `Settings` or `Ingress`.
-3. Add a custom domain such as `api-dev.yourdomain.com` or `ui-dev.yourdomain.com`.
+3. Add a custom domain such as `dev.orderprocessing-api.xydatalabs.com` or `dev.orderprocessing.xydatalabs.com`.
 4. Bind TLS if required by your domain setup.
 5. Update DNS so the friendly hostname resolves to the app or to Front Door.
 

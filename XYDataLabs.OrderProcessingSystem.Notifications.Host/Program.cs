@@ -109,6 +109,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         tags: ["ready"]);
 }
 
+builder.Services.AddConfiguredEntraIdentity(builder.Configuration);
 var app = builder.Build();
 
 app.UseExceptionHandler();

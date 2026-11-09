@@ -1,11 +1,15 @@
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, request as playwrightRequest } from "playwright";
 import type { ChallengeOutcome } from "../contracts/provider-challenge-handler.js";
 import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { RuntimeTargetDefinition } from "../contracts/runtime-target-catalog.js";
 import { OpenPaySandboxChallengeHandler } from "./openpay-sandbox-challenge-handler.js";
+import { waitForCallbackOutcome } from "./callback-outcome.js";
+import {assertSandboxConfirmation,assertRuntimeMode} from "./payment-evidence.js";
+import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
 
 type AutomationScope = import("playwright").Page | import("playwright").Frame;
 type ScopeLocatorFactory = (scope: AutomationScope) => import("playwright").Locator;
@@ -14,7 +18,8 @@ const automationPayerName = "Automation Runner";
 const automationPayerEmail = "abc@xyz.com";
 const razorpayAutomationPhone = "9111191111";
 const razorpayAutomationCardNumber = "4100280000001007";
-const razorpayAutomationCardExpiry = "1244";
+const automationExpiryYear = String((new Date().getUTCFullYear() + 3) % 100).padStart(2, "0");
+const razorpayAutomationCardExpiry = `12${automationExpiryYear}`;
 const razorpayAutomationCardCvv = "111";
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(currentDirectory, "../..");
@@ -34,6 +39,8 @@ interface PaymentConfigurationResponse {
   browserKey?: string | null;
   browserMerchantId?: string | null;
   isProduction: boolean;
+  isThreeDSecure: boolean;
+  adapterMode: "sandbox" | "deterministic" | "live";
 }
 
 export interface PaymentJourneyRequest {
@@ -43,8 +50,15 @@ export interface PaymentJourneyRequest {
   sandboxOtpCode: string;
   headless: boolean;
   requestedProvider?: string;
+  loginUsername?: string;
+  manualEntry?: boolean;
   diagnosticsDirectory?: string;
   logger?: (message: string) => void;
+  expectedAdapterMode?: "sandbox" | "deterministic";
+  challengeRequired?: boolean;
+  expectedThreeDs?: boolean;
+  expectedOutcome?: "failure" | "cancelled";
+  signal?: AbortSignal;
 }
 
 export interface PaymentJourneyResult {
@@ -59,19 +73,37 @@ export interface PaymentJourneyResult {
   orderCurrencyCode: string;
   finalUrl: string;
   statusMessage: string;
+  adapterMode: "sandbox" | "deterministic" | "live";
+  collectionMode: string;
+  observedChallenge: "presented" | "not-presented";
+  providerVerification: string;
 }
 
 export class PaymentJourneyRunner {
   private readonly challengeHandler = new OpenPaySandboxChallengeHandler();
 
   public async execute(request: PaymentJourneyRequest): Promise<PaymentJourneyResult> {
-    const log = request.logger ?? (() => undefined);
+    const log = (message:string) => request.logger?.(safePaymentDiagnostic(message));
     log(`Launching browser for ${request.tenantCode} on ${request.target.key}.`);
     const browser = await chromium.launch({ headless: request.headless });
+    const abortBrowser=()=>{void browser.close();};
+    request.signal?.addEventListener("abort",abortBrowser,{once:true});
+    if(request.signal?.aborted) abortBrowser();
 
     try {
       const context = await browser.newContext({ ignoreHTTPSErrors: request.target.ignoreHttpsErrors });
       const page = await context.newPage();
+      const confirmations: Array<{paymentId:string;status:string;remoteStatusConfirmed:boolean;isSuccess:boolean;isPending:boolean;isFailure:boolean;providerAmount?:number;providerCurrency?:string;providerOrderId?:string}> = [];
+      page.on("response", response => {
+        if (new URL(response.url()).pathname.endsWith("/confirm-status") && response.ok()) {
+          void response.json().then(payload => {
+            const data = payload.data;
+            if (data) confirmations.push({paymentId:data.paymentId,status:data.status,remoteStatusConfirmed:data.remoteStatusConfirmed === true,
+              isSuccess:data.isSuccess === true,isPending:data.isPending === true,isFailure:data.isFailure === true,
+              providerAmount:data.providerAmount,providerCurrency:data.providerCurrency,providerOrderId:data.providerOrderId});
+          }).catch(()=>undefined);
+        }
+      });
       page.on("console", (message) => {
         const text = message.text();
         const messageType = message.type();
@@ -86,7 +118,7 @@ export class PaymentJourneyRunner {
           return;
         }
 
-        log(`[browser:${messageType}] ${text}`);
+        if (messageType === "error" || messageType === "warning") log(`[browser:${messageType}] Browser diagnostic observed; raw content omitted for payment-data safety.`);
       });
       page.on("pageerror", (error) => {
         log(`[browser:error] ${error.message}`);
@@ -104,7 +136,7 @@ export class PaymentJourneyRunner {
           return;
         }
 
-        log(`[browser:requestfailed] ${failedRequest.method()} ${url} -> ${errorText}`);
+        log(`[browser:requestfailed] ${failedRequest.method()} ${new URL(url).origin}${new URL(url).pathname} -> ${errorText}`);
       });
       page.on("response", (response) => {
         const url = response.url();
@@ -124,7 +156,7 @@ export class PaymentJourneyRunner {
         request,
         log,
         accessToken);
-      const authoritativeOrder = await this.createAuthoritativeOrder(
+      const authoritativeOrder = request.manualEntry ? await this.createOrderThroughUi(page, request, accessToken, paymentConfiguration.activeProviderType) : await this.createAuthoritativeOrder(
         request,
         accessToken,
         paymentConfiguration.activeProviderType,
@@ -137,7 +169,16 @@ export class PaymentJourneyRunner {
       log(
         `Opening persisted order ${authoritativeOrder.orderId} (${authoritativeOrder.orderReferenceId}) with authoritative amount ` +
         `${authoritativeOrder.totalPrice} ${authoritativeOrder.currencyCode}.`);
-      await page.goto(orderPaymentUrl, { waitUntil: "domcontentloaded" });
+      // Exercise the same Payments entry used by a person; do not bypass the picker.
+      if (request.manualEntry) {
+        await page.getByRole("link", { name: "Initiate payment", exact: true }).click();
+      } else {
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+      await page.getByLabel("Customer for payment").selectOption(String(authoritativeOrder.customerId));
+      await page.getByLabel("Order for payment").selectOption(String(authoritativeOrder.orderId));
+      await page.getByRole("button", { name: "Continue to payment", exact: true }).click();
+      }
+      await page.waitForURL(url => url.pathname === new URL(orderPaymentUrl).pathname);
       const orderHeading = page.getByRole("heading", { name: /Collect payment|Take a card payment/i });
       const orderErrorBanner = page.locator("p.error-banner").first();
       await Promise.any([
@@ -152,20 +193,25 @@ export class PaymentJourneyRunner {
         throw new Error(statusMessage);
       }
 
-      const tenantPicker = page.getByLabel("Tenant");
+      const tenantPicker = page.locator(".tenant-picker select");
       if (await tenantPicker.count() > 0) {
-        await tenantPicker.selectOption(request.tenantCode).catch(() => undefined);
+        if (await tenantPicker.inputValue() !== request.tenantCode) {
+          if (await tenantPicker.isDisabled()) throw new Error("The signed-in account cannot select the requested payment tenant.");
+          await tenantPicker.selectOption(request.tenantCode);
+        }
       }
 
       log(`Filling payment form for ${customerOrderId}.`);
-      await page.getByLabel("Cardholder name").fill(automationPayerName);
-      await page.getByLabel("Email").fill(automationPayerEmail);
-      await page.getByLabel("Customer order id").fill(customerOrderId);
+      await page.getByLabel("Cardholder name").fill(request.manualEntry ? authoritativeOrder.payerName : automationPayerName);
+      await page.getByLabel("Email").fill(request.manualEntry ? authoritativeOrder.payerEmail : automationPayerEmail);
+      if (await page.getByLabel("Customer order id").inputValue() !== customerOrderId) {
+        throw new Error("Payment form does not reference the selected persisted order.");
+      }
 
       if (paymentConfiguration.collectionMode !== "provider_checkout") {
-        await page.getByLabel("Card number").fill("4111111111111111");
+        await page.getByLabel("Card number").fill(request.expectedAdapterMode === "sandbox" && request.expectedThreeDs ? "5454545454545454" : "4111111111111111");
         await page.getByLabel("Expiry month").fill("12");
-        await page.getByLabel("Expiry year").fill("26");
+        await page.getByLabel("Expiry year").fill(automationExpiryYear);
         await page.getByLabel("CVV").fill("110");
       }
 
@@ -186,25 +232,44 @@ export class PaymentJourneyRunner {
         paymentConfiguration.collectionMode === "provider_checkout"
         && this.providersMatch(paymentConfiguration.activeProviderType, "Razorpay")
       ) {
-        if (this.usesLocalRazorpayMock(request.target.baseUrl)) {
-          log("Using local Razorpay mock callback path.");
-          log("Expected local telemetry noise: /payment/client-event may abort while the callback settles.");
-          const mockPaymentId = `local-razorpay-${customerOrderId}`;
-          const callbackUrl = new URL("/payments/callback", request.target.baseUrl);
-          callbackUrl.searchParams.set("tenantCode", request.tenantCode);
-          callbackUrl.searchParams.set("source", "razorpay-local-mock");
-          callbackUrl.searchParams.set("razorpay_payment_id", mockPaymentId);
-          callbackUrl.searchParams.set("razorpay_order_id", mockPaymentId);
-          await page.goto(callbackUrl.toString(), { waitUntil: "domcontentloaded" });
+        if (paymentConfiguration.adapterMode === "deterministic") {
+          log("Waiting for the application-owned local Razorpay callback and persisted provider payment ID.");
         }
         else {
-          razorpayMockBankChallengeRan = await this.completeRazorpayHostedCheckout(page, automationPayerEmail, log);
+          if (request.expectedOutcome === "cancelled") {
+            await this.fillRazorpayContactDetails(page,automationPayerEmail,log);
+            const close=await this.findVisibleLocator(page,[(scope)=>scope.locator('button[data-testid="checkout-close"]'),(scope)=>scope.getByRole("button",{name:/close checkout/i})],60000,"Razorpay checkout dismissal");
+            await close.locator.click();
+            await this.tryClickVisible(page,[(scope)=>scope.getByRole("button",{name:/^Yes,?\s*(exit|close|cancel)$|^Cancel payment$/i})],10000);
+          } else {
+            razorpayMockBankChallengeRan = await this.completeRazorpayHostedCheckout(page, automationPayerEmail, log,request.expectedOutcome === "failure");
+          }
         }
       }
 
       const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
       const paymentErrorBanner = page.locator("p.error-banner").first();
       const nextState = await this.waitForPostSubmitState(page, paymentConfiguration.collectionMode, callbackHeading, paymentErrorBanner, log);
+
+      if (request.expectedOutcome) {
+        const callback = request.expectedOutcome === "failure" ? await waitForCallbackOutcome(page,120000) : null;
+        const confirmation=confirmations.at(-1);
+        if (request.expectedOutcome === "failure" && (callback?.state !== "failed" || !confirmation?.remoteStatusConfirmed || !confirmation.isFailure || confirmation.isSuccess)) {
+          throw new Error("Expected decline was not authoritatively confirmed. A generic browser/API error cannot pass a negative payment test.");
+        }
+        if (request.expectedOutcome === "cancelled" && (nextState !== "error" || confirmations.some(item=>item.isSuccess))) throw new Error("Checkout cancellation was not observed cleanly.");
+        const statusApi=await playwrightRequest.newContext({baseURL:request.target.apiBaseUrl ?? request.target.baseUrl,extraHTTPHeaders:{"X-Tenant-Code":request.tenantCode,...(accessToken?{Authorization:`Bearer ${accessToken}`}:{})}});
+        try {
+          const response=await statusApi.get(`/api/v1/Order/${authoritativeOrder.orderId}`);
+          if(!response.ok() || (await response.json()).data?.status !== "Created") throw new Error("Negative payment scenario changed the order to a paid or unknown state.");
+        } finally {await statusApi.dispose();}
+        return {journeyOutcome:`expected-${request.expectedOutcome}`,challengeOutcome:request.expectedOutcome === "failure" ? "failed":"not-applicable",
+          threeDsSetting:paymentConfiguration.isThreeDSecure?"enabled":"disabled",paymentProvider:paymentConfiguration.activeProviderType,
+          customerOrderId,orderId:authoritativeOrder.orderId,orderReferenceId:authoritativeOrder.orderReferenceId,orderAmount:authoritativeOrder.totalPrice,
+          orderCurrencyCode:authoritativeOrder.currencyCode,finalUrl:new URL(page.url()).origin,statusMessage:callback?.message ?? "Checkout dismissed; order remains unpaid.",
+          adapterMode:paymentConfiguration.adapterMode,collectionMode:paymentConfiguration.collectionMode,observedChallenge:razorpayMockBankChallengeRan?"presented":"not-presented",
+          providerVerification:request.expectedOutcome === "failure"?"sandbox:failed":"checkout-dismissed:order-unpaid"};
+      }
 
       if (nextState === "error") {
         const statusMessage = (await paymentErrorBanner.textContent().catch(() => null))?.trim() || "Payment processing failed on the payment page.";
@@ -213,15 +278,15 @@ export class PaymentJourneyRunner {
       }
 
       let challengeOutcome: ChallengeOutcome = "not-applicable";
-      let threeDsSetting: ThreeDsSetting = "unknown";
+      const threeDsSetting: ThreeDsSetting = paymentConfiguration.isThreeDSecure ? "enabled" : "disabled";
+      let observedChallenge: "presented" | "not-presented" = "not-presented";
       if (nextState === "redirect") {
         // OpenPay 3DS: redirect to provider challenge page
-        threeDsSetting = "enabled";
         log("3DS redirect state detected.");
         const continueLink = page.getByRole("link", { name: /Continue to secure verification now/i });
         const providerUrl = await continueLink.getAttribute("href").catch(() => null);
         if (providerUrl) {
-          log(`Waiting for provider challenge via browser redirect to ${providerUrl}.`);
+          log("Waiting for provider challenge via browser redirect.");
           await this.openProviderChallenge(page, continueLink, request.target.baseUrl, callbackHeading, log);
         }
         else if (await continueLink.count() > 0) {
@@ -230,39 +295,74 @@ export class PaymentJourneyRunner {
           await page.waitForURL((url) => !url.toString().startsWith(request.target.baseUrl), { timeout: 60000 }).catch(() => undefined);
         }
 
-        log(`Attempting sandbox OTP challenge with ${request.sandboxOtpCode}.`);
+        log("Attempting provider sandbox authentication; code omitted.");
         challengeOutcome = await this.challengeHandler.execute(page, {
           tenantCode: request.tenantCode,
           sandboxOtpCode: request.sandboxOtpCode,
           diagnosticsDirectory: request.diagnosticsDirectory
         });
+        if(challengeOutcome==="submitted") observedChallenge="presented";
         log(`Challenge outcome: ${challengeOutcome}. Waiting for callback page.`);
         await page.waitForURL((url) => url.toString().startsWith(request.target.baseUrl), { timeout: 120000 }).catch(() => undefined);
         await callbackHeading.waitFor({ timeout: 120000 });
       }
       else if (razorpayMockBankChallengeRan) {
         // Razorpay 3DS: bank challenge was handled inside the hosted checkout iframe
-        threeDsSetting = "enabled";
+        observedChallenge = "presented";
         challengeOutcome = "passed";
         log("Razorpay mock bank 3DS challenge completed inside hosted checkout.");
       }
       else {
-        threeDsSetting = "disabled";
         log("Payment flow returned directly to callback page without provider challenge.");
       }
 
-      const callbackSettled = await this.waitForCallbackSettlement(page, log);
-      const statusBanner = page.locator("p.success-banner, p.error-banner, p.info-banner").first();
-      const statusMessage = (await statusBanner.textContent().catch(() => null))?.trim() || "Payment flow reached callback page.";
-      if (request.target.runtime === "local" && statusMessage === "The requested resource was not found.") {
-        log("Final callback status: expected local mock callback response was not found yet; callback settled through the local mock path.");
+      const callbackOutcome = await waitForCallbackOutcome(page,120000);
+      const statusMessage = callbackOutcome.message;
+      log(`Final callback status: ${statusMessage}`);
+      if (callbackOutcome.state === "failed") {
+        throw new Error(`Payment callback failed: ${statusMessage}`);
       }
-      else {
-        log(`Final callback status: ${statusMessage}`);
+      const confirmation = confirmations.at(-1);
+      if (observedChallenge === "presented" && confirmation?.remoteStatusConfirmed && confirmation.isSuccess
+        && ["completed","captured","paid"].includes(confirmation.status?.toLowerCase())) challengeOutcome = "passed";
+      // Keep confirmed payment/order evidence even when a required visible challenge is missing.
+      // The acceptance gate below the journey records this as BLOCKED, never as a challenge PASS.
+      if (request.challengeRequired && (observedChallenge !== "presented" || challengeOutcome !== "passed")) challengeOutcome = "partial";
+      if (callbackOutcome.state === "completed" && paymentConfiguration.adapterMode === "sandbox") {
+        assertSandboxConfirmation(confirmation,{amount:authoritativeOrder.totalPrice,currency:authoritativeOrder.currencyCode});
+      }
+      if(callbackOutcome.state==="completed") {
+        const orderApi=await playwrightRequest.newContext({baseURL:request.target.apiBaseUrl ?? request.target.baseUrl,
+          extraHTTPHeaders:{"X-Tenant-Code":request.tenantCode,...(accessToken?{Authorization:`Bearer ${accessToken}`}:{})}});
+        try{
+          const deadline=Date.now()+120000;let paid=false;
+          do {
+            const response=await orderApi.get(`/api/v1/Order/${authoritativeOrder.orderId}`,{timeout:Math.min(10000,Math.max(1,deadline-Date.now()))});
+            if(!response.ok()) throw new Error(`Paid-order verification failed (${response.status()}). Payment was not resubmitted.`);
+            const saved=(await response.json()).data;
+            if(saved?.status==="Paid" && saved.orderReferenceId===authoritativeOrder.orderReferenceId
+              && saved.totalPrice===authoritativeOrder.totalPrice && saved.currencyCode===authoritativeOrder.currencyCode){paid=true;break;}
+            if(Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,Math.min(2000,deadline-Date.now())));
+          }while(Date.now()<deadline);
+          if(!paid) throw new Error("Provider completed payment but the matching order did not become Paid. E2E acceptance is incomplete.");
+        }finally{await orderApi.dispose();}
+      }
+      if (request.diagnosticsDirectory) {
+        await mkdir(request.diagnosticsDirectory,{recursive:true});
+        await writeFile(path.join(request.diagnosticsDirectory,"provider-confirmation.json"),JSON.stringify({tenant:request.tenantCode,
+          orderId:authoritativeOrder.orderId,orderReferenceId:authoritativeOrder.orderReferenceId,amount:authoritativeOrder.totalPrice,
+          currency:authoritativeOrder.currencyCode,adapterMode:paymentConfiguration.adapterMode,configuredThreeDs:paymentConfiguration.isThreeDSecure,
+          collectionMode:paymentConfiguration.collectionMode,observedChallenge,confirmation},null,2));
+        await page.screenshot({path:path.join(request.diagnosticsDirectory,"final-result.png"),fullPage:true,mask:[page.locator("input")]});
+        if(request.manualEntry){
+          const sheetPath=path.join(request.diagnosticsDirectory,"manual-data-sheet.json");
+          const sheet=JSON.parse(await readFile(sheetPath,"utf8"));
+          await writeFile(sheetPath,JSON.stringify({...sheet,expectedOutcome:"completed",paymentId:confirmation?.paymentId,providerOrderId:confirmation?.providerOrderId,finalMessage:statusMessage,actualOutcome:callbackOutcome.state},null,2));
+        }
       }
 
       return {
-        journeyOutcome: callbackSettled ? "completed" : "callback-pending",
+        journeyOutcome: callbackOutcome.state === "completed" ? "completed" : "callback-pending",
         challengeOutcome,
         threeDsSetting,
         paymentProvider: paymentConfiguration.activeProviderType,
@@ -271,11 +371,23 @@ export class PaymentJourneyRunner {
         orderReferenceId: authoritativeOrder.orderReferenceId,
         orderAmount: authoritativeOrder.totalPrice,
         orderCurrencyCode: authoritativeOrder.currencyCode,
-        finalUrl: page.url(),
+        finalUrl: (()=>{const url=new URL(page.url());for(const key of [...url.searchParams.keys()]) if(!["id","tenantCode","razorpay_payment_id","razorpay_order_id"].includes(key)) url.searchParams.delete(key);return url.toString();})(),
         statusMessage
+        ,adapterMode:paymentConfiguration.adapterMode,collectionMode:paymentConfiguration.collectionMode,observedChallenge,
+        providerVerification:confirmation?.remoteStatusConfirmed ? `${paymentConfiguration.adapterMode}:${confirmation.status}` : "unverified"
       };
     }
+    catch(error) {
+      if(request.diagnosticsDirectory){
+        await mkdir(request.diagnosticsDirectory,{recursive:true});
+        const page=browser.contexts().flatMap(context=>context.pages())[0];
+        if(page) await page.screenshot({path:path.join(request.diagnosticsDirectory,"failure.png"),fullPage:true,
+          mask:page.frames().map(frame=>frame.locator("input, textarea, [contenteditable]"))}).catch(()=>undefined);
+      }
+      throw error;
+    }
     finally {
+      request.signal?.removeEventListener("abort",abortBrowser);
       await browser.close();
     }
   }
@@ -284,6 +396,26 @@ export class PaymentJourneyRunner {
     request: PaymentJourneyRequest,
     log: (message: string) => void,
     accessToken: string | null
+  ): Promise<PaymentConfigurationResponse> {
+    const deadline = Date.now() + 30000;
+    let lastError: unknown;
+    do {
+      request.signal?.throwIfAborted();
+      try { return await this.resolvePaymentConfigurationOnce(request, log, accessToken, deadline - Date.now()); }
+      catch (error) {
+        lastError = error;
+        if (!(error instanceof Error) || !/Effective 3DS|Requested provider|inconsistent with requested/.test(error.message)) throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(500, deadline - Date.now()))));
+    } while (Date.now() < deadline);
+    throw lastError;
+  }
+
+  private async resolvePaymentConfigurationOnce(
+    request: PaymentJourneyRequest,
+    log: (message: string) => void,
+    accessToken: string | null,
+    timeoutMs: number
   ): Promise<PaymentConfigurationResponse> {
     log(`Resolving payment configuration for ${request.tenantCode}.`);
     const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
@@ -297,7 +429,7 @@ export class PaymentJourneyRunner {
     });
 
     try {
-      const response = await apiContext.get("/api/v1/Info/payment-configuration");
+      const response = await apiContext.get("/api/v1/Info/payment-configuration", { timeout: Math.max(1, Math.min(5000, timeoutMs / 2)) });
       if (!response.ok()) {
         const responseBody = await response.text().catch(() => "");
         const normalizedBody = responseBody.trim().replace(/\s+/g, " ");
@@ -308,6 +440,19 @@ export class PaymentJourneyRunner {
       }
 
       const paymentConfiguration = await response.json() as PaymentConfigurationResponse;
+      const runtimeResponse = await apiContext.get("/api/v1/Payments/runtime", { timeout: Math.max(1, Math.min(5000, timeoutMs / 2)) });
+      if (!runtimeResponse.ok()) throw new Error(`Payment runtime diagnostic unavailable (${runtimeResponse.status()}); refusing unverified mode.`);
+      const runtime = (await runtimeResponse.json()).data;
+      if (runtime) assertRuntimeMode(runtime,request.expectedAdapterMode ?? "sandbox");
+      if (!runtime || runtime.adapterMode !== (request.expectedAdapterMode ?? "sandbox") || runtime.isProduction
+        || paymentConfiguration.isProduction || runtime.providerType !== paymentConfiguration.activeProviderType
+        || runtime.collectionMode !== paymentConfiguration.collectionMode || runtime.configuredThreeDs !== paymentConfiguration.isThreeDSecure) {
+        throw new Error("Payment runtime is live, simulated, unknown, or inconsistent with requested test mode; refusing charge.");
+      }
+      if (request.expectedThreeDs !== undefined && runtime.configuredThreeDs !== request.expectedThreeDs) {
+        throw new Error(`Effective 3DS setting (${runtime.configuredThreeDs}) does not match requested ${request.expectedThreeDs} for ${runtime.providerType}/${request.tenantCode}; refusing test charge.`);
+      }
+      paymentConfiguration.adapterMode = runtime.adapterMode;
       if (!paymentConfiguration.activeProviderType?.trim()) {
         throw new Error("Payment configuration response did not include an active provider type.");
       }
@@ -389,11 +534,11 @@ export class PaymentJourneyRunner {
     }
 
     const normalizedTenant = request.tenantCode.trim().toLowerCase();
-    const username = normalizedTenant === "tenantb"
+    const username = request.loginUsername ?? (normalizedTenant === "tenantb"
       ? "tenant-b-user"
       : normalizedTenant === "tenantc"
         ? "tenant-c-user"
-        : "tenant-admin";
+        : "tenant-admin");
 
     const entryState = await Promise.race([
       page.waitForURL((url) => url.toString().includes("/realms/xy-phase9/"), { timeout: 15000 }).then(() => "auth" as const),
@@ -427,12 +572,47 @@ export class PaymentJourneyRunner {
     log(`Keycloak PKCE authentication completed for ${request.tenantCode}.`);
   }
 
+  private async createOrderThroughUi(page: import("playwright").Page, request: PaymentJourneyRequest, token: string | null, provider: string) {
+    await page.goto(`${request.target.baseUrl}/customers?tenantCode=${encodeURIComponent(request.tenantCode)}`);
+    const headers = {"X-Tenant-Code":request.tenantCode,...(token?{Authorization:`Bearer ${token}`}:{})};
+    const uniqueSuffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const customerName = `Phase10 ${request.tenantCode} ${uniqueSuffix}`;
+    const customerEmail = `phase10-${request.tenantCode.toLowerCase()}-${uniqueSuffix}@example.test`;
+    const createCustomer = await page.request.post(`${request.target.apiBaseUrl}/api/v1/Customer`, {
+      headers: { ...headers, "Content-Type": "application/json" },
+      data: { name: customerName, email: customerEmail }
+    });
+    if (!createCustomer.ok()) throw new Error(`Fresh UI-journey customer provisioning failed (${createCustomer.status()}).`);
+    const customerPayload = await createCustomer.json() as { data?: number };
+    if (!Number.isInteger(customerPayload.data) || !customerPayload.data) throw new Error("Fresh customer response did not include an id.");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const customerLink = page.locator(`a.customer-link[href="/customers/${customerPayload.data}"]`);
+    await customerLink.waitFor({ state: "visible", timeout: 30000 });
+    await customerLink.click();
+    await page.getByRole("link", { name: "Create order", exact: true }).click();
+    await page.getByRole("checkbox").first().check();
+    const currency = this.providersMatch(provider, "Razorpay") ? "INR" : "MXN";
+    await page.getByLabel("Order currency").selectOption(currency);
+    await page.getByRole("button", { name: "Create order", exact: true }).click();
+    await page.waitForURL(url => /\/customers\/\d+\/orders\/\d+$/.test(url.pathname));
+    const ids = page.url().match(/\/customers\/(\d+)\/orders\/(\d+)/)!;
+    const response = await page.request.get(`${request.target.apiBaseUrl}/api/v1/Order/${ids[2]}`, {headers:{"X-Tenant-Code":request.tenantCode, ...(token?{Authorization:`Bearer ${token}`}:{})}});
+    if (!response.ok()) throw new Error("UI-created order could not be verified.");
+    const order = (await response.json()).data;
+    if (order.customerId !== Number(ids[1]) || order.currencyCode !== currency || !(order.totalPrice > 0) || !order.orderReferenceId) throw new Error("UI-created order terms are invalid.");
+    if (request.diagnosticsDirectory) {
+      await mkdir(request.diagnosticsDirectory,{recursive:true});
+        await writeFile(path.join(request.diagnosticsDirectory,"manual-data-sheet.json"), JSON.stringify({tenant:request.tenantCode,login:request.loginUsername,provider,adapterMode:request.expectedAdapterMode,customerId:order.customerId,customerName,customerEmail,orderId:Number(ids[2]),orderReferenceId:order.orderReferenceId,amount:order.totalPrice,currency:order.currencyCode,products:order.orderProductDtos?.map((item:{productId:number})=>item.productId) ?? []},null,2));
+    }
+    return {customerId:order.customerId as number,orderId:Number(ids[2]),orderReferenceId:order.orderReferenceId as string,totalPrice:order.totalPrice as number,currencyCode:order.currencyCode as string,payerName:customerName,payerEmail:customerEmail};
+  }
+
   private async createAuthoritativeOrder(
     request: PaymentJourneyRequest,
     accessToken: string | null,
     providerType: string,
     log: (message: string) => void
-  ): Promise<{ customerId: number; orderId: number; orderReferenceId: string; totalPrice: number; currencyCode: string }> {
+  ): Promise<{ customerId: number; orderId: number; orderReferenceId: string; totalPrice: number; currencyCode: string; payerName: string; payerEmail: string }> {
     const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
     const api = await playwrightRequest.newContext({
       baseURL: apiBaseUrl,
@@ -459,11 +639,13 @@ export class PaymentJourneyRunner {
       }
 
       const uniqueSuffix = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const customerName = `${automationPayerName} ${request.tenantCode} ${uniqueSuffix}`;
+      const customerEmail = `phase10-${request.tenantCode.toLowerCase()}-${uniqueSuffix}@example.local`;
       const customerResponse = await api.post("/api/v1/Customer", {
         headers: { "Content-Type": "application/json" },
         data: {
-          name: `${automationPayerName} ${request.tenantCode}`,
-          email: `phase10-${request.tenantCode}-${uniqueSuffix}@example.local`
+          name: customerName,
+          email: customerEmail
         }
       });
       if (!customerResponse.ok()) {
@@ -508,7 +690,9 @@ export class PaymentJourneyRunner {
         orderId: payload.data.orderId,
         orderReferenceId,
         totalPrice: payload.data.totalPrice,
-        currencyCode
+        currencyCode,
+        payerName: customerName,
+        payerEmail: customerEmail
       };
     }
     finally {
@@ -518,20 +702,6 @@ export class PaymentJourneyRunner {
 
   private providersMatch(left: string, right: string): boolean {
     return left.trim().localeCompare(right.trim(), undefined, { sensitivity: "accent" }) === 0;
-  }
-
-  private usesLocalRazorpayMock(baseUrl?: string | null): boolean {
-    if (!baseUrl) {
-      return false;
-    }
-
-    try {
-      const parsed = new URL(baseUrl);
-      return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-    }
-    catch {
-      return false;
-    }
   }
 
   private async waitForPostSubmitState(
@@ -573,7 +743,8 @@ export class PaymentJourneyRunner {
   private async completeRazorpayHostedCheckout(
     page: import("playwright").Page,
     payerEmail: string,
-    log: (message: string) => void
+    log: (message: string) => void,
+    failPayment=false
   ): Promise<boolean> {
     const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
     if (await callbackHeading.isVisible().catch(() => false)) {
@@ -585,7 +756,7 @@ export class PaymentJourneyRunner {
     await this.fillRazorpayContactDetails(page, payerEmail, log);
     await this.fillRazorpayCardDetails(page, log);
     await this.dismissRazorpaySaveCardPrompt(page, log);
-    await this.completeRazorpayMockBankChallenge(page, log);
+    await this.completeRazorpayMockBankChallenge(page, log,failPayment);
     return true;
   }
 
@@ -689,20 +860,14 @@ export class PaymentJourneyRunner {
       await this.fillCardInputsByOrder(cardScope.scope);
     }
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await this.clickWithinScope(cardScope.scope, [
+    // Submit once. A quiet/slow provider is an ambiguous result, not permission to charge again.
+    await this.clickWithinScope(cardScope.scope, [
         (scope) => scope.getByRole("button", { name: /^Continue$/i }),
         (scope) => scope.getByText(/^Continue$/i)
       ], "Razorpay card continue");
 
-      if (await this.waitForRazorpayPostCardAdvance(page, 6000)) {
-        return;
-      }
-
-      log(`Razorpay card submit attempt ${attempt} did not advance the checkout yet.`);
-    }
-
-    throw new Error("Razorpay checkout did not advance after card submission.");
+    if (await this.waitForRazorpayPostCardAdvance(page, 60000)) return;
+    throw new Error("Razorpay checkout outcome is ambiguous after one card submission; no automatic resubmission is permitted.");
   }
 
   private async dismissRazorpaySaveCardPrompt(
@@ -721,7 +886,8 @@ export class PaymentJourneyRunner {
 
   private async completeRazorpayMockBankChallenge(
     page: import("playwright").Page,
-    log: (message: string) => void
+    log: (message: string) => void,
+    failPayment=false
   ): Promise<void> {
     let mockBankSurface: { scope: AutomationScope; label: string };
 
@@ -738,25 +904,31 @@ export class PaymentJourneyRunner {
       throw error;
     }
 
-    log(`Completing Razorpay mock bank success step in ${mockBankSurface.label}.`);
+    const outcome=failPayment?"Failure":"Success";
+    log(`Completing Razorpay mock bank ${outcome} step in ${mockBankSurface.label}.`);
     await this.clickWithinScope(mockBankSurface.scope, [
-      (scope) => scope.getByRole("button", { name: /^Success$/i }),
-      (scope) => scope.getByText(/^Success$/i)
-    ], "Razorpay mock bank success");
+      (scope) => scope.getByRole("button", { name: new RegExp(`^${outcome}$`,"i") }),
+      (scope) => scope.getByText(new RegExp(`^${outcome}$`,"i"))
+    ], "Razorpay mock bank outcome");
   }
 
   private async fillCardInputsByOrder(scope: AutomationScope): Promise<void> {
     const inputs = scope.locator('input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]):not([type="button"]):not([type="submit"])');
     const visibleInputs: import("playwright").Locator[] = [];
-
-    for (let index = 0; index < await inputs.count(); index += 1) {
+    const deadline=Date.now()+60000;
+    do {
+      visibleInputs.length=0;
+      for (let index = 0; index < await inputs.count(); index += 1) {
       const candidate = inputs.nth(index);
       const isVisible = await candidate.isVisible().catch(() => false);
       const inputType = (await candidate.getAttribute("type").catch(() => null))?.toLowerCase() ?? "text";
       if (isVisible && !["radio", "checkbox", "hidden", "button", "submit"].includes(inputType)) {
         visibleInputs.push(candidate);
       }
-    }
+      }
+      if(visibleInputs.length>=3) break;
+      await new Promise(resolve=>setTimeout(resolve,250));
+    }while(Date.now()<deadline);
 
     if (visibleInputs.length < 3) {
       throw new Error("Unable to identify Razorpay card entry inputs.");
@@ -993,28 +1165,6 @@ export class PaymentJourneyRunner {
     ]).catch(() => false);
   }
 
-  private async waitForCallbackSettlement(
-    page: import("playwright").Page,
-    log: (message: string) => void
-  ): Promise<boolean> {
-    const loadingPanel = page.locator(".loading-progress-panel").first();
-    const loadingVisible = await loadingPanel.isVisible().catch(() => false);
-    if (!loadingVisible) {
-      return true;
-    }
-
-    log("Callback page is still reconciling; waiting for final status.");
-
-    const settled = await loadingPanel.waitFor({ state: "hidden", timeout: 60000 })
-      .then(() => true)
-      .catch(() => false);
-
-    if (!settled) {
-      log("Callback page did not finish reconciliation before the settlement timeout.");
-    }
-
-    return settled;
-  }
 
   private usesLocalParityBrowserNoiseFilter(target: RuntimeTargetDefinition): boolean {
     return target.runtime === "local" || target.runtime === "docker";

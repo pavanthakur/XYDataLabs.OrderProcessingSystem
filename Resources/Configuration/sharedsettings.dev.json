@@ -142,13 +142,13 @@
       "WebApps": {
         "API": {
           "Name": "pavanthakur-orderprocessing-api-xyapp-dev",
-          "Url": "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net",
-          "CustomDomain": ""
+          "Url": "https://dev.orderprocessing-api.xydatalabs.com",
+          "CustomDomain": "dev.orderprocessing-api.xydatalabs.com"
         },
         "UI": {
           "Name": "pavanthakur-orderprocessing-ui-xyapp-dev",
-          "Url": "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net",
-          "CustomDomain": ""
+          "Url": "https://dev.orderprocessing.xydatalabs.com",
+          "CustomDomain": "dev.orderprocessing.xydatalabs.com"
         }
       },
       "Database": {

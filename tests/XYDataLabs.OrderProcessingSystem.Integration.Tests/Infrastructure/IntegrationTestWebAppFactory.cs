@@ -63,6 +63,9 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             // local test database instead of any stale developer/Azure value.
             Environment.SetEnvironmentVariable("ConnectionStrings__OrderProcessingSystemDbConnection", _connectionString);
             Environment.SetEnvironmentVariable("ConnectionStrings__TenantRegistryDbConnection", _connectionString);
+            // Infrastructure fixtures intentionally use anonymous test mode.
+            // Environment precedence is required for the same reason as the SQL overrides.
+            Environment.SetEnvironmentVariable("IdentityProvider__Enabled", "false");
         }
 
         /// <summary>
@@ -94,6 +97,9 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
                 // that cover infrastructure/routing behaviour.
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
+                    // These routing/persistence fixtures are deliberately identity-disabled.
+                    // Authenticated authorization is exercised by bearer and browser suites.
+                    ["IdentityProvider:Enabled"] = "false",
                     ["ConnectionStrings:OrderProcessingSystemDbConnection"] = _connectionString,
                     ["ConnectionStrings:TenantRegistryDbConnection"] = _connectionString,
                     ["ConnectionStrings:Redis"] = string.Empty,

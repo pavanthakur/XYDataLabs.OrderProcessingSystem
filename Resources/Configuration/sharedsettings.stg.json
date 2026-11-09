@@ -124,13 +124,13 @@
       "WebApps": {
         "API": {
           "Name": "wa-orderprocessing-api-stg",
-          "Url": "https://wa-orderprocessing-api-stg.azurewebsites.net",
-          "CustomDomain": ""
+          "Url": "https://staging.orderprocessing-api.xydatalabs.com",
+          "CustomDomain": "staging.orderprocessing-api.xydatalabs.com"
         },
         "UI": {
           "Name": "wa-orderprocessing-ui-stg",
-          "Url": "https://wa-orderprocessing-ui-stg.azurewebsites.net",
-          "CustomDomain": ""
+          "Url": "https://staging.orderprocessing.xydatalabs.com",
+          "CustomDomain": "staging.orderprocessing.xydatalabs.com"
         }
       },
       "Database": {

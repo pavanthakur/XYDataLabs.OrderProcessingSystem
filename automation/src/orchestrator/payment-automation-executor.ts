@@ -15,6 +15,7 @@ import { PaymentJourneyRunner } from "../browser/payment-journey-runner.js";
 import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildCustomerOrderId, buildRunPrefix } from "../support/customer-order-id.js";
 import { PowerShellVerificationAdapter } from "../verification/powershell-verification-adapter.js";
+import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
 
 export interface ExecutePaymentAutomationRunOptions {
   target: string;
@@ -33,6 +34,12 @@ export interface ExecutePaymentAutomationRunOptions {
   autoStopLocalSessions?: boolean;
   tenantLimit?: number;
   logger?: (message: string) => void;
+  expectedAdapterMode?: "sandbox" | "deterministic";
+  threeDs?: boolean;
+  loginUsername?: string;
+  manualEntry?: boolean;
+  challengeRequired?: boolean;
+  expectedOutcome?: "failure" | "cancelled";
 }
 
 export interface PaymentAutomationRunOutput {
@@ -73,7 +80,7 @@ export async function executePaymentAutomationRun(
   const reportComposer = new FileReportComposer();
   const verificationAdapter = new PowerShellVerificationAdapter();
   const paymentJourneyRunner = new PaymentJourneyRunner();
-  const log = options.logger ?? (() => undefined);
+  const log = (message:string) => options.logger?.(safePaymentDiagnostic(message));
   log(`Resolving runtime target ${options.target}.`);
   const target = await runtimeTargetCatalog.resolve(options.target);
   log(`Resolved runtime target ${target.key} (${target.runtime}/${target.profile}).`);
@@ -160,6 +167,7 @@ export async function executePaymentAutomationRun(
     let journeyOutcome = options.dryRun ? "dry_run" : "failed";
     let challengeOutcome: ExecutiveSummaryRow["challengeOutcome"] = "not-applicable";
     let threeDsSetting: ExecutiveSummaryRow["threeDsSetting"] = "unknown";
+    let paymentEvidence: Partial<ExecutiveSummaryRow> = {};
     let paymentProvider = executionItem.paymentProviderCode ?? "unresolved";
     let verificationOutcome = options.verify && !options.dryRun ? "pending" : "skipped";
     let cleanupOutcome = resolveCleanupOutcome();
@@ -171,10 +179,11 @@ export async function executePaymentAutomationRun(
     let stopAfterCurrentItem = false;
 
     try {
-      if (!options.dryRun && executionItem.paymentProviderCode && executionItem.shouldPrepareProviderFixture) {
+      if (!options.dryRun && executionItem.paymentProviderCode && (executionItem.shouldPrepareProviderFixture || options.threeDs !== undefined)) {
         provisioner = new PowerShellPaymentProviderProvisioner({
           target,
           requestedProvider: executionItem.paymentProviderCode,
+          threeDs: options.threeDs,
           logger: (message) => {
             log(`[${executionItem.tenantCode}/${executionItem.paymentProviderCode}] ${message}`);
           }
@@ -189,8 +198,8 @@ export async function executePaymentAutomationRun(
         log(
           `Running tenant ${executionItem.tenantCode} (tier ${executionItem.tenantTier}${executionItem.paymentProviderCode ? `, provider ${executionItem.paymentProviderCode}` : ""}) and order id ${customerOrderId}.`
         );
-        const journeyResult = await withTimeout(
-          paymentJourneyRunner.execute({
+        const journeyAbort=new AbortController();
+        const journey=paymentJourneyRunner.execute({
             tenantCode: executionItem.tenantCode,
             target,
             customerOrderId,
@@ -198,17 +207,27 @@ export async function executePaymentAutomationRun(
             headless: options.headless,
             requestedProvider: executionItem.paymentProviderCode ?? undefined,
             diagnosticsDirectory: tenantDiagnosticsDirectory,
+            expectedAdapterMode: options.expectedAdapterMode ?? "sandbox",
+            challengeRequired: options.challengeRequired,
+            expectedThreeDs: options.threeDs,
+            loginUsername: options.loginUsername,
+            manualEntry: options.manualEntry,
+            expectedOutcome: options.expectedOutcome,
+            signal:journeyAbort.signal,
             logger: (message) => {
               log(`[${executionItem.tenantCode}] ${message}`);
             }
-          }),
+          });
+        const journeyResult = await withTimeout(journey,
           options.tenantTimeoutMs,
-          `Tenant ${executionItem.tenantCode} exceeded ${options.tenantTimeoutMs}ms.`
+          `Tenant ${executionItem.tenantCode} exceeded ${options.tenantTimeoutMs}ms.`,()=>journeyAbort.abort()
         );
 
         journeyOutcome = journeyResult.journeyOutcome;
         challengeOutcome = journeyResult.challengeOutcome;
         threeDsSetting = journeyResult.threeDsSetting;
+        paymentEvidence = {adapterMode:journeyResult.adapterMode,collectionMode:journeyResult.collectionMode,
+          observedChallenge:journeyResult.observedChallenge,providerVerification:journeyResult.providerVerification};
         paymentProvider = journeyResult.paymentProvider;
         customerOrderId = journeyResult.customerOrderId;
         orderId = journeyResult.orderId;
@@ -219,12 +238,9 @@ export async function executePaymentAutomationRun(
         evidenceReference = `customerOrderId:${customerOrderId} | orderId:${orderId} | orderRef:${orderReferenceId} | amount:${orderAmount} ${orderCurrencyCode} -> ${journeyResult.finalUrl}`;
         const providerPaymentId = extractProviderPaymentId(journeyResult.finalUrl);
 
-        if (options.verify) {
+        if(options.expectedOutcome) verificationOutcome="passed"; // Runner verifies provider failure/cancellation and authoritative unpaid order independently.
+        if (options.verify && !options.expectedOutcome) {
           try {
-            if (target.runtime === "docker") {
-              await new Promise((resolve) => setTimeout(resolve, 15000));
-            }
-
             log(
               `[${executionItem.tenantCode}] Verification anchor customerOrderId=${customerOrderId} runPrefix=${executionItem.executionRunPrefix}.`
             );
@@ -243,10 +259,8 @@ export async function executePaymentAutomationRun(
             verificationOutcome = verificationResult.outcome;
             verificationSummaries.push(verificationResult.summary);
 
-            const verifiedThreeDsSetting = verificationResult.threeDsByTenant?.[executionItem.tenantCode];
-            if (verifiedThreeDsSetting) {
-              threeDsSetting = verifiedThreeDsSetting;
-            }
+            // The setting was captured before submission; never overwrite it with
+            // current DB routing/flags after callback or infer it from navigation.
 
             await writeFile(
               path.join(
@@ -267,7 +281,7 @@ export async function executePaymentAutomationRun(
       }
     }
     catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error.";
+      const errorMessage = safePaymentDiagnostic(error instanceof Error ? error.message : "Unknown error.");
       journeyOutcome = `failed: ${errorMessage}`;
       errorDetail = errorMessage;
       verificationOutcome = "skipped";
@@ -308,6 +322,7 @@ export async function executePaymentAutomationRun(
         evidenceReference,
         threeDsSetting,
         paymentProvider
+        ,...paymentEvidence
       });
 
       log(
@@ -497,14 +512,16 @@ function parseDatabaseNameFromConnectionString(connectionString: string): string
   return match?.[1]?.trim() || null;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string, onTimeout:()=>void): Promise<T> {
   let timeoutHandle: NodeJS.Timeout | undefined;
 
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_, reject) => {
-        timeoutHandle = setTimeout(() => {
+        timeoutHandle = setTimeout(async () => {
+          onTimeout();
+          await promise.catch(()=>undefined);
           reject(new Error(message));
         }, timeoutMs);
       })

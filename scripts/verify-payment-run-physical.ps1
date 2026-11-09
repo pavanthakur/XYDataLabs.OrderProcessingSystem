@@ -330,7 +330,9 @@ function Get-DockerSqlConnectionString {
     )
 
     $password = Get-SqlPasswordFromEnvLocal
-    $connectionString = "Server=localhost,1433;Database=$Database;User Id=sa;Password=$password;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+    $connectionString = New-Phase10HostSqlConnectionString -Database $Database -Password $password
+    Assert-Phase10HostSqlIdentity -ConnectionString $connectionString
     Assert-DockerRuntimeSqlGuardrail `
         -ScriptName (Split-Path -Leaf $PSCommandPath) `
         -ConnectionString $connectionString `
@@ -1165,17 +1167,20 @@ FROM payments.PaymentProviders pp;
 
 $q2Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+       pa.ProviderChargeId, ct.AttemptOrderId, ct.TransactionType,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
+LEFT JOIN payments.PaymentAttempts pa ON pa.TenantId=ct.TenantId AND pa.AttemptOrderId=ct.AttemptOrderId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
 "@
 
 $q5Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
+       ct.Id AS TransactionRowId, ct.TransactionType,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
@@ -1191,10 +1196,12 @@ $q2TenantC = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-PhysicalSqlQuery -Database $tenant.DedicatedDatabaseName -Query @"
 SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+       pa.ProviderChargeId, ct.AttemptOrderId, ct.TransactionType,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
+LEFT JOIN payments.PaymentAttempts pa ON pa.TenantId=ct.TenantId AND pa.AttemptOrderId=ct.AttemptOrderId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.CustomerOrderId, ct.Id;
 "@
@@ -1205,6 +1212,7 @@ $q5TenantC = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-PhysicalSqlQuery -Database $tenant.DedicatedDatabaseName -Query @"
 SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
+       ct.Id AS TransactionRowId, ct.TransactionType,
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
 JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
@@ -1352,7 +1360,10 @@ if ($chargeCorrelation.Count -eq 0) {
             ForEach-Object {
                 $uiEvent = $_
                 $dbRow = $dbCandidates |
-                    Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ChargeId') -eq $uiEvent.ChargeId } |
+                    Where-Object {
+                        (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ChargeId') -eq $uiEvent.ChargeId -or
+                        (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ProviderChargeId') -eq $uiEvent.ChargeId
+                    } |
                     Select-Object -First 1
                 $resolvedTenant = [string](Get-ObjectPropertyValue -InputObject $uiEvent -PropertyName 'Tenant')
                 if ([string]::IsNullOrWhiteSpace($resolvedTenant) -and $null -ne $dbRow) {
@@ -1573,10 +1584,18 @@ foreach ($tenantCode in $expectedOrdersByTenant.Keys | Sort-Object) {
     $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
     $tenantRows = @($allRows | Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $tenantCode })
     $tenantHistoryRows = @($allHistoryRows | Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $tenantCode })
-    $q2Outcome = if ($tenantRows.Count -eq ($expectedOrdersByTenant[$tenantCode].Count * 2)) { 'PASS' } elseif ($tenantRows.Count -eq 0) { 'PASS' } else { 'FAIL' }
-    $q5Outcome = if ($tenantHistoryRows.Count -eq $expectedStepsByTenant[$tenantCode]) { 'PASS' } elseif ($tenantHistoryRows.Count -eq 0) { 'PASS' } else { 'FAIL' }
+    $q2Outcome = if ($tenantRows.Count -eq ($expectedOrdersByTenant[$tenantCode].Count * 2)) { 'PASS' } else { 'FAIL' }
+    # Extra legitimate created/authorized transitions are valid. Require each
+    # charge's final success and reject repeated identical history transitions;
+    # tokenization success alone must never stand in for charge completion.
+    $missingTerminal = @($expectedOrdersByTenant[$tenantCode] | Where-Object {
+        $orderKey=$_
+        @($tenantHistoryRows | Where-Object { $_.CustomerOrderId -eq $orderKey -and $_.TransactionType -eq 'charge' -and $_.Status -eq 'completed' }).Count -eq 0
+    })
+    $duplicates = @($tenantHistoryRows | Group-Object TransactionRowId,Status,Stage | Where-Object Count -gt 1)
+    $q5Outcome = if ($tenantHistoryRows.Count -ge $expectedStepsByTenant[$tenantCode] -and $missingTerminal.Count -eq 0 -and $duplicates.Count -eq 0) { 'PASS' } else { 'FAIL' }
     $checks["Q2 rows [$tenantCode]"] = Convert-CheckResult -Expected ([string] ($expectedOrdersByTenant[$tenantCode].Count * 2)) -Actual ([string] $tenantRows.Count) -Outcome $q2Outcome
-    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ([string] $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRows.Count) -Outcome $q5Outcome
+    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ("at least {0}; terminal charge success; no duplicate transitions" -f $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRows.Count) -Outcome $q5Outcome
 }
 $checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q8Shared).Count) -Outcome $(if (@($q8Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
 $checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
@@ -1593,7 +1612,7 @@ if ($apiChargeEvents.Count -eq 0) {
 }
 else {
     $dbChargeCount = @($chargeCorrelation | Where-Object InDb).Count
-    $apiChargeOutcome = if ($dbChargeCount -eq @($apiChargeEvents).Count) { 'PASS' } elseif ($dbChargeCount -eq 0) { 'PASS' } else { 'FAIL' }
+    $apiChargeOutcome = if ($dbChargeCount -eq @($apiChargeEvents).Count) { 'PASS' } else { 'FAIL' }
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected ([string] @($apiChargeEvents).Count) -Actual ([string] $dbChargeCount) -Outcome $apiChargeOutcome
 }
 

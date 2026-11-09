@@ -39,6 +39,9 @@ export function createTenantSession(storage: Storage | undefined = globalThis.lo
       if (!runtimeConfiguration) {
         throw new Error("Tenant session cannot change tenants before runtime bootstrap completes.");
       }
+      if (!runtimeConfiguration.availableTenants.some(tenant => tenant.tenantCode.toLowerCase() === nextTenantCode.toLowerCase())) {
+        throw new Error("The requested tenant is not available to this account.");
+      }
 
       const activeTenantCode = resolveTenantCode(runtimeConfiguration, nextTenantCode);
       state = {

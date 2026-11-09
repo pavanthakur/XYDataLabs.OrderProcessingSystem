@@ -14,6 +14,56 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 /// </summary>
 public class ProcessPaymentHandlerTests : PaymentServiceTestBase
 {
+    [Theory]
+    [InlineData("TenantA")]
+    [InlineData("TenantB")]
+    [InlineData("TenantC")]
+    [InlineData("FutureTenant")]
+    public async Task RazorpayMxnOrder_IsRejectedBeforeAnyPaymentSideEffect(string tenantCode)
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        MockTenantProvider.SetupGet(tenant => tenant.TenantCode).Returns(tenantCode);
+        var handler = CreateProcessPaymentHandler(use3DSecure: false, providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Validation");
+        result.Error.Description.Should().Contain("MXN").And.Contain("INR");
+        MockPaymentGateway.Verify(gateway => gateway.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        MockPaymentGateway.Verify(gateway => gateway.CreateCardTokenAsync(It.IsAny<PaymentGatewayCreateCardTokenRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        MockPaymentGateway.Verify(gateway => gateway.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        MockDbContext.Verify(db => db.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        CapturedPaymentAttempts.Should().BeEmpty();
+        CapturedCardTransactions.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(PaymentAttemptStatus.PendingProviderCall)]
+    [InlineData(PaymentAttemptStatus.ProviderAccepted)]
+    [InlineData(PaymentAttemptStatus.Succeeded)]
+    [InlineData(PaymentAttemptStatus.UnknownNeedsReconciliation)]
+    public async Task ExistingSuccessfulOrUnresolvedAttempt_BlocksAnotherProviderCharge(PaymentAttemptStatus status)
+    {
+        SetupPaymentDbSets(existingPaymentAttempts:[new PaymentAttempt {CustomerOrderId="ORDER-001",Status=status}]);
+        SetupOpenPayHappyPath();
+        var result=await CreateProcessPaymentHandler().HandleAsync(BuildProcessPaymentCommand());
+        result.IsFailure.Should().BeTrue();
+        result.Error.Description.Should().Contain("successful or unresolved");
+        MockPaymentGateway.Verify(g=>g.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(),It.IsAny<CancellationToken>()),Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ImmediateCompletion_RaisesOrderPaymentSuccessEvent()
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        var result=await CreateProcessPaymentHandler().HandleAsync(BuildProcessPaymentCommand());
+        result.IsSuccess.Should().BeTrue();
+        CapturedPaymentAttempts.Single().DomainEvents.OfType<XYDataLabs.OrderProcessingSystem.Domain.Events.PaymentAttemptSucceededDomainEvent>().Should().ContainSingle();
+    }
+
     // ------------------------------------------------------------------ Fix 1 regression guard
 
     [Fact]
@@ -210,7 +260,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_ShouldGenerateNextDeterministicAttemptOrderIdForExistingCustomerOrder()
+    public async Task HandleAsync_ShouldGenerateNextDeterministicAttemptOrderIdAfterFailedAttempt()
     {
         SetupPaymentDbSets(existingPaymentAttempts:
         [
@@ -223,7 +273,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
                 AttemptNumber = 1,
                 PaymentTraceId = "trace-existing",
                 PaymentProviderName = "OpenPay",
-                Status = PaymentAttemptStatus.Succeeded,
+                Status = PaymentAttemptStatus.Failed,
             }
         ]);
         SetupOpenPayHappyPath();
@@ -381,6 +431,9 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     public async Task HandleAsync_RazorpayHostedCheckout_ShouldAllowMissingCardFields()
     {
         SetupPaymentDbSets(providerType: PaymentProviderTypes.Razorpay);
+        MockOrderModuleApi.Setup(service => service.GetPaymentContextByOrderReferenceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new XYDataLabs.OrderProcessingSystem.Orders.Contracts.OrderPaymentContextDto(
+                1, "ORDER-001", Guid.Parse("11111111-1111-1111-1111-111111111111"), 100m, "INR", "Created", "fixture-version"));
 
         MockPaymentGateway
             .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))

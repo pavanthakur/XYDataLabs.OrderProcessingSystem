@@ -563,8 +563,8 @@ public sealed class Phase10MigrationOwnershipTests
 
         GetControllerNames(solutionRoot, Path.Combine("XYDataLabs.OrderProcessingSystem.Payments.API", "Controllers"))
             .Should().BeEquivalentTo(
-                ["PaymentCallbackController.cs", "PaymentsController.cs", "WebhookController.cs"],
-                "Payments should own payment processing, callback, and webhook routes");
+                ["PaymentCallbackController.cs", "PaymentRuntimeController.cs", "PaymentsController.cs", "WebhookController.cs"],
+                "Payments should own payment processing, authenticated effective-adapter diagnostics, callback, and webhook routes");
 
         GetControllerNames(solutionRoot, Path.Combine("XYDataLabs.OrderProcessingSystem.Inventory.API", "Controllers"))
             .Should().BeEquivalentTo(

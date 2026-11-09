@@ -24,7 +24,7 @@ var host = new HostBuilder()
 
         services.Configure<ServiceBusOptions>(context.Configuration.GetSection(ServiceBusOptions.SectionName));
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IIntegrationEventTypeResolver, IntegrationEventTypeResolver>();
+        services.AddSingleton<IIntegrationEventTypeResolver>(_ => FunctionEventContracts.CreateResolver());
         services.AddSingleton<ServiceBusMessageFactory>();
         var operationsConnectionString = context.Configuration.GetConnectionString("OrderProcessingSystemDbConnection");
         if (!string.IsNullOrWhiteSpace(operationsConnectionString))

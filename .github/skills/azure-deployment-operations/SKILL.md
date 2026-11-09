@@ -44,6 +44,8 @@ Runtime target convention for Phase 10+ automation:
 - For every new automation-used Azure service, add explicit values for `azure-dev`, `azure-stg`, and `azure-prod` before wiring workflows or scripts to it.
 - Update `automation/src/contracts/runtime-target-catalog.ts` and `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` with the service field so future hardcoding fails validation.
 - Do not put generated ACA FQDNs, random revision suffixes, GUIDs, or one-run discovery values in `runtime-targets.json`; discover generated values at runtime.
+- For Azure targets, keep `baseUrl`/`apiBaseUrl` and `publicUiBaseUrl`/`publicApiBaseUrl` on stable public custom domains. Generated `*.azurecontainerapps.io` URLs may be emitted only as diagnostic/fallback workflow outputs.
+- Keep `allowGeneratedAzureUrlFallback` explicit for every Azure target and default it to `false`; any temporary fallback run must be visibly reported as partial, not fully accepted.
 - Deployment/IaC may create resources from suffix parameters; post-deploy automation must consume stable configured names from `runtime-targets.json` or workflow outputs derived from it.
 
 1. Keep the two-workflow split intact.

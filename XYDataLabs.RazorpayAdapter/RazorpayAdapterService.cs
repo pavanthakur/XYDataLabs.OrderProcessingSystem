@@ -59,8 +59,14 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
         RazorpayCreateOrderRequest request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        var currency = request.Currency?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!PaymentCurrencyPolicy.IsSupported(ProviderType, currency))
+            throw new PaymentProviderCustomerActionException(PaymentCurrencyPolicy.GetUnsupportedCurrencyMessage(ProviderType, currency));
+        if (request.Amount <= 0m || request.Amount > int.MaxValue / 100m || request.Amount * 100m != decimal.Truncate(request.Amount * 100m))
+            throw new PaymentProviderCustomerActionException("Razorpay amount must be positive and exactly representable in paise.");
         // Razorpay amounts are in paise (smallest currency unit) — multiply by 100 for INR
-        var amountInPaise = (int)(request.Amount * 100);
+        var amountInPaise = checked((int)(request.Amount * 100m));
 
         _logger.Information(
             "Creating Razorpay order with payload: Amount={Amount}, Currency={Currency}, Receipt={Receipt}, Notes={Notes}",
@@ -73,7 +79,7 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
                 var attributes = new Dictionary<string, object>
                 {
                     ["amount"] = amountInPaise,
-                    ["currency"] = "INR", // Always use INR for Razorpay
+                    ["currency"] = currency,
                     ["receipt"] = request.Receipt
                 };
 
@@ -92,9 +98,14 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
                 order["created_at"] != null ? (long)order["created_at"] : DateTimeOffset.UtcNow.ToUnixTimeSeconds())
                 .UtcDateTime;
 
-            _logger.Information("Razorpay order created successfully: {OrderId}, Status: {Status}, FullResponse: {Order}", orderId, status, order.Attributes);
+            var providerAmountInPaise = long.Parse(order["amount"]?.ToString()
+                ?? throw new InvalidOperationException("Razorpay order response is missing its amount."), System.Globalization.CultureInfo.InvariantCulture);
+            var providerCurrency = order["currency"]?.ToString()
+                ?? throw new InvalidOperationException("Razorpay order response is missing its currency.");
+            _logger.Information("Razorpay order created: {OrderId}, Status: {Status}, Amount: {Amount}, Currency: {Currency}",
+                orderId, status, providerAmountInPaise / 100m, providerCurrency);
 
-            return new RazorpayOrderResult(orderId, status, request.Amount, request.Currency, createdAt);
+            return new RazorpayOrderResult(orderId, status, providerAmountInPaise / 100m, providerCurrency, createdAt);
         }
         catch (Exception ex)
         {
@@ -116,7 +127,8 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
             var payment = await Task.Run(() => _client.Payment.Fetch(paymentId), cancellationToken);
 
             var amountInPaise = payment["amount"] != null ? (int)payment["amount"] : 0;
-            var currency = payment["currency"]?.ToString() ?? "INR";
+            var currency = payment["currency"]?.ToString()
+                ?? throw new InvalidOperationException("Razorpay payment response is missing its currency.");
             var status = payment["status"]?.ToString();
             var orderId = payment["order_id"]?.ToString();
             var errorCode = payment["error_code"]?.ToString();

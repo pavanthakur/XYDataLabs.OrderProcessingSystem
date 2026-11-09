@@ -147,6 +147,12 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             ?? NormalizeStatus(transaction.TransactionStatus)
             ?? "unknown";
 
+        if (remoteStatusConfirmed && remoteCharge is not null
+            && (remoteCharge.Amount != transaction.Amount
+                || (!string.IsNullOrWhiteSpace(remoteCharge.Currency)
+                    && !string.Equals(remoteCharge.Currency, transaction.CurrencyCode, StringComparison.OrdinalIgnoreCase))))
+            return Error.Create("Validation", "Provider payment amount or currency does not match the stored payment attempt.");
+
         var resolvedErrorMessage = FirstNonEmpty(
             remoteCharge?.ErrorMessage,
             command.ErrorMessage,
@@ -197,6 +203,9 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             IsFinal = EnumHelper.IsFinalStatus(resolvedStatus),
             CallbackRecorded = callbackRecorded,
             RemoteStatusConfirmed = remoteStatusConfirmed,
+            ProviderAmount = remoteStatusConfirmed ? remoteCharge?.Amount : null,
+            ProviderCurrency = remoteCharge?.Currency,
+            ProviderOrderId = remoteCharge?.ProviderOrderId,
             StatusSource = remoteStatusConfirmed ? ResolveStatusSource(_paymentProvider.ProviderType) : "database",
             ErrorMessage = resolvedErrorMessage,
             TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId),

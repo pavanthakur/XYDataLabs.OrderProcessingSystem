@@ -7,7 +7,8 @@ export interface PendingPaymentContext {
 }
 
 const pendingPaymentStorageKeyPrefix = "pending-payment:";
-const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+// Requests use the same-origin proxy, configured per deployment at runtime.
+const configuredApiBaseUrl = "";
 let configuredAccessToken = "";
 
 export function createFlowId(): string {

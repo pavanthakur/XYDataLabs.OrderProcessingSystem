@@ -4,8 +4,6 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Queries;
 
-public sealed record GetAllCustomersQuery : IQuery<Result<IEnumerable<CustomerDto>>>, ICacheable
-{
-    public string CacheKey => "customers:all";
-    public TimeSpan? Expiration => TimeSpan.FromMinutes(5);
-}
+// Includes mutable order/payment state. Read authoritative data until this query
+// has tenant-scoped invalidation for all customer, order and payment mutations.
+public sealed record GetAllCustomersQuery : IQuery<Result<IEnumerable<CustomerDto>>>;

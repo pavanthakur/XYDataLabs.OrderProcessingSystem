@@ -4,17 +4,29 @@ param(
 
     [string]$RunDir = '',
 
-    [string]$ProgressLogPath = ''
+    [string]$ProgressLogPath = '',
+
+    [switch]$NoBuild,
+
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+Assert-Phase10ComposeProject
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+Initialize-Phase10LogRedaction -Settings (Get-Phase10LocalSettings -Path $envFile)
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $dockerSqlGuardrailScript = Join-Path $workspaceRoot 'scripts\assert-docker-runtime-sql-guardrail.ps1'
 $tenantRegistryHygieneScript = Join-Path $workspaceRoot 'scripts\assert-docker-tenant-registry-hygiene.ps1'
+$tenantBootstrapContractPath = Join-Path $workspaceRoot 'Resources\Configuration\tenant-bootstrap.local.json'
+if (-not (Test-Path -LiteralPath $tenantBootstrapContractPath)) { throw 'Local tenant bootstrap contract is missing.' }
+$tenantBootstrapContract = Get-Content -LiteralPath $tenantBootstrapContractPath -Raw | ConvertFrom-Json
+if ($tenantBootstrapContract.schemaVersion -ne 1 -or $tenantBootstrapContract.scope -ne 'docker-dev' -or $tenantBootstrapContract.seedPolicy -ne 'missing-only') { throw 'Local tenant bootstrap contract version/scope/seed policy is invalid.' }
+if (@($tenantBootstrapContract.supportedProviderTypes).Count -lt 1 -or @($tenantBootstrapContract.providerDefaults.PSObject.Properties.Name).Count -ne @($tenantBootstrapContract.supportedProviderTypes).Count) { throw 'Local tenant bootstrap provider catalog/defaults do not agree.' }
 
 New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
 $env:DOCKER_CONFIG = $dockerConfigRoot
@@ -45,31 +57,8 @@ function Write-ProgressMessage {
 
 function Get-EnvLocalValue {
     param([Parameter(Mandatory = $true)][string]$Name)
-
-    $environmentValue = [Environment]::GetEnvironmentVariable($Name)
-    if (-not [string]::IsNullOrWhiteSpace($environmentValue)) {
-        return $environmentValue.Trim()
-    }
-
-    if (-not (Test-Path -LiteralPath $envFile)) {
-        return $null
-    }
-
-    $line = Get-Content -LiteralPath $envFile | Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($line)) {
-        return $null
-    }
-
-    $value = (($line -split '=', 2)[1]).Trim()
-    if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
-        $value = $value.Substring(1, $value.Length - 2)
-    }
-
-    if ($value.StartsWith("'") -and $value.EndsWith("'") -and $value.Length -ge 2) {
-        $value = $value.Substring(1, $value.Length - 2)
-    }
-
-    return $value.Trim()
+    $effectiveSettings = Get-Phase10LocalSettings -Path $envFile
+    return $effectiveSettings[$Name]
 }
 
 function Get-ComposeEnvArguments {
@@ -126,7 +115,7 @@ function Resolve-DatabaseNameFromConnectionString {
 function New-LocalSqlConnectionString {
     param([Parameter(Mandatory = $true)][string] $DatabaseName)
 
-    return "Server=localhost,1433;Database=$DatabaseName;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    return New-Phase10HostSqlConnectionString -Database $DatabaseName -Password $localSqlPassword
 }
 
 function Get-Phase10DedicatedTenantDatabaseMap {
@@ -182,37 +171,15 @@ function Get-Phase10DedicatedTenantEnvironmentState {
 
 function Get-Phase10BaselineSampleTenantContracts {
     $dedicatedByTenant = @{}
-    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
-        $dedicatedByTenant[$dedicatedTenant.TenantCode] = $dedicatedTenant
-    }
-
-    if (-not $dedicatedByTenant.ContainsKey('TenantC')) {
-        throw "Phase 10 local baseline requires a dedicated database mapping for TenantC."
-    }
-
-    return @(
-        [pscustomobject]@{
-            TenantCode = 'TenantA'
-            Status = 'Active'
-            TenantTier = 'SharedPool'
-            PaymentProviderCode = 'Razorpay'
-            Database = 'OrderProcessingSystem_Dev'
+    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) { $dedicatedByTenant[$dedicatedTenant.TenantCode] = $dedicatedTenant }
+    return @($tenantBootstrapContract.tenantBaselines | ForEach-Object {
+        $database = $tenantBootstrapContract.sharedBusinessDatabase
+        if ($_.tenantTier -eq 'Dedicated') {
+            if (-not $dedicatedByTenant.ContainsKey($_.tenantCode)) { throw "Baseline dedicated tenant '$($_.tenantCode)' has no Compose database mapping." }
+            $database = $dedicatedByTenant[$_.tenantCode].DatabaseName
         }
-        [pscustomobject]@{
-            TenantCode = 'TenantB'
-            Status = 'Active'
-            TenantTier = 'SharedPool'
-            PaymentProviderCode = 'Razorpay'
-            Database = 'OrderProcessingSystem_Dev'
-        }
-        [pscustomobject]@{
-            TenantCode = 'TenantC'
-            Status = 'Active'
-            TenantTier = 'Dedicated'
-            PaymentProviderCode = 'OpenPay'
-            Database = $dedicatedByTenant['TenantC'].DatabaseName
-        }
-    )
+        [pscustomobject]@{TenantCode=$_.tenantCode;Status=$_.status;TenantTier=$_.tenantTier;PaymentProviderCode=$_.paymentProviderCode;Database=$database}
+    })
 }
 
 function Set-Phase10DedicatedTenantEnvironmentState {
@@ -368,7 +335,7 @@ function Invoke-Phase10SqlAgainstDockerHost {
 
     $output = & docker @sqlcmdArguments 2>&1
     if ($LASTEXITCODE -ne 0) {
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim() | Protect-Phase10Log
         throw "Failed to execute Phase 10 Docker SQL query against '$Database' through the compose-managed SQL container. $message"
     }
 
@@ -477,13 +444,16 @@ function Invoke-Phase10DatabaseBootstrap {
     try {
         $composeEnvArgs = Get-ComposeEnvArguments
         $composeProfileArgs = Get-ComposeProfileArguments
+        # Compose `run` never builds unless --build is supplied, so an empty option array is the safe no-build mode.
+        $buildOption = @()
+        if (-not $NoBuild) { $buildOption += '--build' }
         $output = & docker @(
             'compose'
         ) @composeEnvArgs @(
             '-f', $composeFile
         ) @composeProfileArgs @(
-            'run',
-            '--build',
+            'run'
+        ) @buildOption @(
             '--rm',
             '--no-deps',
             '-T',
@@ -493,7 +463,7 @@ function Invoke-Phase10DatabaseBootstrap {
             'orders'
         ) 2>&1
         $exitCode = $LASTEXITCODE
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim() | Protect-Phase10Log
         Set-Content -Path $schemaLogPath -Value $message -Encoding utf8
 
         if ($exitCode -ne 0) {
@@ -525,23 +495,26 @@ function Invoke-Phase10SampleDataSeed {
     try {
         $composeEnvArgs = Get-ComposeEnvArguments
         $composeProfileArgs = Get-ComposeProfileArguments
+        $buildOption = @()
+        if (-not $NoBuild) { $buildOption += '--build' }
         $output = & docker @(
             'compose'
         ) @composeEnvArgs @(
             '-f', $composeFile
         ) @composeProfileArgs @(
-            'run',
-            '--build',
+            'run'
+        ) @buildOption @(
             '--rm',
             '--no-deps',
             '-T',
             '-e', 'Phase10__BootstrapMigrateOnly=false',
             '-e', 'Phase10__BootstrapSeedOnly=true',
+            '-e', 'Phase10__PreserveExistingSeedData=true',
             '-e', 'Phase10__DisableStartupDdl=true',
             'orders'
         ) 2>&1
         $exitCode = $LASTEXITCODE
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim() | Protect-Phase10Log
         Set-Content -Path $seedLogPath -Value $message -Encoding utf8
 
         if ($exitCode -ne 0) {
@@ -558,41 +531,7 @@ function Ensure-Phase10SqlSampleDataBaseline {
     Write-Host 'Ensuring Phase 10 SQL sample data baseline...' -ForegroundColor Cyan
     Write-ProgressMessage 'Ensuring Phase 10 SQL sample data baseline.'
 
-    $baselineContracts = @(Get-Phase10BaselineSampleTenantContracts)
-    $baselineTenantCodesSql = (($baselineContracts | ForEach-Object {
-        "N'$((Escape-SqlLiteral -Value $_.TenantCode))'"
-    }) -join ', ')
-
-    $registryResetQuery = @"
-UPDATE [dbo].[Tenants]
-SET [Status] = N'Decommissioned'
-WHERE [Code] NOT IN ($baselineTenantCodesSql)
-  AND ISNULL([Status], N'') = N'Active';
-"@
-    Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query $registryResetQuery | Out-Null
-    Write-ProgressMessage 'Reset shared registry active tenant set to the Phase 10 local sample baseline.'
-
-    foreach ($baselineTenant in $baselineContracts) {
-        $tenantCodeSql = Escape-SqlLiteral -Value $baselineTenant.TenantCode
-        $providerCodeSql = Escape-SqlLiteral -Value $baselineTenant.PaymentProviderCode
-        $tenantTierSql = Escape-SqlLiteral -Value $baselineTenant.TenantTier
-        $statusSql = Escape-SqlLiteral -Value $baselineTenant.Status
-        $registryQuery = @"
-UPDATE [dbo].[Tenants]
-SET [Status] = N'$statusSql',
-    [TenantTier] = N'$tenantTierSql',
-    [PaymentProviderCode] = N'$providerCodeSql'
-WHERE [Code] = N'$tenantCodeSql';
-
-IF @@ROWCOUNT = 0
-BEGIN
-    THROW 51000, N'Baseline tenant row missing for $tenantCodeSql in OrderProcessingSystem_Dev.', 1;
-END;
-"@
-        Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query $registryQuery | Out-Null
-        Write-ProgressMessage "Reset registry baseline for $($baselineTenant.TenantCode) -> $($baselineTenant.PaymentProviderCode) ($($baselineTenant.TenantTier))"
-    }
-
+    # Normal bootstrap never resets routes/statuses or decommissions additional tenants.
     foreach ($tenant in (Get-Phase10ActiveTenantTopology)) {
         $tenantCodeSql = Escape-SqlLiteral -Value $tenant.TenantCode
         $providerCodeSql = Escape-SqlLiteral -Value $tenant.PaymentProviderCode
@@ -609,17 +548,6 @@ IF @tenantId IS NULL
 BEGIN
     THROW 51000, N'Tenant row missing for $tenantCodeSql.', 1;
 END;
-
-UPDATE [dbo].[Tenants]
-SET [Status] = N'Active',
-    [TenantTier] = N'$tenantTierSql',
-    [PaymentProviderCode] = N'$providerCodeSql'
-WHERE [Id] = @tenantId
-  AND (
-    ISNULL([Status], N'') <> N'Active'
-    OR ISNULL([TenantTier], N'') <> N'$tenantTierSql'
-    OR ISNULL([PaymentProviderCode], N'') <> N'$providerCodeSql'
-  );
 
 IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
 BEGIN
@@ -661,9 +589,17 @@ function Assert-Phase10DatabaseAzureParity {
     }
 
     $activeTopology = @(Get-Phase10ActiveTenantTopology)
+    $baselineContracts = @(Get-Phase10BaselineSampleTenantContracts)
+    foreach ($baseline in $baselineContracts) {
+        $actual = @($activeTopology | Where-Object TenantCode -eq $baseline.TenantCode)
+        if ($actual.Count -ne 1 -or $actual[0].Status -ne $baseline.Status -or $actual[0].TenantTier -ne $baseline.TenantTier -or $actual[0].PaymentProviderCode -ne $baseline.PaymentProviderCode -or $actual[0].Database -ne $baseline.Database) {
+            throw "Local bootstrap contract mismatch for required tenant '$($baseline.TenantCode)'; existing tenant data is preserved and will not be repaired automatically."
+        }
+        Write-ProgressMessage "Verified manifest baseline: $($baseline.TenantCode) / $($baseline.TenantTier) / $($baseline.PaymentProviderCode)"
+    }
     $providerChecks = @()
     foreach ($tenant in $activeTopology) {
-        foreach ($providerType in @('Razorpay', 'OpenPay')) {
+        foreach ($providerType in @($tenantBootstrapContract.supportedProviderTypes)) {
             $providerChecks += [pscustomobject]@{
                 Database = $tenant.Database
                 TenantCode = $tenant.TenantCode
@@ -806,10 +742,14 @@ if ([string]::IsNullOrWhiteSpace($localSqlPassword)) {
     throw "LOCAL_SQL_PASSWORD was not found in $envFile."
 }
 
-Ensure-Phase10Databases
-Invoke-Phase10DatabaseBootstrap
-Invoke-Phase10SampleDataSeed
-Ensure-Phase10SqlSampleDataBaseline
+Assert-Phase10LocalDockerEndpoint
+Assert-Phase10HostSqlIdentity -ConnectionString (New-LocalSqlConnectionString -DatabaseName 'master')
+if (-not $ValidateOnly) {
+    Ensure-Phase10Databases
+    Invoke-Phase10DatabaseBootstrap
+    Invoke-Phase10SampleDataSeed
+    Ensure-Phase10SqlSampleDataBaseline
+}
 Assert-DockerTenantRegistryHygiene `
     -ScriptName (Split-Path -Leaf $PSCommandPath) `
     -ConnectionString (New-LocalSqlConnectionString -DatabaseName 'OrderProcessingSystem_Dev') `

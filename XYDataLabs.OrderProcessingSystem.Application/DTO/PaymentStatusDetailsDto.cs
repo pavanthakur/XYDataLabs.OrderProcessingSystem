@@ -23,6 +23,9 @@ public sealed class PaymentStatusDetailsDto
     public bool CallbackRecorded { get; set; }
 
     public bool RemoteStatusConfirmed { get; set; }
+    public decimal? ProviderAmount { get; set; }
+    public string? ProviderCurrency { get; set; }
+    public string? ProviderOrderId { get; set; }
 
     public string StatusSource { get; set; } = "database";
 

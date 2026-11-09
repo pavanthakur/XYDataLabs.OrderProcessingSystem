@@ -202,11 +202,11 @@ else
 
 $env:ORDERPROCESSING_DEV_SERVER_PORT = "$uiPort"
 $env:ORDERPROCESSING_API_BASE_URL = $apiBaseUrl
-$env:VITE_KEYCLOAK_AUTHORITY = $keycloakAuthority
-$env:VITE_KEYCLOAK_REALM = $keycloakRealm
-$env:VITE_KEYCLOAK_CLIENT_ID = $keycloakClientId
-$env:VITE_KEYCLOAK_USERNAME = $keycloakUsername
-$env:VITE_KEYCLOAK_PASSWORD = $keycloakPassword
+$env:IDENTITY_MODE = 'KeycloakLocal'
+$env:APP_ENVIRONMENT = 'local'
+$env:PUBLIC_WEB_ORIGIN = $uiUrl.TrimEnd('/')
+$env:PUBLIC_IDENTITY_AUTHORITY = "$($keycloakAuthority.TrimEnd('/'))/realms/$keycloakRealm"
+$env:PUBLIC_IDENTITY_CLIENT_ID = $keycloakClientId
 
 Start-BrowserLaunchMonitor `
     -Url $uiUrl `

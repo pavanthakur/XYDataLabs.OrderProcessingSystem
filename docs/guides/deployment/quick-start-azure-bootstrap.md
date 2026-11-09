@@ -784,9 +784,13 @@ Watch Actions → use the active Phase 10 deploy and smoke workflows instead of 
 5. **Make the Azure URLs friendlier**
    - The default `azurecontainerapps.io` hostnames are platform-generated and intentionally long
    - For human-friendly URLs, add custom domains to the Container Apps or place Front Door/Application Gateway in front of them
-   - Suggested pattern:
-     - `api-dev.<your-domain>`
-     - `ui-dev.<your-domain>`
+   - Stable Phase 10 pattern:
+     - `https://dev.orderprocessing-api.xydatalabs.com`
+     - `https://dev.orderprocessing.xydatalabs.com`
+     - `https://staging.orderprocessing-api.xydatalabs.com`
+     - `https://staging.orderprocessing.xydatalabs.com`
+     - `https://orderprocessing-api.xydatalabs.com`
+     - `https://orderprocessing.xydatalabs.com`
    - If you want one public front door, route `/` to UI and `/api` to the gateway
    - This is the Container Apps equivalent of the old App Service naming style, where the app name stayed readable but the public URL was aliased to your own domain
    - The aliasing recommendation applies to the current Phase 10 stack; the old App Service URLs remain only as historical references

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { OrderDetail, OrderProcessingApiClient, PaymentConfiguration, PaymentResult } from "@xydatalabs/orderprocessing-api-sdk";
 import { createFlowId, persistPendingPaymentContext, trackPaymentEvent } from "../payment-flow";
+import { PaymentOrderPicker } from "./PaymentOrderPicker";
+import { isEligiblePaymentOrder } from "../payment-order";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "launching_checkout" | "redirecting" | "success" | "error";
@@ -56,6 +58,13 @@ function buildLocalDeviceSessionId(activeTenantCode: string): string {
 }
 
 export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
+  const params = useParams<{ customerId: string; orderId: string }>();
+  return params.orderId === undefined
+    ? <PaymentOrderPicker activeTenantCode={activeTenantCode} apiClient={apiClient} />
+    : <OrderPaymentPage key={`${activeTenantCode}:${params.customerId}:${params.orderId}`} activeTenantCode={activeTenantCode} apiClient={apiClient} />;
+}
+
+function OrderPaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const navigate = useNavigate();
   const params = useParams<{ customerId: string; orderId: string }>();
   const customerId = Number(params.customerId);
@@ -75,16 +84,19 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const [formState, setFormState] = useState<PaymentFormState>({
     name: "",
     email: "",
-    customerOrderId: buildCustomerOrderId(orderId, hasOrderRouteContext),
+    customerOrderId: buildCustomerOrderId(orderId),
     orderReferenceId: "",
     cardNumber: "",
     expirationMonth: "",
     expirationYear: "",
     cvv2: ""
   });
-  const isManualFlow = !hasValidOrderContext;
   const usesProviderCheckout = paymentConfiguration?.collectionMode === "provider_checkout";
   const activeProviderName = paymentConfiguration?.activeProviderName ?? "payment provider";
+  const currencyError = order && paymentConfiguration?.supportedCurrencies
+    && !paymentConfiguration.supportedCurrencies.some(currency => currency.toUpperCase() === order.currencyCode?.toUpperCase())
+    ? `Order currency ${order.currencyCode} is not supported by ${activeProviderName}. Supported currency: ${paymentConfiguration.supportedCurrencies.join(", ")}. New payment is blocked. Check any existing payment before changing the order/provider.`
+    : null;
   const requiresDeviceSessionId = paymentConfiguration?.collectionMode === "direct_card_form"
     && paymentConfiguration?.activeProviderType?.toLowerCase() === "openpay";
 
@@ -95,7 +107,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
 
     setFormState((current) => ({
       ...current,
-      customerOrderId: buildCustomerOrderId(orderId, hasOrderRouteContext)
+      customerOrderId: buildCustomerOrderId(orderId)
     }));
   }, [hasOrderRouteContext, orderId]);
 
@@ -130,6 +142,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     let isCancelled = false;
 
     async function loadOrder() {
+      setOrder(null);
       setLoadState("loading");
       setErrorMessage(null);
 
@@ -137,6 +150,9 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         const nextOrder = await apiClient.getOrderById(orderId);
         if (isCancelled) {
           return;
+        }
+        if (nextOrder.orderId !== orderId || nextOrder.customerId !== customerId || !isEligiblePaymentOrder(nextOrder)) {
+          throw new Error("Select an existing created order with a valid reference, positive amount and currency for this customer.");
         }
 
         setOrder(nextOrder);
@@ -156,7 +172,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     return () => {
       isCancelled = true;
     };
-  }, [activeTenantCode, apiClient, hasOrderRouteContext, hasValidOrderContext, orderId]);
+  }, [activeTenantCode, apiClient, hasOrderRouteContext, hasValidOrderContext, orderId, customerId]);
 
   useEffect(() => {
     if (!activeTenantCode) {
@@ -203,7 +219,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       return;
     }
 
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    if (paymentConfiguration.adapterMode === "deterministic") {
       setDeviceSessionId(buildLocalDeviceSessionId(activeTenantCode));
       return;
     }
@@ -280,9 +296,18 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       setErrorMessage("Tenant runtime configuration is unavailable.");
       return;
     }
+    if (!order || !order.orderReferenceId || order.customerId !== customerId) {
+      setErrorMessage("Select an existing order before continuing to payment.");
+      return;
+    }
 
     if (!paymentConfiguration) {
       setErrorMessage("Payment provider configuration is unavailable.");
+      return;
+    }
+
+    if (currencyError) {
+      setErrorMessage(currencyError);
       return;
     }
 
@@ -292,7 +317,6 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     }
 
     const clientFlowId = createFlowId();
-    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
     setSubmitState("submitting");
     setErrorMessage(null);
@@ -308,8 +332,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
 
     try {
       const pendingPaymentContext = {
-        customerOrderId: formState.customerOrderId,
-        orderReferenceId: formState.orderReferenceId || null,
+        customerOrderId: `ORDER-${order.orderId}`,
+        orderReferenceId: order.orderReferenceId,
         clientFlowId,
         customerId: hasValidCustomerContext ? customerId : null,
         orderId: hasValidOrderContext ? orderId : null
@@ -323,8 +347,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         expirationYear: usesProviderCheckout ? "" : formState.expirationYear,
         expirationMonth: usesProviderCheckout ? "" : formState.expirationMonth,
         cvv2: usesProviderCheckout ? "" : formState.cvv2,
-        customerOrderId: formState.customerOrderId,
-        orderReferenceId: formState.orderReferenceId || null,
+        customerOrderId: `ORDER-${order.orderId}`,
+        orderReferenceId: order.orderReferenceId,
         clientCallbackOrigin: window.location.origin
       });
 
@@ -336,7 +360,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
 
       persistPendingPaymentContext(payment.id, persistedPendingPaymentContext);
 
-      if (isLocalhost && paymentConfiguration.activeProviderType?.toLowerCase() === "razorpay") {
+      if (paymentConfiguration.adapterMode === "deterministic") {
         setSubmitState("success");
         void trackPaymentEvent({
           eventName: "ui_payment_completed",
@@ -352,7 +376,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         navigate(`/payments/callback?${new URLSearchParams({
           tenantCode: activeTenantCode,
           id: payment.id,
-          source: "razorpay-local-mock",
+          source: "deterministic",
           status: "completed"
         }).toString()}`, { replace: true });
         return;
@@ -446,14 +470,13 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
           <div className="payment-header-copy">
             <p className="eyebrow">Card Payment</p>
             <h2>{order ? `Collect payment for order #${order.orderId}` : "Take a card payment"}</h2>
+            <p role="status" data-testid="payment-runtime-mode">Payment mode: {paymentConfiguration?.adapterMode ?? "unverified"}. Configured 3DS: {paymentConfiguration?.isThreeDSecure === undefined ? "unknown" : paymentConfiguration.isThreeDSecure ? "enabled" : "disabled"}. Authentication is controlled by the provider and may also occur in hosted checkout.</p>
             <p className="subtle-copy">
               {order
                 ? usesProviderCheckout
                   ? `Review the order amount, confirm payer details, and continue into ${activeProviderName} checkout to collect the payment securely.`
                   : "Review the order amount, capture the card details, and continue through secure verification only when the provider requires it."
-                : usesProviderCheckout
-                  ? `Create a standalone payment reference and hand the card collection to ${activeProviderName} checkout.`
-                  : "Create a standalone card payment with a clear customer reference and a secure provider-managed verification step when needed."}
+                : "Load an existing order before continuing to payment."}
             </p>
           </div>
           <div className="detail-actions">
@@ -471,6 +494,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         </header>
 
         {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
+        {currencyError && currencyError !== errorMessage ? <p className="error-banner" role="alert">{currencyError}</p> : null}
 
         {threeDSRedirectState ? (
           <section className="redirect-transition-card detail-card" role="status" aria-live="polite">
@@ -533,14 +557,14 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                 <p className="section-kicker">Reference</p>
                 <h3>Payment reference</h3>
                 <p className="subtle-copy">
-                  Use a reference your operations team can trace later in reconciliation, statements, and callback reviews.
+                  This reference belongs to the selected order and cannot be changed here.
                 </p>
                 <div className="field-grid">
                   <label className="search-field field-span-full">
                     <span>Customer order id</span>
                     <input
                       value={formState.customerOrderId}
-                      onChange={(event) => updateFormState("customerOrderId", event.target.value)}
+                      readOnly
                       required
                     />
                   </label>
@@ -658,7 +682,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                   || submitState === "redirecting"
                   || submitState === "launching_checkout"
                   || paymentConfigurationState !== "ready"
-                  || loadState !== "ready"
+                  || loadState !== "ready" || !order
+                  || Boolean(currencyError)
                   || (requiresDeviceSessionId && !deviceSessionId)
                 }
               >
@@ -691,7 +716,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
             </div>
             <div>
               <dt>Payment mode</dt>
-              <dd>{isManualFlow ? "Standalone" : "Order-linked"}</dd>
+              <dd>Order-linked</dd>
             </div>
             <div>
               <dt>Provider flow</dt>
@@ -751,12 +776,12 @@ function formatSubmitState(value: SubmitState): string {
   }
 }
 
-function buildCustomerOrderId(orderId: number, hasOrderRouteContext: boolean): string {
-  if (hasOrderRouteContext && Number.isInteger(orderId) && orderId > 0) {
+function buildCustomerOrderId(orderId: number): string {
+  if (Number.isInteger(orderId) && orderId > 0) {
     return `ORDER-${orderId}`;
   }
 
-  return `PAY-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(16).slice(2, 8).toUpperCase()}`;
+  return "";
 }
 
 function formatCardNumber(value: string): string {
@@ -888,6 +913,7 @@ async function openProviderCheckout(options: {
     modal: {
       ondismiss: () => {
         options.setSubmitState("idle");
+          options.setErrorMessage("Checkout closed. Payment has not been confirmed. Check the order status before trying again.");
       }
     }
   });
@@ -921,11 +947,7 @@ async function openProviderCheckout(options: {
   checkout.open();
 }
 
-async function getRazorpayConstructor(): Promise<RazorpayConstructor> {
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    return createLocalRazorpayMockConstructor();
-  }
-
+export async function getRazorpayConstructor(): Promise<RazorpayConstructor> {
   const globalWindow = window as Window & RazorpayWindow;
   if (globalWindow.Razorpay) {
     return globalWindow.Razorpay;
@@ -952,32 +974,10 @@ async function getRazorpayConstructor(): Promise<RazorpayConstructor> {
 
   try {
     return await razorpayScriptPromise;
-  } catch {
-    return createLocalRazorpayMockConstructor();
+  } catch (error) {
+    razorpayScriptPromise = null;
+    throw error;
   }
-}
-
-function createLocalRazorpayMockConstructor(): RazorpayConstructor {
-  return class LocalRazorpayMockCheckout {
-    constructor(private readonly options: RazorpayCheckoutConstructorOptions) {
-    }
-
-    on(_eventName: "payment.failed", _handler: (response: RazorpayCheckoutFailureResponse) => void): void {
-    }
-
-    open(): void {
-      const callbackUrl = new URL("/payments/callback", window.location.origin);
-      callbackUrl.searchParams.set("tenantCode", this.options.notes?.tenantCode ?? "");
-      callbackUrl.searchParams.set("source", "razorpay-local-mock");
-      callbackUrl.searchParams.set("razorpay_payment_id", this.options.order_id);
-      callbackUrl.searchParams.set("razorpay_order_id", this.options.order_id);
-      if (this.options.description) {
-        callbackUrl.searchParams.set("customerOrderId", this.options.description);
-      }
-
-      window.location.assign(callbackUrl.toString());
-    }
-  } as unknown as RazorpayConstructor;
 }
 
 interface OpenPayWindow {

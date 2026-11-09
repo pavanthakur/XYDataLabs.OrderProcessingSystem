@@ -39,14 +39,20 @@ const exactSubmitSelectors = [
 
 export class OpenPaySandboxChallengeHandler {
   public async execute(page: Page, context: ProviderChallengeContext): Promise<ChallengeOutcome> {
-    const sandboxOtpCode = context.sandboxOtpCode?.trim() || "999";
+    const sandboxOtpCode = context.sandboxOtpCode?.trim();
+    if (!sandboxOtpCode) return "partial"; // Require the selected fixture's code; never guess a universal OTP.
     const diagnosticsDirectory = context.diagnosticsDirectory?.trim();
 
     try {
       await page.waitForLoadState("domcontentloaded", { timeout: 60000 });
       await this.captureDiagnostics(page, diagnosticsDirectory, "provider-loaded");
 
-      const otpInput = await this.findOtpInput(page);
+      let otpInput = await this.findOtpInput(page);
+      const deadline = Date.now() + Math.min(context.challengeTimeoutMs ?? 60000,60000);
+      while (!otpInput && Date.now() < deadline) {
+        await new Promise(resolve=>setTimeout(resolve,500));
+        otpInput = await this.findOtpInput(page);
+      }
       if (!otpInput) {
         await this.captureDiagnostics(page, diagnosticsDirectory, "otp-input-missing");
         return "partial";
@@ -65,11 +71,14 @@ export class OpenPaySandboxChallengeHandler {
         await otpInput.press("Enter");
       }
 
-      const submissionCompleted = await this.waitForSubmissionState(page, otpInput, preSubmitUrl);
+      const advanced = await this.waitForSubmissionState(page, otpInput, preSubmitUrl,Math.min(context.submissionTimeoutMs ?? 120000,120000));
+      if (!advanced) return "partial";
 
       await this.captureDiagnostics(page, diagnosticsDirectory, "otp-submitted");
 
-      return submissionCompleted ? "passed" : "partial";
+      // Navigation only proves submission. The runner promotes this to passed
+      // after authoritative provider confirmation, never from a hidden input.
+      return "submitted";
     }
     catch {
       await this.captureDiagnostics(page, diagnosticsDirectory, "challenge-error");
@@ -123,17 +132,17 @@ export class OpenPaySandboxChallengeHandler {
     return null;
   }
 
-  private async waitForSubmissionState(page: Page, otpInput: Locator, preSubmitUrl: string): Promise<boolean> {
+  private async waitForSubmissionState(page: Page, otpInput: Locator, preSubmitUrl: string, timeoutMs:number): Promise<boolean> {
     const navigationDetected = await page.waitForURL(
       (url) => url.toString() !== preSubmitUrl,
-      { timeout: 30000 }
+      { timeout: timeoutMs }
     ).then(() => true).catch(() => false);
 
     if (navigationDetected) {
       return true;
     }
 
-    const inputHidden = await otpInput.waitFor({ state: "hidden", timeout: 5000 })
+    const inputHidden = await otpInput.waitFor({ state: "hidden", timeout: Math.min(5000,timeoutMs) })
       .then(() => true)
       .catch(() => false);
 
@@ -150,25 +159,24 @@ export class OpenPaySandboxChallengeHandler {
     const safeStage = stage.replace(/[^a-z0-9-]/gi, "-").toLowerCase();
     const pageTitle = await page.title().catch(() => "");
     const frameSnapshot = await Promise.all(page.frames().map((frame) => this.describeFrame(frame)));
-    const html = await page.content().catch(() => "");
 
     await page.screenshot({
       path: path.join(diagnosticsDirectory, `${safeStage}.png`),
       fullPage: true
+      ,mask:page.frames().map(frame=>frame.locator("input"))
     }).catch(() => undefined);
 
     await writeFile(
       path.join(diagnosticsDirectory, `${safeStage}.json`),
       JSON.stringify({
         stage,
-        url: page.url(),
+        origin: new URL(page.url()).origin,
         title: pageTitle,
         frames: frameSnapshot
       }, null, 2),
       "utf8"
     );
 
-    await writeFile(path.join(diagnosticsDirectory, `${safeStage}.html`), html, "utf8");
   }
 
   private async describeFrame(frame: Frame): Promise<{ url: string; name: string; title: string; inputs: string[] }> {
@@ -182,7 +190,7 @@ export class OpenPaySandboxChallengeHandler {
     const title = await frame.title().catch(() => "");
 
     return {
-      url: frame.url(),
+      url: (()=>{try{return new URL(frame.url()).origin;}catch{return "opaque-frame";}})(),
       name: frame.name(),
       title,
       inputs

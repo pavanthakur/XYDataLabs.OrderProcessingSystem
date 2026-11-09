@@ -10,5 +10,6 @@ namespace XYDataLabs.OpenPayAdapter
         Task<Card> CreateCardTokenAsync(Card card);
         Task<Charge> CreateChargeAsync(ChargeRequest request);
         Task<Charge> GetChargeAsync(string chargeId, string? customerId = null);
+        Task<string?> GetChargeCurrencyAsync(string chargeId, string? customerId = null, CancellationToken cancellationToken = default);
     }
 }

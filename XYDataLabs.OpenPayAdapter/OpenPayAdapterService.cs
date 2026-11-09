@@ -14,18 +14,23 @@ namespace XYDataLabs.OpenPayAdapter
         private readonly OpenpayAPI _openpayApi;
         private readonly ILogger _logger;
         private readonly ResiliencePipeline _pipeline;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly PaymentProviderRuntimeConfiguration _configuration;
 
         public string ProviderType => PaymentProviderTypes.OpenPay;
 
         public OpenPayAdapterService(
             ITenantPaymentProviderConfigurationResolver paymentProviderConfigurationResolver,
             ILogger logger,
-            ResiliencePipelineProvider<string> pipelineProvider)
+            ResiliencePipelineProvider<string> pipelineProvider,
+            IHttpClientFactory httpClientFactory)
         {
             ArgumentNullException.ThrowIfNull(paymentProviderConfigurationResolver);
             ArgumentNullException.ThrowIfNull(logger);
             _logger = logger;
             var configuration = paymentProviderConfigurationResolver.ResolveCurrentTenantConfiguration();
+            _configuration=configuration;
+            _httpClientFactory=httpClientFactory;
             _openpayApi = new OpenpayAPI(configuration.PrivateKey, configuration.MerchantId, configuration.IsProduction);
             _pipeline = pipelineProvider.GetPipeline("openpay");
 
@@ -75,9 +80,10 @@ namespace XYDataLabs.OpenPayAdapter
             _logger.Information("Creating charge for amount: {Amount} {Currency}", request.Amount, request.Currency);
             try
             {
-                var charge = await _pipeline.ExecuteAsync<Charge>(
-                    ct => new ValueTask<Charge>(Task.Run(() => _openpayApi.ChargeService.Create(request), ct)),
-                    CancellationToken.None);
+                // A timeout may occur after the provider accepted the charge.
+                // Never automatically repeat this non-idempotent write; reconcile
+                // the existing attempt instead of risking a duplicate charge.
+                var charge = await Task.Run(() => _openpayApi.ChargeService.Create(request));
                 _logger.Information("Successfully created charge with ID: {ChargeId}", charge.Id);
                 return charge;
             }
@@ -119,6 +125,29 @@ namespace XYDataLabs.OpenPayAdapter
                 _logger.Error(ex, "Failed to retrieve charge {ChargeId} from OpenPay", chargeId);
                 throw;
             }
+        }
+
+        // Openpay 1.0.25 drops the currency field when deserializing Charge.
+        // Fetch only the public transaction metadata through the authenticated API;
+        // never fabricate provider currency from our requested currency.
+        public async Task<string?> GetChargeCurrencyAsync(string chargeId, string? customerId = null, CancellationToken cancellationToken = default)
+        {
+            var host=_configuration.IsProduction ? "https://api.openpay.mx" : "https://sandbox-api.openpay.mx";
+            var basePath=$"{host}/v1/{Uri.EscapeDataString(_configuration.MerchantId)}";
+            var paths=new List<string>{$"{basePath}/charges/{Uri.EscapeDataString(chargeId)}"};
+            if(!string.IsNullOrWhiteSpace(customerId)) paths.Add($"{basePath}/customers/{Uri.EscapeDataString(customerId)}/charges/{Uri.EscapeDataString(chargeId)}");
+            using var client=_httpClientFactory.CreateClient("openpay-metadata");
+            foreach(var path in paths)
+            {
+                using var request=new HttpRequestMessage(HttpMethod.Get,path);
+                request.Headers.Authorization=new System.Net.Http.Headers.AuthenticationHeaderValue("Basic",Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{_configuration.PrivateKey}:")));
+                using var response=await client.SendAsync(request,cancellationToken);
+                if(response.StatusCode==System.Net.HttpStatusCode.NotFound && paths.Count>1 && path==paths[0]) continue;
+                response.EnsureSuccessStatusCode();
+                using var json=System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+                return json.RootElement.TryGetProperty("currency",out var currency) ? currency.GetString() : null;
+            }
+            return null;
         }
 
         private static string MaskEmail(string? email)

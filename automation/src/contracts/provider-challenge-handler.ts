@@ -1,9 +1,11 @@
-export type ChallengeOutcome = "passed" | "partial" | "failed" | "not-applicable";
+export type ChallengeOutcome = "passed" | "submitted" | "partial" | "failed" | "not-applicable";
 
 export interface ProviderChallengeContext {
   tenantCode: string;
   sandboxOtpCode?: string;
   diagnosticsDirectory?: string;
+  challengeTimeoutMs?: number;
+  submissionTimeoutMs?: number;
 }
 
 export interface ProviderChallengeHandler {

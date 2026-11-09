@@ -7,6 +7,9 @@ param(
     [string]$UiContainerAppName,
     [string]$GatewayFqdn,
     [string]$UiFqdn,
+    [string]$GatewayBaseUrl,
+    [string]$UiBaseUrl,
+    [bool]$AllowGeneratedAzureUrlFallback = $false,
     [string]$SummaryPath,
     [int]$Attempts = 18,
     [int]$DelaySeconds = 10
@@ -205,17 +208,48 @@ if ([string]::IsNullOrWhiteSpace($UiFqdn)) {
     $UiFqdn = Resolve-ContainerAppFqdn -Name $uiApp
 }
 
-$gatewayHealthUrl = "https://$GatewayFqdn/"
-$gatewayApiUrl = "https://$GatewayFqdn/api/v1/Info/runtime-configuration"
-$uiUrl = "https://$UiFqdn/customers"
-$uiProxyApiUrl = "https://$UiFqdn/api/v1/Info/runtime-configuration"
+$azureGeneratedGatewayUrl = "https://$GatewayFqdn"
+$azureGeneratedUiUrl = "https://$UiFqdn"
+
+if ([string]::IsNullOrWhiteSpace($GatewayBaseUrl)) {
+    if (-not $AllowGeneratedAzureUrlFallback) {
+        throw 'GatewayBaseUrl is required for Azure runtime smoke. Generated Azure Container Apps FQDN fallback is disabled.'
+    }
+
+    $GatewayBaseUrl = $azureGeneratedGatewayUrl
+}
+
+if ([string]::IsNullOrWhiteSpace($UiBaseUrl)) {
+    if (-not $AllowGeneratedAzureUrlFallback) {
+        throw 'UiBaseUrl is required for Azure runtime smoke. Generated Azure Container Apps FQDN fallback is disabled.'
+    }
+
+    $UiBaseUrl = $azureGeneratedUiUrl
+}
+
+$GatewayBaseUrl = $GatewayBaseUrl.TrimEnd('/')
+$UiBaseUrl = $UiBaseUrl.TrimEnd('/')
+
+if ((($GatewayBaseUrl -like '*.azurecontainerapps.io*') -or ($UiBaseUrl -like '*.azurecontainerapps.io*')) -and -not $AllowGeneratedAzureUrlFallback) {
+    throw "Configured public runtime smoke URLs must not use generated Azure Container Apps FQDNs unless AllowGeneratedAzureUrlFallback is true. GatewayBaseUrl='$GatewayBaseUrl'; UiBaseUrl='$UiBaseUrl'."
+}
+
+$fallbackUsed = ($GatewayBaseUrl -eq $azureGeneratedGatewayUrl) -or ($UiBaseUrl -eq $azureGeneratedUiUrl)
+
+$gatewayHealthUrl = "$GatewayBaseUrl/"
+$gatewayApiUrl = "$GatewayBaseUrl/api/v1/Info/runtime-configuration"
+$uiUrl = "$UiBaseUrl/customers"
+$uiProxyApiUrl = "$UiBaseUrl/api/v1/Info/runtime-configuration"
 $startedUtc = [DateTimeOffset]::UtcNow
 
 Write-Host "Running Phase 10 Azure runtime smoke for '$Environment'..."
-Write-Host "Gateway: $gatewayHealthUrl"
-Write-Host "Orders API through gateway: $gatewayApiUrl"
-Write-Host "UI: $uiUrl"
+Write-Host "Public Gateway: $gatewayHealthUrl"
+Write-Host "Public Orders API through gateway: $gatewayApiUrl"
+Write-Host "Public UI: $uiUrl"
 Write-Host "UI API proxy: $uiProxyApiUrl"
+Write-Host "Azure generated Gateway diagnostic URL: $azureGeneratedGatewayUrl"
+Write-Host "Azure generated UI diagnostic URL: $azureGeneratedUiUrl"
+Write-Host "Generated URL fallback used: $fallbackUsed"
 
 $checks = @()
 $checks += Invoke-SmokeHttp -Name 'Gateway health' -Url $gatewayHealthUrl -Validate {
@@ -254,6 +288,7 @@ $checks += Invoke-SmokeHttp -Name 'UI API proxy runtime configuration' -Url $uiP
 $completedUtc = [DateTimeOffset]::UtcNow
 $failed = @($checks | Where-Object { -not $_.Passed })
 $status = if ($failed.Count -eq 0) { 'PASS' } else { 'FAIL' }
+$deploymentVerdict = if ($failed.Count -gt 0) { 'FAIL' } elseif ($fallbackUsed) { 'PARTIAL' } else { 'PASS' }
 
 $summary = @()
 $summary += '## Phase 10 Azure Runtime Smoke'
@@ -269,10 +304,14 @@ $summary += '### Endpoints'
 $summary += ''
 $summary += '| Endpoint | URL |'
 $summary += '|---|---|'
-$summary += "| Gateway Health | $gatewayHealthUrl |"
-$summary += "| Gateway Routed API | $gatewayApiUrl |"
-$summary += "| UI Static Route | $uiUrl |"
-$summary += "| UI API Proxy | $uiProxyApiUrl |"
+$summary += "| Public Gateway Health | $gatewayHealthUrl |"
+$summary += "| Public Gateway Routed API | $gatewayApiUrl |"
+$summary += "| Public UI Static Route | $uiUrl |"
+$summary += "| Public UI API Proxy | $uiProxyApiUrl |"
+$summary += "| Azure Generated Gateway Diagnostic | $azureGeneratedGatewayUrl |"
+$summary += "| Azure Generated UI Diagnostic | $azureGeneratedUiUrl |"
+$summary += "| Generated URL Fallback Used | $fallbackUsed |"
+$summary += "| Deployment Verdict | $deploymentVerdict |"
 $summary += ''
 $summary += '### Checks'
 $summary += ''

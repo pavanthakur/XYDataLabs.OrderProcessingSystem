@@ -130,14 +130,14 @@ describe("PaymentCallbackPage", () => {
 
     await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText("Waiting for the provider to finish confirmation.")).toBeInTheDocument());
-    expect(screen.getByText("Retry 1 of 4 will run automatically in a moment.")).toBeInTheDocument();
+    expect(screen.getByText("Retry 1 of 24 will run automatically in a moment.")).toBeInTheDocument();
     expect(screen.getByText("charge_pending")).toBeInTheDocument();
 
-    await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledTimes(2), { timeout: 5000 });
+    await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledTimes(2), { timeout: 7000 });
     await waitFor(() => expect(screen.getByText("Payment completed successfully.")).toBeInTheDocument());
 
     expect(screen.getByText("completed")).toBeInTheDocument();
-    expect(screen.getByText("1 of 4 used")).toBeInTheDocument();
+    expect(screen.getByText("1 of 24 used")).toBeInTheDocument();
   }, 10000);
 
   it("accepts Razorpay callback identifiers and labels the provider source correctly", async () => {

@@ -12,7 +12,8 @@ This runbook covers the first live check for the Phase 10 pre-Azure baseline def
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
-- Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`
+- Stable public URL source of truth: `automation/config/runtime-targets.json`
+- Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`; these are compatibility/operator controls, but the preferred hostnames are the stable `xydatalabs.com` URLs in the runtime target catalog.
 - The active `01 Phase 10 Azure Deploy Orchestrator` path does deploy Azure SQL Server and Azure Managed Redis into the environment-scoped app resource group when the baseline runs; they are not part of `rg-orderprocessing-platform`.
 - For the next implementation slice, use [docs/internal/phase10-parity-matrix.md](../internal/phase10-parity-matrix.md) as the SQL / Redis / ACR ownership source of truth before changing Azure again.
 - Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
@@ -393,12 +394,14 @@ Use this as the current known-good Phase 10 baseline when comparing future workf
 | 2026-07-13 | `03 Phase 10 Azure Transport Smoke` | `29273881488` | PASS | Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
 | 2026-07-13 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | `29268434294` | PASS | Optional Docker Dev HTTP E2E smoke, integration, matrix, and cleanup parity. |
 
-Current dev URLs from the latest deploy proof:
+Current stable dev URLs from the runtime target catalog:
 
 | Target | URL |
 |---|---|
-| Gateway | `https://orderprocessing-gate-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io` |
-| UI | `https://orderprocessing-ui-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io` |
+| Gateway/API | `https://dev.orderprocessing-api.xydatalabs.com` |
+| UI | `https://dev.orderprocessing.xydatalabs.com` |
+
+The Azure-generated Container Apps hostnames from a deployment run are diagnostic fallback values only.
 
 ### Workflow Responsibilities
 
@@ -495,19 +498,29 @@ Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD
 | Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
 | ACR image retention | Implemented with the retention workflow | Scheduled ACR cleanup protects active revision images | `phase10-retention-cleanup.yml` | Stale ACR tags/manifests are removed without deleting active revision images |
 
-If you want human-friendly public URLs, choose:
+Phase 10 smoke tests and direct operator access use stable custom domains, not generated Azure Container Apps hostnames:
+
+| Environment | UI URL | API/Gateway URL |
+|-------------|--------|-----------------|
+| dev | `https://dev.orderprocessing.xydatalabs.com` | `https://dev.orderprocessing-api.xydatalabs.com` |
+| staging | `https://staging.orderprocessing.xydatalabs.com` | `https://staging.orderprocessing-api.xydatalabs.com` |
+| prod | `https://orderprocessing.xydatalabs.com` | `https://orderprocessing-api.xydatalabs.com` |
+
+Generated `*.azurecontainerapps.io` URLs are diagnostic fallback values only. They must not be stored as primary runtime targets and must not silently replace the public smoke URLs.
+
+If you need to bind or plan human-friendly public URLs, choose:
 
 - `bindAliases=false` for summary-only runs
 - `bindAliases=true` and `aliasMode=direct` for direct custom-domain binding
 - `bindAliases=true` and `aliasMode=frontdoor` for DNS or Front Door planning only
 
-When alias binding is enabled, supply a real `publicDomain` value such as `contoso.com`.
+The checked-in runtime target catalog already carries the preferred `xydatalabs.com` URLs. If alias binding is enabled and the catalog is missing a URL, supply a real `publicDomain` value such as `xydatalabs.com`.
 
 Quick chooser:
 
 - Pick `direct` if you want the custom domain to land directly on the Container App ingress.
 - Pick `frontdoor` if you want the run to only prepare the alias plan for a Front Door or DNS layer.
-- Leave aliasing off for dry run and first deploys unless you already own the public domain.
+- Leave aliasing off for dry run and first deploys unless you already own and have prepared the public domain.
 - `direct` is the safer default when you are testing the Phase 10 path for the first time.
 
 Shared operator rule:
@@ -883,9 +896,9 @@ Enable aliasing only when you are ready to manage a real public domain:
 
 | Environment | bindAliases | aliasMode | publicDomain |
 |-------------|-------------|-----------|--------------|
-| dev | `true` | `direct` or `frontdoor` | `contoso.com` or your real suffix |
-| staging | `true` | `direct` or `frontdoor` | `contoso.com` or your real suffix |
-| prod | `true` | `direct` or `frontdoor` | `contoso.com` or your real suffix |
+| dev | `true` | `direct` or `frontdoor` | `xydatalabs.com` |
+| staging | `true` | `direct` or `frontdoor` | `xydatalabs.com` |
+| prod | `true` | `direct` or `frontdoor` | `xydatalabs.com` |
 
 ## Verify Everything
 
