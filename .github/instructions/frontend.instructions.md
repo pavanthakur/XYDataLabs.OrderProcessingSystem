@@ -22,7 +22,8 @@ Use this instruction set for the React workspace under `frontend/`.
 
 ## Payment UI Safety
 
-- Never log, persist, or render raw card numbers, CVV, private keys, or payment secrets.
+- Never log or persist raw card numbers or CVV, include them in telemetry/reports, or echo them outside approved card-entry controls. Keep screenshots and diagnostic artifacts sanitized.
+- Preserve transient card entry in the existing approved payment flow; this rule does not prohibit its input controls or authorize a new collection path. Never store card values in local/session storage. Private keys and payment secrets must never reach the browser.
 - Preserve sandbox/live indicators and existing payment callback handling.
 - Keep provider-specific behavior behind existing payment-flow or API abstractions.
 - Display technical identifiers only when the existing contract marks them as customer-safe.

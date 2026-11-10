@@ -4,8 +4,8 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Checkpoint Provenance
 
-- Review revision: `f52b06c`
-- Worktree state: `CLEAN`
+- Review revision: `d84cd8e`
+- Worktree state: `DIRTY`
 - Evidence status: `HISTORICAL`
 - Evidence revision: `UNKNOWN`
 - Evidence environment: `docker-dev`
@@ -14,12 +14,12 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Last Session
 
-- Updated: 2026-11-10. Branch at review: `dev`; repository baseline: `f52b06c` (clean and aligned with `origin/dev`). This is the current governance baseline, not the revision certified by the historical payment report.
-- Current task: approved AI framework gap review and controlled expansion. The existing five skills remain preserved; frontend and payment-provider guidance was added only after live-surface review. DW-025's narrow orchestration/test correction is locally verified; DW-026/DW-027 acceptance remains blocked. No Azure or Phase 10 runtime work was started.
+- Updated: 2026-11-10. Branch: `dev`; baseline: `d84cd8e` (`Skills file updated`), clean before these approved corrections. This is not the revision certified by the historical payment report.
+- Current task: four guidance-review corrections: profile-scoped validation, transient card-entry safety, runtime OpenPay device IDs versus private secrets, and discoverable React tenancy reference. Seven skills remain canonical. No application, runtime or global-settings changes; DW-026/DW-027 remain open.
 - Phase 10 remains **paused**. Its reporting and Azure work are planned, not implemented by this governance task. Phase 11 is not started.
-- Existing commits: `6c467a5` contains tenant identity and Phase 10 payment/Docker implementation; `b3f7ed5` contains dropdown styling and P11-W0 planning; `802bdfe` records the remaining Phase 10/11 plans. None alone establishes Azure acceptance.
-- Latest historical governance regression: **28 passed, one symlink NOT TESTED, exit 1/partial**. Evidence: `TestResults/AIGovernance/regression-57932721cb3d47ef9e7cba5ca5c7e517/summary.json`. The current local AI customization and documentation checks pass for seven skills; no elevation or runtime access was used. Hosted CI has not run; publishing this candidate/dispatch requires separate approval.
-- Codex CLI `0.164.0-alpha.11.1` remains behaviorally untested. Restricted Copilot continuation was attempted: CLI reports `1.0.83-5`, execution uses runtime `1.0.56`. Configured model rejected; identical-permission per-run `auto` timed out after about two minutes and only verified owned processes were stopped. One scenario attempted/two launches; no behavioral PASS, eleven other scenarios unexecuted. Evidence: `TestResults/AIGovernance/remediation-20261110/summary.json`. Startup confirmed five skill descriptors and disabled mutation/MCP tools, not full guidance application or VS Code behavior.
+- Prior implementation/plans: `6c467a5`, `b3f7ed5`, `802bdfe`. None establishes Azure acceptance.
+- Current guidance checks: AI/docs/diff and both skill-format checks PASS. Local regression: 28 pass / one symlink NOT TESTED, exit 1 (`TestResults/AIGovernance/regression-a70abb865a6c457998906746167e459b/summary.json`). Hosted [run 42795579199](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/42795579199) at `d84cd8e` reports all 29 cases, including symlink rejection, passed on Windows/Linux, but both jobs exit 1. CI remains FAIL; retained negative-test exit status is a hypothesis requiring separate runner diagnosis/correction. These newer guidance fixes have not run in hosted CI.
+- DW-027: Codex CLI `0.164.0-alpha.11.1` remains untested. Restricted Copilot CLI `1.0.83-5`/runtime `1.0.56` rejected its configured model; same-permission `auto` timed out, then only owned processes were stopped. One scenario/two launches, no PASS; eleven scenarios unexecuted. Evidence: `TestResults/AIGovernance/remediation-20261110/summary.json`. Five startup skill descriptors do not prove full application or VS Code behavior.
 - [Phase 10 findings](../../docs/internal/phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog): DW-025 **closed locally** (environment contract 178 pass/0 fail; unchanged checker; mocked TenantC/arbitrary-tenant prepare/restore and unfiltered native matrix checks pass). Runtime wrapper's redundant sample-filtered invocation was removed. DW-026 symlink/hosted CI and DW-027 supported-model/controlled-client acceptance remain open. Parking is not a waiver.
 
 ## Verified Evidence And Limits
@@ -34,7 +34,7 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 ## Pending / Next Actions
 
 1. Review the remediation diff. No automatic commit/push, additional runtime work, permission broadening or gate waiver. Overall acceptance remains incomplete until DW-026/027 close with evidence.
-2. Obtain an approved symlink-capable host and controlled Codex setup, plus a supported responsive Copilot model. Review publication/CI dispatch separately. Observe six scenarios per tool; retain both unsuccessful launches. Three-task efficiency metrics remain pending; bytes are not tokens.
+2. With separate implementation approval, resolve the governance runner's successful-summary/nonzero-exit mismatch and recheck hosted CI; do not seek extra local privilege merely to repeat an already observed hosted symlink test. DW-027 still needs controlled Codex setup and a supported responsive Copilot model for six scenarios per tool. Publication/dispatch needs separate approval; three-task efficiency metrics remain pending, not measured savings.
 3. Resume Phase 10 only after approval: start with **L5-R unified HTML reporting and coverage**. Follow the [Phase 10 pause/resume checkpoint](../../docs/internal/phase10-implementation-checklist.md#remaining-pre-azure-implementation-board); that checklist owns the remaining scope and Azure gates.
 4. Phase 11 scope remains in its [implementation plan](../../docs/internal/phase11-implementation-plan.md): P11-W0 payment UX first, with provider-switch safety and generic-tenant regression work tracked separately. Recovery/capability exclusions remain in the [Deferred Work Log](../../docs/internal/DEFERRED-WORK-LOG.md).
 

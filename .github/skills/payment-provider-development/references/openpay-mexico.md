@@ -11,7 +11,9 @@ Use this reference for repository work involving `XYDataLabs.OpenPayAdapter` or 
 
 ## Safety Rules
 
-- Treat merchant identifiers, private keys, device session values, and webhook secrets as secrets. Read them only from the approved local secret or deployment configuration path.
+- Private keys and webhook secrets are server-side secrets, read only through approved secret/configuration paths; never expose them to the browser.
+- The approved server payment-configuration response supplies the merchant ID and browser-public key used by the existing OpenPay browser initialization. These are not private keys; do not hardcode them in components or substitute a server/private key.
+- Device-session IDs are generated at runtime by the existing OpenPay device collector, not read from seeds, environment variables, or deployment settings. Preserve fresh collection for the payment flow; never replace it with a fixed or reused configuration value. Treat the resulting ID as sensitive transient correlation data and exclude it from logs and reports.
 - Never add real credentials, card data, CVV, or provider payloads containing sensitive values to source, fixtures, logs, prompts, or documentation.
 - Keep sandbox behavior and production behavior explicitly distinguishable.
 - Do not infer a successful OpenPay journey from a mocked adapter result or an HTTP page alone.

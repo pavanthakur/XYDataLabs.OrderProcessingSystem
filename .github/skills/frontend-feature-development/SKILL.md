@@ -31,6 +31,7 @@ Do not use this skill for:
 - `frontend/apps/web/package.json`
 - `frontend/packages/api-sdk/` when API contracts change
 - `frontend/packages/tenant-session/` when tenant context changes
+- [React tenancy reference](references/react-tenancy.md) when changing tenant/session selection, restoration, request headers, or clearing tenant-scoped UI state
 - `.github/prompts/XYDataLabs-new-feature.prompt.md` when the work is a full-stack feature
 
 ## Operating Rules
