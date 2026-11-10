@@ -6,6 +6,8 @@
   "scripts": {
     "report:phase10-preview": "tsx src/cli/render-phase10-preview.ts",
     "verify:phase10-completion": "tsx src/cli/verify-phase10-completion.ts",
+    "reconcile:phase10-acceptance": "tsx src/cli/reconcile-phase10-acceptance.ts",
+    "test:phase10-acceptance": "tsx --test src/report/phase10-acceptance.test.ts",
     "test:phase10-report": "tsx --test src/report/phase10-report.test.ts",
     "test:payment-currency:browser": "tsx --test src/browser/payment-currency.browser.test.ts",
     "test:order-continuation:browser": "tsx --test src/browser/order-payment-continuation.browser.test.ts",

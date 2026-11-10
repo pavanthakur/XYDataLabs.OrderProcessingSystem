@@ -68,6 +68,9 @@ $summary = [ordered]@{
     completedAtIst = $null
     artifactRoot = $nfrRoot
     commitSha = (& git -C $workspaceRoot rev-parse HEAD).Trim()
+    worktreeAtStart = $(if ([string]::IsNullOrWhiteSpace((& git -C $workspaceRoot status --porcelain) -join '')) { 'clean' } else { 'dirty' })
+    commitShaAtFinish = $null
+    worktreeAtFinish = $null
     categories = $categories
 }
 
@@ -814,6 +817,8 @@ $aggregate = Get-Phase10NfrAggregate -Categories $categories
 $notPassed = $aggregate.NonPassing
 $summary.status = $aggregate.Status
 $summary.nonPassingCategories = $notPassed
+$summary.commitShaAtFinish = (& git -C $workspaceRoot rev-parse HEAD).Trim()
+$summary.worktreeAtFinish = $(if ([string]::IsNullOrWhiteSpace((& git -C $workspaceRoot status --porcelain) -join '')) { 'clean' } else { 'dirty' })
 $summary.completedAtIst = (Get-IstNow).ToString('o')
 Set-Content -LiteralPath $currentStepPath -Value 'completed' -Encoding utf8
 Write-NfrSummary
