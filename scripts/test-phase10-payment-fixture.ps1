@@ -16,7 +16,10 @@ function Table($rows){
 }
 function Invoke-Database($database,$sql,$parameters=@{}){
     $script:calls+=@{database=$database;sql=$sql}
-    if($sql.StartsWith('SELECT Id,Code')){return ,(Table @(@{Id=3;Code='TenantC';TenantTier='Dedicated';Status='Active';PaymentProviderCode=$script:route}))}
+    if($sql.StartsWith('SELECT Id,Code')){
+        if($parameters.code-ne$script:fixtureCode){throw 'Unexpected fixture tenant query.'}
+        return ,(Table @(@{Id=3;Code=$script:fixtureCode;TenantTier='Dedicated';Status='Active';PaymentProviderCode=$script:route}))
+    }
     if($sql.StartsWith('SELECT Id,PaymentProviderCode')){return ,(Table @(@{Id=3;PaymentProviderCode='OpenPay'}))}
     if($sql.StartsWith('SELECT Id,ProviderType')){
         if($database-eq$shared){throw 'Dedicated provider rows must not be required in the shared registry.'}
@@ -24,18 +27,29 @@ function Invoke-Database($database,$sql,$parameters=@{}){
     }
     if($sql.StartsWith('UPDATE dbo.Tenants')){
         if($database-ne$shared){throw 'Do not mutate the dedicated mirror route.'}
-        $script:route=$parameters.route;return ,(Table @(@{Restored=1}))
+        $script:route=if($parameters.ContainsKey('route')){$parameters.route}else{$parameters.provider};return ,(Table @(@{Restored=1}))
     }
     if($sql.StartsWith('UPDATE payments.PaymentProviders')){if($parameters.provider-eq'Razorpay'){$script:rzFlag=$parameters.flag};return ,(Table @(@{Restored=1}))}
     throw 'Unexpected mock SQL.'
 }
-function Get-Phase10ComposeDedicatedTenantDatabaseMap { return @{ TenantC='OrderProcessingSystem_TenantC_Dev' } }
-$original=Get-Snapshot 'TenantC'
-if($original.registryRoute-ne'OpenPay'-or$original.providers.Count-ne 2){throw 'Independent registry/provider snapshot failed.'}
-$snapshot=@{original=$original};$script:route='Razorpay';$script:rzFlag=$true
-Restore-Snapshot $snapshot
-if($script:route-ne'OpenPay'-or$script:rzFlag){throw 'Exact restoration failed.'}
-Write-Host 'PASS TenantC shared registry without shared provider rows snapshots/restores independently.'
+function Get-Phase10ComposeDedicatedTenantDatabaseMap { return @{ $script:fixtureCode='OrderProcessingSystem_IsolatedFixture_Dev' } }
+$prepareRoute=$ast.Find({param($node) $node-is[Management.Automation.Language.AssignmentStatementAst]-and$node.Right.Extent.Text.Contains('SET PaymentProviderCode=@provider')},$true)
+$prepareFlag=$ast.Find({param($node) $node-is[Management.Automation.Language.AssignmentStatementAst]-and$node.Right.Extent.Text.Contains('Use3DSecure=@flag WHERE TenantId=@id')},$true)
+if(-not$prepareRoute-or-not$prepareFlag){throw 'Missing fixture preparation assignments.'}
+foreach($script:fixtureCode in @('TenantC','Clinic-West-47')){
+    $script:route='OpenPay';$script:rzFlag=$false;$script:calls=@()
+    $original=Get-Snapshot $script:fixtureCode
+    if($original.registryRoute-ne'OpenPay'-or$original.providers.Count-ne 2){throw 'Independent registry/provider snapshot failed.'}
+    if($original.businessDatabase-ne'OrderProcessingSystem_IsolatedFixture_Dev'){throw 'Explicit dedicated mapping was not used.'}
+    $snapshot=@{original=$original};$ProviderType='Razorpay';$TenantCode=$script:fixtureCode;$ThreeDs='true'
+    . ([scriptblock]::Create($prepareRoute.Extent.Text))
+    . ([scriptblock]::Create($prepareFlag.Extent.Text))
+    $prepared=Get-Snapshot $script:fixtureCode
+    if($prepared.registryRoute-ne'Razorpay'-or$prepared.businessRoute-ne'OpenPay'-or-not($prepared.providers|Where-Object provider -eq 'Razorpay').threeDs){throw 'Preparation did not separate authoritative route from dedicated provider settings.'}
+    Restore-Snapshot $snapshot
+    if($script:route-ne'OpenPay'-or$script:rzFlag){throw 'Exact restoration failed.'}
+    Write-Host "PASS $script:fixtureCode shared registry without shared provider rows prepares/restores independently via explicit mapping."
+}
 # Exercise actual PowerShell-to-native argument expansion using source command construction.
 $capture=Join-Path $PSScriptRoot 'tests/capture-native-args.ps1'
 function docker { throw 'Docker execution is forbidden in this argument-capture test.' }
@@ -64,6 +78,28 @@ foreach($NoBuild in @($false,$true)){
     if(($captured-contains'--build')-eq$NoBuild-or'orders'-notin$captured-or'-'-in$captured){throw 'Bootstrap native argument capture failed.'}
 }
 Write-Host 'PASS daily/cold build, app/Functions startup and bootstrap native arguments.'
+# Execute only the deterministic orchestration branch, replacing its native process
+# with argument capture. No Docker, SQL or provider process is launched.
+$orchestrationAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'run-phase10-local-container-stack-end-to-end.ps1'),[ref]$null,[ref]$null)
+$matrixIf=$orchestrationAst.Find({param($node) $node-is[Management.Automation.Language.IfStatementAst]-and$node.Clauses[0].Item1.Extent.Text-eq"`$PaymentSuite -in @('deterministic', 'both')"},$true)
+if(-not$matrixIf){throw 'Deterministic matrix branch is missing.'}
+$matrixBody=$matrixIf.Clauses[0].Item2.Extent.Text
+if(@($matrixIf.Clauses[0].Item2.FindAll({param($node) $node-is[Management.Automation.Language.CommandAst]-and$node.GetCommandName()-eq'pwsh'},$true)).Count-ne 1){throw 'Expected one discovered-tenant matrix invocation.'}
+$matrixCode=$matrixBody.Substring(1,$matrixBody.Length-2).Replace('& pwsh','& pwsh -NoProfile -File $capture')
+function Invoke-LoggedCommand {
+    param([string]$Name,[scriptblock]$Script)
+    if($Name-ne'payments-deterministic'){throw 'Unexpected targeted runtime payment invocation.'}
+    $script:matrixCaptured=@(& $Script | ConvertFrom-Json)
+}
+$workspaceRoot=$root
+foreach($AcceptanceProfile in @('baseline','extended')){
+    $summary=@{steps=@()};$script:matrixCaptured=@()
+    & ([scriptblock]::Create($matrixCode))
+    $captured=$script:matrixCaptured
+    if('-TenantCode'-in$captured-or'-ProviderType'-in$captured-or$AcceptanceProfile-notin$captured-or'deterministic'-notin$captured){throw 'Matrix was restricted to a tenant/provider or lost the selected profile.'}
+    if(@($summary.steps).Count-ne 1-or$summary.steps[0].name-ne'payments-deterministic'){throw 'Unexpected deterministic matrix stages.'}
+}
+Write-Host 'PASS native matrix invocation discovers tenants without sample filters and preserves both acceptance profiles.'
 # Absolute and relative artifact paths must resolve to the same owned directory.
 $messagingAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'test-local-messaging.ps1'),[ref]$null,[ref]$null)
 $artifactAssignment=$messagingAst.Find({param($node) $node-is[Management.Automation.Language.AssignmentStatementAst]-and$node.Left.Extent.Text-eq'$artifact'},$true)

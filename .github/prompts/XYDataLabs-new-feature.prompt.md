@@ -7,6 +7,14 @@ description: "Mandatory 13-step end-to-end workflow for a new feature — gather
 
 The user wants to add a new feature. Follow this mandatory workflow in order. Do NOT skip steps. Do NOT proceed to the next step until the current step is verified.
 
+## Scope, Approval And Evidence
+
+- Inspect Git status/HEAD and the relevant plan, code and tests through bounded read-only checks. The repository handoff is navigation, not proof; retain historical environment/scope/revision limits and report unavailable evidence as unavailable, not PASS.
+- Implement only the approved feature plan. Begin with targeted validation, then satisfy the applicable broader acceptance gates; do not run a full suite merely to orient the session.
+- Before tests or commands, inspect their side effects. Database queries/mutations, Docker lifecycle/reset, provider transactions/refunds and Azure/directory operations require explicit scoped approval. Generating/reviewing a migration under the approved feature plan does not authorize applying it to a database. Destructive resets need immediate per-operation approval.
+- Git staging, commit, push, merge, tag/branch creation and other Git writes require explicit authorization. Prepare the reviewed diff/file list and proposed commands; passing tests does not grant Git authorization. Preserve unrelated changes and stop to reconcile overlapping work.
+- If a required check cannot run safely or lacks approval/evidence, report BLOCKED/NOT TESTED and retain the acceptance requirement. Do not silently waive it, start another phase or treat the feature as complete.
+
 ## Step 1: Gather Requirements
 
 Ask the user:
@@ -94,7 +102,7 @@ dotnet ef migrations remove `
 ```
 
 Rules (from `ef-migrations.instructions.md`):
-- Always commit all three files: migration `.cs`, `.Designer.cs`, and updated `ModelSnapshot.cs`
+- Include all three files in the reviewed change set: migration `.cs`, `.Designer.cs`, and updated `ModelSnapshot.cs`; committing them requires explicit authorization
 - Never manually edit the ModelSnapshot
 - Verify `Down()` is reversible
 - Update `ef-migrations.instructions.md` "Applied Migrations" section with the new migration
@@ -166,7 +174,9 @@ Rules:
 
 ## Step 9: Build + Test
 
-Run the full build and test suite:
+After targeted checks, the approved feature must satisfy the full build/test requirement below. Inspect the test lane's configuration and side effects first; do not run database/provider/cloud operations without the scoped approval above. Report a missing required run as BLOCKED/NOT TESTED, not a waived or passed gate.
+
+Build/test commands for the approved scope:
 ```powershell
 dotnet build XYDataLabs.OrderProcessingSystem.sln
 dotnet test XYDataLabs.OrderProcessingSystem.sln --no-build
@@ -195,22 +205,27 @@ Before committing, perform a self-review against this checklist:
 | All tests pass? | `dotnet test` exits with 0 failures |
 | Azure runtime target impact handled? | New automation-visible Azure dependencies update `runtime-targets.json`, TypeScript contract, owning workflow/script, and Phase 10 environment contract validator together |
 
-## Step 11: Commit
+## Step 11: Prepare Commit — Explicit Approval Required
 
-```powershell
-git add -A
-git commit -m "Add {EntityName} entity with multitenant CQRS and EF migration
+Review `git status --short` and the diff. Present the exact intended file list, relevant validation results/limitations, and a suggested commit message:
+
+```text
+Add {EntityName} entity with multitenant CQRS and EF migration
 
 - Domain: {EntityName} entity with TenantId FK
 - Application: Create/Get commands+handlers, DTO
 - Infrastructure: DbContext config, migration, composite index
 - API: {EntityName}Controller with dispatch endpoints
-- Tests: handler unit tests + architecture tenant compliance"
+- Tests: handler unit tests + architecture tenant compliance
 ```
 
-## Step 12: Update Context (optional)
+This is preparation only: do not stage or commit automatically. After explicit authorization, stage only reviewed paths (not unrelated work), recheck the staged diff and run the approved Git operation. Commit permission is not push, merge, tag, deployment or payment-run permission. Do not execute a commit until all required validation for the approved feature, including Step 13 when applicable, is satisfied or an allowed deferral is recorded.
 
-If this is a significant feature, run `/XYDataLabs-context-audit` to verify instruction files still reflect the codebase.
+## Step 12: Refresh Relevant Context
+
+After material approved work, refresh the concise repository-relative `memories/repo/active-work.md` with observed changes, validation commands/results, evidence scope/limits and one next action. Keep it under 8 KiB; use revision UNKNOWN when evidence is unbound, and preserve unresolved constraints and unrelated work. Do not write personal/global memory or duplicate the phase roadmap. A read-only question does not require an update.
+
+If this is a significant feature, perform the relevant `/XYDataLabs-context-audit` checks against current code/evidence to verify instruction files still reflect the codebase. No broad audit or consequential validation is authorized merely by loading this prompt.
 
 ## Step 13: Payment Verification (conditional)
 
@@ -220,4 +235,6 @@ If this is a significant feature, run `/XYDataLabs-context-audit` to verify inst
 - `Domain/Entities/CardTransaction*`, `PayinLog*`, `BillingCustomer*`, `PaymentProvider*`, `TransactionStatusHistory*`
 - `Infrastructure/` payment-related data access or seeding
 
-**Action:** Run `/XYDataLabs-verify-db-logs` to verify logs and DB records and confirm no data isolation or schema regressions were introduced. Running this also serves as physical verification of the ADR-010 log filename and sink selection cells for the runtime profile used — confirming the correct log file was written with the correct naming pattern.
+**Action:** The applicable `/XYDataLabs-verify-db-logs` evidence remains required before feature closeout/commit. Inspect its commands and obtain explicit scoped approval for database/provider/cloud access before execution; it does not authorize a new charge, refund, reset or deployment. Correlate actual logs and DB records for the selected runtime, and verify no data isolation or schema regression. Confirm the ADR-010 log filename/sink selection only from observed evidence; if unavailable or unapproved, leave the gate BLOCKED/NOT TESTED rather than infer PASS.
+
+Finish with the reviewed diff, actual validation outcomes, unresolved findings and proposed next action. Do not automatically commit, push or start the next phase.

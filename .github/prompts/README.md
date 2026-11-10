@@ -4,7 +4,7 @@ This folder contains reusable VS Code Chat agent prompts for common operational 
 
 These prompts are intended to reduce missed post-deployment steps, standardize repeated workflows, and give a consistent entry point for tasks that are easy to forget during Azure setup, validation, and daily learning progress updates.
 
-For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OPERATING-MODEL.md) as the canonical protocol and [docs/internal/DEFERRED-WORK-LOG.md](../../docs/internal/DEFERRED-WORK-LOG.md) as the shared deferral register.
+Follow [AGENTS.md](../../AGENTS.md) for shared engineering behavior. This README owns prompt/agent discovery; [the skill index](../skills/README.md) owns skill discovery. For governance/routing use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OPERATING-MODEL.md), and use [docs/internal/DEFERRED-WORK-LOG.md](../../docs/internal/DEFERRED-WORK-LOG.md) for justified deferrals. Client entries link these owners instead of repeating every asset.
 
 Use [.github/instructions/ai-operating.instructions.md](../instructions/ai-operating.instructions.md) as the shared local slice-sizing and drift-control rule file.
 
@@ -25,8 +25,8 @@ Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-comp
 ### `/XYDataLabs-day-start`
 
 Purpose:
-- Reads `/memories/repo/active-work.md` and reports the current phase, last-session summary, pending next actions, and key paths.
-- Starts a session from the repository handoff note without broad rediscovery.
+- Reads repository-relative `memories/repo/active-work.md` as a checkpoint, with bounded read-only checks of Git state, the relevant plan and material evidence.
+- Reports active/pause state, historical or unavailable evidence, next actions and key paths without broad rediscovery or automatic full test runs.
 
 Use when:
 - Beginning a new work session in this repository.
@@ -36,6 +36,8 @@ Use when:
 
 Purpose:
 - Routes end-of-day curriculum updates to the correct documents.
+- Applies only routes relevant to approved work; a pause or governance-only task does not mark curriculum/phase work complete.
+- Refreshes the concise handoff after material approved work, with actual validation/evidence limits; Git writes, snapshots and consequential validation require explicit authorization.
 - Ensures progress tracking stays consistent, including architecture phase status surfaces.
 - Makes payment automation validation mandatory during phase closeout when the work touched `automation/` or the payment automation workflow surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
@@ -103,9 +105,10 @@ Use when:
 
 Purpose:
 - Runs a structured quality gate after completing any feature, task, script, or workflow.
+- Selects applicable safe checks from the changed scope; governance metadata does not automatically trigger application suites or consequential runtime operations. Required unapproved/unavailable checks remain BLOCKED/NOT TESTED.
 - Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
 - Fixes gaps immediately where possible; records any justified deferrals in `docs/internal/DEFERRED-WORK-LOG.md`.
-- For phase checkpoints, confirm the roadmap says exactly what the repo now proves: Phase 10.1 complete, Phase 10.2 next.
+- For phase checkpoints, compare the relevant approved plan and actual evidence; do not hardcode an old next slice or infer completion from historical results.
 - For Phase 9 closeout, also verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned with the closeout roadmap.
 
 Use when:
@@ -125,7 +128,7 @@ Purpose:
 - Detects stale AI context by diffing memory files and copilot-instructions.md against the actual codebase.
 - Catches drift in project tables, package references, directory layouts, and memory files.
 - Reports findings with severity levels (HIGH/MEDIUM/LOW) and specific fix instructions.
-- For Phase 10 work, specifically verify that the local baseline checkpoint is reflected as Phase 10.1 complete and Phase 10.2 next across the roadmap and status docs.
+- Verify the current approved phase plan/checkpoint and its evidence limits rather than hardcoding an old next slice or treating paused work as authorized.
 
 Use when:
 - Periodically (every few sessions or after major refactors).
@@ -137,7 +140,7 @@ Use when:
 
 Purpose:
 - Orchestrates end-to-end feature development with multitenant support.
-- Enforces the mandatory 13-step workflow: requirements → entity → DTO → CQRS → DbContext → migration → controller → tests → build → review → commit → context check → payment verification (conditional).
+- Enforces the mandatory 13-step workflow: requirements → entity → DTO → CQRS → DbContext → migration → controller → tests → build → review → commit preparation → context refresh → payment verification (conditional).
 - References all relevant instruction files at each step.
 
 Use when:
@@ -145,11 +148,11 @@ Use when:
 - You want the agent to follow the established development workflow automatically.
 
 Workflow:
-1. Run `/XYDataLabs-new-feature` — it gathers requirements and starts implementation.
+1. Run `/XYDataLabs-new-feature` — it gathers requirements and confirms the plan before implementing only approved scope.
 2. Steps 2-9 are handled by the **CQRS Backend** agent (entity through build+test).
 3. Step 10: switch to **Code Reviewer** agent for architecture/security review.
-4. Steps 11-12: commit and optionally run `/XYDataLabs-context-audit`.
-5. Step 13 (conditional): if the feature touched payment code, run `/XYDataLabs-verify-db-logs`.
+4. Steps 11-12: present the reviewed diff/file list and proposed commit message; refresh relevant context. No staging/commit/push without explicit authorization.
+5. Step 13 (conditional): payment-related changes require `/XYDataLabs-verify-db-logs` evidence before closeout/commit; obtain scoped approval for consequential access and report unavailable/unapproved checks as BLOCKED/NOT TESTED, not PASS.
 
 ### `/XYDataLabs-validate-adrs`
 
@@ -271,13 +274,14 @@ Current prompts:
 
 ```
 [Starting a new feature]
-└─ /XYDataLabs-new-feature  →  gathers requirements, orchestrates 12-step workflow
+└─ /XYDataLabs-new-feature  →  confirms approved scope, orchestrates 13-step workflow
    └─ Steps 2-9: CQRS Backend agent (entity → build+test)
    └─ Step 10: Code Reviewer agent (architecture audit)
-   └─ Step 11-12: commit → /XYDataLabs-context-audit
+   └─ Step 11-12: prepare commit (approval required) → refresh relevant context
+   └─ Step 13: conditional payment evidence before closeout/commit (scoped approval required)
 
 [After a coding/learning day]
-└─ /XYDataLabs-day-complete  →  routes curriculum + command + roadmap updates
+└─ /XYDataLabs-day-complete  →  routes only relevant approved docs/handoff updates; no automatic Git writes
    └─ [Optional] /XYDataLabs-context-audit  →  verify no stale references created
 
 [After bootstrap or deploy]
@@ -331,6 +335,7 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 
 | File | Purpose |
 |------|--------|
+| `AGENTS.md` | Shared short engineering behavior and task-context routing |
 | `docs/AI-OPERATING-MODEL.md` | Canonical protocol for shared AI customization, validation, and deferrals |
 | `docs/internal/DEFERRED-WORK-LOG.md` | Shared register for justified deferred work |
 | `.github/completion-check-rubric.md` | Pass/defer rubric for `/XYDataLabs-completion-check` |
@@ -346,11 +351,11 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `.github/prompts/XYDataLabs-validate-adrs.prompt.md` | ADR frontmatter schema + markdownlint local validation |
 | `scripts/verify-payment-run-physical.ps1` | Deterministic physical-log rerun for docker/local payment verification |
 | `scripts/verify-payment-run-azure.ps1` | Deterministic Azure rerun for App Insights + Azure SQL payment verification |
-| `.github/copilot-instructions.md` | Prompt index and quick usage reference |
+| `.github/copilot-instructions.md` | Thin Copilot-specific entry linking shared rules and owning indexes |
 
 ## Operational Guidance
 
 - Start with `dev` before promoting changes to `staging` and `main`.
 - Use prompts to avoid missing required manual post-deploy steps.
-- When a prompt is added or its behavior changes, update this README and any bootstrap or troubleshooting docs that reference manual command sequences.
+- When a prompt/agent is added or its behavior changes, update this owning index and any affected procedure docs; keep client entry links valid without copying the full inventory there.
 - When a prompt, agent, or instruction changes, run `pwsh scripts/validate-ai-customization.ps1` before merge.

@@ -30,12 +30,20 @@ Use this register for justified deferrals that remain open after `/XYDataLabs-co
 
 The 9 November 2026 local Docker acceptance explicitly carries DW-023/DW-024 forward to Phase 11. They do not block the bounded local sandbox baseline, but remain unverified work rather than PASS. This does not certify production readiness or waive existing currency, signature, tenant-isolation or duplicate-charge safeguards. Server order-state eligibility and disposition of the already-captured historical mismatch are not closed by these deferrals.
 
+### Phase 10 Governance-Rollout Parking
+
+| ID | Item | Source | Owner | Reason | Risk | Review | Closure trigger | Status |
+|---|---|---|---|---|---|---|---|---|
+| DW-026 | [P10-R2 governance symlink regression](phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog) | Owner-approved parking, 2026-11-10 | Governance/tooling maintainer | Local Windows symlink creation unavailable; no permission escalation | Batch 3 packet remains partial/nonzero, not PASS | Phase 10 resumption, no later than 2026-12-01 | Run the symlink case on an approved capable host and review Windows/Linux CI results without suppressing failures | Open; NOT TESTED |
+| DW-027 | [P10-R3 fresh-client behavioral acceptance](phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog) | Owner-approved parking, 2026-11-10 | AI-governance maintainer / client operator | Restricted Copilot continuation attempted; configured model unsupported, bounded per-run auto timed out. Codex controls not established; no permissive fallback | No behavioral PASS; one scenario attempted, eleven unexecuted | Phase 10 resumption, no later than 2026-12-01 | Establish approved controls and a supported responsive model; observe all twelve fresh scenarios with model/mode/client and action evidence; preserve failed attempts | Open; BLOCKED / NOT TESTED |
+
 ## Closed Items
 
 Add closed items here instead of deleting them immediately when the closure itself is useful context for future reviewers.
 
 | ID | Item | Closed date | Closure summary |
 |----|------|-------------|-----------------|
+| DW-025 | Resolve targeted-tenant regression versus generic orchestration contract | 2026-11-10 | Approved local correction removes the sample-filtered live invocation without weakening the checker. Focused mocks preserve TenantC and arbitrary dedicated-tenant preparation/restoration; native capture verifies unfiltered baseline/extended execution. Environment contract: 178 passes / 0 failures. This closes the local automation conflict only; no Docker/provider/Azure acceptance was rerun. See [P10-R1](phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog). |
 | DW-016 | Make payment amount and currency order-owned before production commerce use | 2026-11-09 | Implemented and verified in code/local Docker: saved order terms drive provider requests and records; unsupported Razorpay currency fails before payment side effects; actual provider terms are validated without silent INR substitution. Nine real sandbox cases and all-tenant mismatch rejection passed. See local evidence `TestResults/DockerStorage/currency-fix-20261109/`. Azure rollout/acceptance and the already-captured historical mismatch remain separate, not claimed complete. |
 | DW-005 | Add a repo-owned skills layer for repeated specialist workflows | 2026-04-07 | Added `.github/skills/README.md`, introduced the first repo-owned skill for Azure deployment operations, and extended AI validation/discovery surfaces to govern skills alongside prompts and agents. |
 | DW-008 | Restore the strict `dotnet build --warnaserror` completion-check gate to green | 2026-04-10 | Re-ran the completion-check build gate. `dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /warnnotaserror:NU1701` now completes successfully; only the known `NU1701` package-compatibility warnings remain visible in output. |

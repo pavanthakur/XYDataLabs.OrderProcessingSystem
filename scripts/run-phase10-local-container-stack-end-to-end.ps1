@@ -245,10 +245,8 @@ try {
     }
 
     if ($PaymentSuite -in @('deterministic', 'both')) {
-        Invoke-LoggedCommand -Name 'tenantc-routing-regression' -Script {
-            & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-local-payment-tests.ps1') -Mode deterministic -TenantCode TenantC -ProviderType Razorpay
-        } | Out-Null
-        $summary.steps += @{name='tenantc-routing-regression';status='passed'}
+        # Dedicated-registry characterization lives in test-phase10-payment-fixture.ps1.
+        # The runtime matrix discovers all active tenants; never restrict it to a sample tenant.
         Invoke-LoggedCommand -Name 'payments-deterministic' -Script {
             & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/run-local-payment-tests.ps1') -Mode deterministic -AcceptanceProfile $AcceptanceProfile
         } | Out-Null

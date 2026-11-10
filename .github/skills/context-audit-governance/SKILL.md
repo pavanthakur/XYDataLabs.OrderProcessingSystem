@@ -73,12 +73,13 @@ Open the relevant sources before running the audit:
 
 ## Common Checks
 
-- `.github/copilot-instructions.md` project or test tables missing live projects
+- Any maintained project/test inventory contradicting live projects; short `AGENTS.md`/Copilot entry files intentionally route to owners rather than duplicate tables
 - Repo memory describing packages or CQRS tooling that no longer exists
 - Prompt indexes that omit newer prompts, agents, or skills
 - Architecture phase/status surfaces disagreeing on completed phase or next phase
 - AI-facing markdown or tracked config samples containing credential-like literals
 - AI-facing guidance missing the strict Azure runtime target convention or the Phase 10 environment contract validation path
+- Audit prompts still expecting removed Copilot inventories or hardcoding a historical next phase instead of checking the relevant approved plan and evidence
 
 ## Output Guidance
 
