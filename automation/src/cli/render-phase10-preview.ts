@@ -161,8 +161,7 @@ async function main(): Promise<void> {
       if (integrationDuplicate) reportInputIssues.push("Unexpected or duplicate integration TRX artifact is present.");
       if (!integrationDuplicate && entries.length === 1) integrationTrx = await readText(join(root, "integration"), entries[0]);
       const inventoryFiles = integrationEntries.filter(name => /^integration-\d+\.json$/i.test(name));
-      if (integrationEntries.some(name => /\.json$/i.test(name) && !/^integration-1\.json$/i.test(name)) ||
-          inventoryFiles.length > 1 || (inventoryFiles.length === 1 && inventoryFiles[0] !== "integration-1.json")) {
+      if (inventoryFiles.length > 1 || (inventoryFiles.length === 1 && inventoryFiles[0] !== "integration-1.json")) {
         reportInputIssues.push("Unexpected or duplicate integration inventory artifact is present.");
       }
       if (!integrationDuplicate && inventoryFiles.length === 1 && inventoryFiles[0] === "integration-1.json") {

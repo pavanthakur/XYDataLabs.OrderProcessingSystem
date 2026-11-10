@@ -262,6 +262,28 @@ try {
         if ($sandbox.status -eq 'failed') { $runFailed=$true } elseif ($sandbox.status -ne 'passed') { $runPartial=$true }
     }
     if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Fixture lock remains; refuse messaging/restart.' }
+    # Derived from this run's own evidence: dedicated-tier tenants come from the seed contract, never a hardcoded tenant name.
+    $dedicatedTenants = @((Get-Content (Join-Path $runDir 'seed-contract.json') -Raw | ConvertFrom-Json).tenants |
+        Where-Object { $_.status -eq 'Active' -and $_.tier -eq 'Dedicated' } | ForEach-Object { $_.tenant })
+    $fixtureCheck = @((Get-Content (Join-Path $runDir 'foundations/summary.json') -Raw | ConvertFrom-Json).results | Where-Object { $_.name -eq 'fixture-regression' })
+    $routingSuites = @(if ($PaymentSuite -in @('deterministic', 'both')) { 'deterministic' }; if ($PaymentSuite -in @('sandbox', 'both')) { 'sandbox' })
+    $routingMissing = @()
+    foreach ($routingSuite in $routingSuites) {
+        $routingRows = @(Get-ChildItem $paymentReportRoot -Directory -Filter "payment-acceptance-$routingSuite-*" | ForEach-Object {
+            $routingSummary = Join-Path $_.FullName 'summary.json'
+            if (Test-Path $routingSummary) { (Get-Content $routingSummary -Raw | ConvertFrom-Json).results.rows }
+        })
+        foreach ($dedicatedTenant in $dedicatedTenants) {
+            if (-not @($routingRows | Where-Object { $_.tenantCode -eq $dedicatedTenant -and $_.journeyOutcome -eq 'completed' -and $_.verificationOutcome -eq 'passed' }).Count) {
+                $routingMissing += "$routingSuite/$dedicatedTenant"
+            }
+        }
+    }
+    $routingFixturePassed = $fixtureCheck.Count -eq 1 -and $fixtureCheck[0].status -eq 'passed'
+    $routingStatus = if ($dedicatedTenants.Count -eq 0) { 'blocked' }
+        elseif ($routingFixturePassed -and $routingMissing.Count -eq 0) { 'passed' } else { 'failed' }
+    $summary.steps += @{name='tenantc-routing-regression';status=$routingStatus;dedicatedTenants=$dedicatedTenants;missingVerifiedJourneys=$routingMissing;fixtureRegression=$routingFixturePassed;derivedFrom='foundations fixture-regression plus dedicated-tenant verified journeys in each selected payment suite'}
+    if ($routingStatus -eq 'failed') { $runFailed = $true } elseif ($routingStatus -eq 'blocked') { $runPartial = $true }
     try {
         Invoke-LoggedCommand -Name 'currency-order-entry' -Script { npm --prefix (Join-Path $workspaceRoot 'automation') run test:payment-currency:browser } | Out-Null
         $summary.steps += @{name='currency-order-entry';status='passed'}
