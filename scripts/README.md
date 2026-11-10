@@ -138,6 +138,14 @@ pwsh -NoProfile -File scripts/tests/test-ai-customization.ps1
 
 Optional `-RepositoryRoot` selects the source repository; `-ArtifactDirectory` must stay under its TestResults directory. The runner preserves per-case logs and `summary.json` under `TestResults/AIGovernance/`; fixtures are synthetic/disposable but are not automatically deleted. A permission-dependent NOT TESTED case yields a partial packet/nonzero exit, not PASS. The existing governance CI runs this on Windows/Linux and publishes sanitized logs, never fixture copies.
 
+Test the runner's process-level exit contract separately:
+
+```powershell
+pwsh -NoProfile -File scripts/tests/test-ai-customization-exit.ps1
+```
+
+This executes the real aggregation/terminal code in fresh PowerShell processes with GitHub's appended exit-code check. Fourteen synthetic cases cover inherited native exit codes 0/1, complete success, failed/skipped cases, missing/extra results and recorded/raised errors. These are exit-status unit tests, not additional governance or model-behavior acceptance. Complete success exits 0 explicitly; failures and incomplete coverage stay nonzero. Use a fresh artifact directory; the helper refuses to overwrite prior evidence. CI preserves both this summary and the full regression summary independently.
+
 **When to Use**:
 - After changing `.github/copilot-instructions.md`
 - After adding or editing files under `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/`

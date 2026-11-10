@@ -7,6 +7,7 @@ on:
       - 'AGENTS.md'
       - 'memories/repo/**'
       - 'scripts/tests/test-ai-customization.ps1'
+      - 'scripts/tests/test-ai-customization-exit.ps1'
       - '.github/copilot-instructions.md'
       - '.github/completion-check-rubric.md'
       - '.github/instructions/**'
@@ -27,6 +28,7 @@ on:
       - 'AGENTS.md'
       - 'memories/repo/**'
       - 'scripts/tests/test-ai-customization.ps1'
+      - 'scripts/tests/test-ai-customization-exit.ps1'
       - '.github/copilot-instructions.md'
       - '.github/completion-check-rubric.md'
       - '.github/instructions/**'
@@ -68,6 +70,11 @@ jobs:
         shell: pwsh
         run: scripts/tests/test-ai-customization.ps1 -ArtifactDirectory TestResults/AIGovernance/ci
 
+      - name: Test runner process exit status with the GitHub pwsh wrapper
+        if: always()
+        shell: pwsh
+        run: scripts/tests/test-ai-customization-exit.ps1 -ArtifactDirectory TestResults/AIGovernance/ci-exit
+
       - name: Preserve sanitized governance test results
         if: always()
         uses: actions/upload-artifact@v6
@@ -76,6 +83,8 @@ jobs:
           path: |
             TestResults/AIGovernance/ci/summary.json
             TestResults/AIGovernance/ci/logs/*.log
+            TestResults/AIGovernance/ci-exit/summary.json
+            TestResults/AIGovernance/ci-exit/logs/*.log
           if-no-files-found: warn
           retention-days: 14
 

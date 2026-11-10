@@ -143,4 +143,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $artifact 'summary.json'), (@{status=$status;expectedCount=$expectedCount;actualCount=$results.Count;error=$runError;kind='structural-regression';runtimeAcceptance='not-tested';results=@($results)} | ConvertTo-Json -Depth 8), $utf8)
     Write-Output "Structural regression summary: $status; failed=$failed; not-tested=$notTested; artifacts=$artifact"
 }
-if ($failed -or $notTested -or $results.Count -ne $expectedCount) { exit 1 }
+if ($failed -or $notTested -or $runError -or $results.Count -ne $expectedCount) { exit 1 }
+# Expected-failure validator subprocesses leave LASTEXITCODE=1. Do not leak that
+# value into a successful GitHub pwsh step after all required cases passed.
+exit 0
