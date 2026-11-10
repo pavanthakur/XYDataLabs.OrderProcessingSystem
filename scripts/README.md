@@ -908,6 +908,8 @@ What it does:
 2. Starts the Docker Dev HTTP stack if needed, unless you explicitly opt out with `-SkipStartIfNeeded`.
 3. Runs the shared NFR proof engine with a Docker proof label.
 4. Writes Docker parity artifacts under `TestResults\Phase10\docker-preazure\phase10-docker-nfr-<timestamp>\nfr`.
+5. Runs two measured operational drills: approved replay visibility (limit 60 s, via `test-local-messaging.ps1`) and a consumer-outage backlog recovery drill (consumers stopped, 25-message backlog published, consumers started; requires 0 lost, 0 duplicate effects, recovery within 30 minutes). Results: `replay-proof/functions-proof.json` and `consumer-outage-drill.json`.
+6. After the NFR proof and the Docker E2E hook (`run-phase10-docker-dev-e2e-hook.ps1 -PaymentSuite both -VerifyPersistence`) both ran on the same clean commit, `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` produces one PASS / INCOMPLETE / FAIL verdict (exit 0 only on PASS).
 
 Useful switches:
 

@@ -4,35 +4,32 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Checkpoint Provenance
 
-- Review revision: `290d0fba`
-- Worktree state: `DIRTY`
-- Evidence status: `BLOCKED`
-- Evidence revision: `UNKNOWN`
+- Review revision: `f2bd3587`
+- Worktree state: `CLEAN`
+- Evidence status: `CURRENT_PASS`
+- Evidence revision: `f2bd3587`
 - Evidence environment: `docker-dev`
-- Evidence scope: `baseline`
-- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261110-localacceptance001/local-acceptance-reconciliation.json`
+- Evidence scope: `non-azure-local`
+- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-024241244/phase10-acceptance-reconciliation.json`
 
 ## Last Session
 
-- Updated: 2026-11-11. Branch: `dev`; base revision `290d0fba`; worktree remains dirty. The approved local Docker acceptance command ran without `-ResetData`; a separate NFR run followed a narrow PowerShell argument-binding fix. Docker E2E passed selected foundations, isolated integration, identity, six deterministic and six sandbox positives (all active tenants × both providers), Razorpay negative cases, messaging/Functions effects, persistence restart, settings restoration, and storage/log rotation. NFR functional, tenant, payment, security/identity and 100-message performance checks passed (100/100 inbox/effects, P95 1.907s); scripted operational/recovery sub-suites were skipped. A separate inventory/notifications restart diagnostic passed. Two L5-R reporting defects were fixed; fresh foundations and 27 report tests pass, with 18/18 runner checks, five .NET inventories reconciled, and 61/61 unique frontend identities. The local environment contract passed 178/0. See the reconciliation artifact for exact run paths and dirty diff hashes.
-- Phase 10 remains open: the original HTML report is sealed but provisional/BLOCKED and was not regenerated after the reporting fix; sandbox payment cases were not repeated just to refresh it. Order continuation remains DW-023 deferred; rollback is blocked because the old image is absent; replay/recovery-time failure drills remain unrun. No Azure operations, reset, commit or push were performed. Do not interpret the packet's bounded `passed` status or completion seal as total Phase 10 acceptance.
-- AI-context token optimization through `46f4309` remains byte-estimated, not token-measured; three-task measurement and DW-027 remain pending. Generated evidence/build folders are Git-ignored, but Git ignore does not prove Copilot context exclusion. Seven skills remain canonical.
-- Guidance checks: AI validator, `git diff --check` and the 14-case runner exit-status test PASS locally. Hosted [run 42802711936](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/42802711936) at `1000ff6`: Validate AI Customization passed on Windows/Linux (DW-026 closed). The separate Drift Scanner workflow was fixed in `d77b895`/`af5bec3` and passes in hosted CI.
-- DW-027: Codex CLI untested; Copilot CLI rejected its configured model and `auto` timed out. No behavioral PASS, eleven of twelve scenarios unexecuted (`TestResults/AIGovernance/remediation-20261110/summary.json`).
-- [Phase 10 findings](../../docs/internal/phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog): DW-025 and DW-026 closed. DW-027 (controlled-client acceptance) remains open; parking is not a waiver.
+- Updated: 2026-11-11. Branch `dev`. Non-Azure local acceptance **PASS** on one clean committed candidate `f2bd3587` (commits `5a117599`, `d84b9f60`, `0a5e4602`, `f2bd3587`; later commits are documentation only). Verdict from `npm --prefix automation run reconcile:phase10-acceptance` over E2E run `phase10-docker-http-20261111-024241244` and NFR run `phase10-docker-nfr-20261111-023057463`: sealed completion, foundations, smoke, integration, deterministic and sandbox payments (3 tenants x 2 providers), TenantC routing, messaging/Functions, persistence restart, restoration, L5-R report (no issues, all coverage measured), NFR categories, 100-message burst (P95 2.0 s), approved replay 1.07 s (limit 60 s), consumer-outage backlog recovery 26 s with 0 lost/0 duplicate (limit 30 min), and rollback executed and restored.
+- Fixes made on the way: skipped/blocked NFR categories are `incomplete`, never `passed`; rollback prerequisite no longer blocks drills; non-ASCII test names broke discovery reconciliation (UTF-8 helper); `tenantc-routing-regression` is now derived from run evidence; report no longer flags integration bookkeeping JSON.
+- Rollback proof scope: a locally built previous inventory image (`phase10-prev-290d0fba`, built from a clean export of `290d0fba`, provenance under `TestResults/Phase10/rollback-baseline/290d0fba/`) swapped in and restored. No application source differs from the base, so this proves the swap/restore mechanism and schema readiness, not a behavioural difference, and is not an ACA revision rollback.
+- Not done: L6 CI parity (workflow `99`) and every Azure stage are NOT-RUN; DW-023 and DW-024 stay deferred to Phase 11. Nothing was pushed. `origin/dev` showed `d84b9f60` mid-session although no push was run from here; investigate before any push.
+- DW-027 (controlled-client behavioral acceptance) remains open; AI-context token measurement is still byte-estimated.
 
 ## Verified Evidence And Limits
 
-- Current local evidence: Docker HTTP, baseline profile, cold build, payment suites `both`, persistence restart. E2E run `phase10-docker-http-20261110-localacceptance001`; NFR run `phase10-docker-nfr-20261111-001359480`. Final read-only seed and storage reports are under the NFR run directory. Environment-contract validator: 178 passes / 0 failures. No Azure state was read or changed.
-- Candidate binding: base `290d0fba499f6fea70fe6e1b8e6950dd9432302b`, dirty tree. `local-acceptance-reconciliation.json` records SHA-256 identity for the tracked diff and untracked files; this is not committed-revision certification.
-- Docker packet status is PASS for its selected bounded stages. It explicitly marks order continuation deferred and TenantC routing regression not-run in that packet; the separate mocked generalized fixture regression passed in foundations. NFR report passed functional, tenant, payments, security/identity and the 100-message burst; operational/recovery were explicitly skipped.
-- Final limits: L5-R full-packet dashboard remains BLOCKED/provisional; reporting fixes have passing standalone regression evidence but are not integrated into the sealed E2E packet. Overall Phase 10 is incomplete. Rollback is blocked because no retained previous inventory image was present. No replay-under-60s or recovery-under-30m failure drill was executed. DW-023 order continuation remains deferred. Azure, visible OpenPay 3DS challenge, Razorpay S2S, fulfillment and installments are not certified.
+- The PASS covers only the `non-azure-local` scope on `f2bd3587`: it does not certify Phase 10 completion, Azure, CI parity, fulfillment, installments, unresolved-payment recovery, a visible OpenPay 3DS challenge or Razorpay S2S.
+- Images are locally built (no registry digest); the candidate is identified by commit and local image IDs.
+- Docs edits after `f2bd3587` change no code; rerun the reconciler if any code changes.
 
 ## Pending / Next Actions
 
-1. Complete L5-R by resolving missing per-test and frontend coverage evidence, then reconcile the HTML against Docker and NFR source results without promoting provisional data.
-2. Plan separately approved local operational/recovery drills; rollback cannot run until a verified previous inventory image is available. Do not retry any ambiguous charge.
-3. Keep Azure outside this approval; do not start it automatically. Phase 11 remains separate in its [implementation plan](../../docs/internal/phase11-implementation-plan.md) and [Deferred Work Log](../../docs/internal/DEFERRED-WORK-LOG.md).
+1. Phase 10 closes only after L6 (architecture conformance, CI workflow `99` on a pushed SHA) and the separately approved Azure stages. Push and Azure need explicit approval.
+2. Phase 11 (DW-023/DW-024) is separate: [plan](../../docs/internal/phase11-implementation-plan.md), [Deferred Work Log](../../docs/internal/DEFERRED-WORK-LOG.md).
 
 ## Recent Key Facts And Safety Boundaries
 
@@ -45,4 +42,4 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## If Returning After A Long Gap
 
-Read this short checkpoint, inspect Git status/HEAD and the relevant Phase 10 plan section, then check only evidence material to the requested task. Report missing evidence or conflicting sources explicitly. Phase 10 is paused; the next implementation candidate is L5-R after approval, not an automatic Azure deployment or payment reset.
+Read this checkpoint, inspect Git status/HEAD and the Phase 10 plan section, then check only evidence material to the task. Phase 10 local acceptance passed; the next step is a separately approved L6/CI parity run, not an automatic push, Azure deployment or payment reset.
