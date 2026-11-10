@@ -128,11 +128,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - `DbInitializer.SeedDedicatedTenants()` reads `DedicatedTenantConnectionStrings` from `IConfiguration` to seed dedicated tenant databases. Connection strings are never stored in the `Tenants` table.
 
 ## Required test coverage
-
-- Architecture (`MultiTenantSchemaTests`, `EfMigrationDriftTests`): migration drift, tenant composite indexes, query filter on tenant-owned entities (not `Tenant`), no internal IDs in customer DTOs, tier constants/default, `TenantRegistryDbContext` has no filter.
-- Middleware (`TenantMiddlewareTests`): 400 missing/unknown tenant code; 403 Suspended/Decommissioned; runtime-configuration endpoint works without auth.
-- SharedPool isolation (`TenantIsolationTests`): per-entity filter isolation; tests create their own tenants, no reliance on baseline rows.
-- Dedicated (`DedicatedTenantTests`): unprovisioned → 400 even if Suspended (unresolvable wins); provisioned Suspended/Decommissioned → 403; provisioned Active → 200 routed to the dedicated DB; coexistence with SharedPool; physical isolation verified by direct SQL on both databases.
+Test inventory per area (architecture, middleware, SharedPool isolation, Dedicated): `.github/skills/cqrs-backend-implementation/tenant-test-coverage.md`.
 
 ### New feature guardrail
 When adding a new tenant-owned entity or feature:

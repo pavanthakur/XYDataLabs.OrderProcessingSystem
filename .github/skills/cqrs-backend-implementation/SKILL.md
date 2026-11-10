@@ -30,6 +30,7 @@ Open the relevant sources before changing backend behavior:
 
 - `.github/instructions/clean-architecture.instructions.md`
 - `.github/skills/cqrs-backend-implementation/clean-architecture-patterns.md` for handler, caching, observability and tenancy-wiring detail
+- `.github/skills/cqrs-backend-implementation/tenant-test-coverage.md` when writing tenant, payment or migration tests
 - `.github/instructions/multitenant-payment-schema.instructions.md` when the change touches payment or tenant-owned data
 - `.github/instructions/ef-migrations.instructions.md` when Infrastructure or migrations change
 - `.github/agents/cqrs-backend.agent.md`
