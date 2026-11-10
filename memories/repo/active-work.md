@@ -15,11 +15,11 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 ## Last Session
 
 - Updated: 2026-11-10. Branch: `dev`; baseline: `d84cd8e` (`Skills file updated`), clean before these approved corrections. This is not the revision certified by the historical payment report.
-- Current task: AI-context token optimization (trim duplicated file instructions; DW-026 exit-status fix `a82afab` verified locally only). Seven skills remain canonical. No application, runtime or global-settings changes.
+- Current task: AI-context token optimization (file instructions trimmed and `applyTo` narrowed, `1000ff6`). Seven skills remain canonical. No application, runtime or global-settings changes.
 - Phase 10 remains **paused** (reporting and Azure work planned, not implemented). Phase 11 not started. None of the prior implementation/plans (`6c467a5`, `b3f7ed5`, `802bdfe`) establishes Azure acceptance.
-- Guidance checks: AI validator, `git diff --check` and the 14-case runner exit-status test PASS locally. Hosted CI at `d84cd8e` ([run 42795579199](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/42795579199)) passed all 29 cases but exited 1 (DW-026); the fix is not yet verified in hosted CI.
+- Guidance checks: AI validator, `git diff --check` and the 14-case runner exit-status test PASS locally. Hosted [run 42802711936](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/42802711936) at `1000ff6`: Validate AI Customization passed on Windows/Linux (DW-026 closed). The separate Drift Scanner workflow fails (`Invoke-Expression` in `scripts/test-phase10-payment-fixture.ps1`), also on earlier commits; uninvestigated.
 - DW-027: Codex CLI untested; Copilot CLI rejected its configured model and `auto` timed out. No behavioral PASS, eleven of twelve scenarios unexecuted (`TestResults/AIGovernance/remediation-20261110/summary.json`).
-- [Phase 10 findings](../../docs/internal/phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog): DW-025 closed locally. DW-026 (hosted CI) and DW-027 (controlled-client acceptance) remain open; parking is not a waiver.
+- [Phase 10 findings](../../docs/internal/phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog): DW-025 and DW-026 closed. DW-027 (controlled-client acceptance) remains open; parking is not a waiver.
 
 ## Verified Evidence And Limits
 
@@ -32,7 +32,7 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Pending / Next Actions
 
-1. Review the remediation diff. No automatic commit/push, additional runtime work, permission broadening or gate waiver. Overall acceptance remains incomplete until DW-026/027 close with evidence.
+1. Review the diff. No automatic commit/push, additional runtime work, permission broadening or gate waiver. Overall acceptance remains incomplete until DW-027 closes with evidence; measure token usage over the next three material tasks (pending, not measured savings).
 2. With separate implementation approval, resolve the governance runner's successful-summary/nonzero-exit mismatch and recheck hosted CI; do not seek extra local privilege merely to repeat an already observed hosted symlink test. DW-027 still needs controlled Codex setup and a supported responsive Copilot model for six scenarios per tool. Publication/dispatch needs separate approval; three-task efficiency metrics remain pending, not measured savings.
 3. Resume Phase 10 only after approval: start with **L5-R unified HTML reporting and coverage**. Follow the [Phase 10 pause/resume checkpoint](../../docs/internal/phase10-implementation-checklist.md#remaining-pre-azure-implementation-board); that checklist owns the remaining scope and Azure gates.
 4. Phase 11 scope remains in its [implementation plan](../../docs/internal/phase11-implementation-plan.md): P11-W0 payment UX first, with provider-switch safety and generic-tenant regression work tracked separately. Recovery/capability exclusions remain in the [Deferred Work Log](../../docs/internal/DEFERRED-WORK-LOG.md).
