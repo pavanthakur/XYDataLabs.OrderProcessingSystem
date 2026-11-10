@@ -29,6 +29,7 @@ Do not use this skill for:
 Open the relevant sources before changing backend behavior:
 
 - `.github/instructions/clean-architecture.instructions.md`
+- `.github/skills/cqrs-backend-implementation/clean-architecture-patterns.md` for handler, caching, observability and tenancy-wiring detail
 - `.github/instructions/multitenant-payment-schema.instructions.md` when the change touches payment or tenant-owned data
 - `.github/instructions/ef-migrations.instructions.md` when Infrastructure or migrations change
 - `.github/agents/cqrs-backend.agent.md`
