@@ -14,6 +14,7 @@ The user wants to add a new feature. Follow this mandatory workflow in order. Do
 - Before tests or commands, inspect their side effects. Database queries/mutations, Docker lifecycle/reset, provider transactions/refunds and Azure/directory operations require explicit scoped approval. Generating/reviewing a migration under the approved feature plan does not authorize applying it to a database. Destructive resets need immediate per-operation approval.
 - Git staging, commit, push, merge, tag/branch creation and other Git writes require explicit authorization. Prepare the reviewed diff/file list and proposed commands; passing tests does not grant Git authorization. Preserve unrelated changes and stop to reconcile overlapping work.
 - If a required check cannot run safely or lacks approval/evidence, report BLOCKED/NOT TESTED and retain the acceptance requirement. Do not silently waive it, start another phase or treat the feature as complete.
+- If the approved task changes shared AI instructions, prompts, agents, skills, or governance documentation, apply the four gates from `docs/AI-OPERATING-MODEL.md`: complete discovery and the knowledge-preservation matrix first, present the design and exact file list for approval, then implement and perform acceptance. Do not treat this feature prompt as implementation authorization for AI governance changes.
 
 ## Step 1: Gather Requirements
 
@@ -23,8 +24,20 @@ Ask the user:
 3. "Is this entity tenant-owned? (default: yes — all business entities require TenantId)"
 4. "Does it relate to any existing entity? (e.g., FK to Order, Customer)"
 5. "Does this feature add or rename any deployed runtime dependency or automation-visible Azure service? (e.g., Container App, Function App, queue/topic/subscription, Key Vault secret family, App Insights dependency, gateway/UI endpoint)"
+6. "Does this feature change the React frontend, shared frontend packages, API SDK contracts, tenant-session behavior, payment UI, or browser navigation? (default: no)"
 
 Once answered, confirm the plan before proceeding.
+
+## Step 1B: Classify Feature Surfaces
+
+Before creating backend files, classify the approved scope as backend-only, frontend-only, or full-stack:
+
+- Backend work follows Steps 2–10 through the **CQRS Backend** skill and this prompt.
+- Frontend work follows the **Frontend Feature Development** skill and `.github/instructions/frontend.instructions.md`.
+- Payment-provider or payment-flow work also follows the **Payment Provider Development** skill.
+- Full-stack work must keep backend DTO/API changes, the frontend API SDK, tenant-session behavior, UI tests, and runtime validation synchronized.
+- Do not force a frontend-only task through the backend entity/migration sequence. Do not treat a frontend mock or page test as proof of backend or provider acceptance.
+- If a new reusable workflow is proposed, prefer orchestrating an existing specialist skill over creating a duplicate feature-development skill; justify any new skill against the skill quality contract.
 
 ## Step 2: Domain Entity
 
@@ -176,6 +189,16 @@ Rules:
 
 After targeted checks, the approved feature must satisfy the full build/test requirement below. Inspect the test lane's configuration and side effects first; do not run database/provider/cloud operations without the scoped approval above. Report a missing required run as BLOCKED/NOT TESTED, not a waived or passed gate.
 
+If the approved scope includes frontend work, also run the affected frontend checks from `frontend/`:
+
+```powershell
+npm run typecheck
+npm run test:web
+npm run build
+```
+
+Run browser verification when navigation, callbacks, or visible payment behavior changes. Report unavailable browser or runtime evidence as BLOCKED/NOT TESTED.
+
 Build/test commands for the approved scope:
 ```powershell
 dotnet build XYDataLabs.OrderProcessingSystem.sln
@@ -203,6 +226,7 @@ Before committing, perform a self-review against this checklist:
 | IAppDbContext updated? | `DbSet<T>` added to both concrete DbContext and `IAppDbContext` interface |
 | No tenant params in controller? | No `TenantId`/`TenantCode`/`TenantExternalId` in action params or request DTOs |
 | All tests pass? | `dotnet test` exits with 0 failures |
+| Frontend contract and tests? | SDK/types, component tests, typecheck, build, and required browser checks are aligned for frontend scope |
 | Azure runtime target impact handled? | New automation-visible Azure dependencies update `runtime-targets.json`, TypeScript contract, owning workflow/script, and Phase 10 environment contract validator together |
 
 ## Step 11: Prepare Commit — Explicit Approval Required

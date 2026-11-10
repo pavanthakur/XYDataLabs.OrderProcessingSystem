@@ -4,8 +4,8 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Checkpoint Provenance
 
-- Review revision: `802bdfe`
-- Worktree state: `DIRTY`
+- Review revision: `f52b06c`
+- Worktree state: `CLEAN`
 - Evidence status: `HISTORICAL`
 - Evidence revision: `UNKNOWN`
 - Evidence environment: `docker-dev`
@@ -14,11 +14,11 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Last Session
 
-- Updated: 2026-11-10. Branch at review: `dev`; repository baseline: `802bdfe` (clean before Batch 1). This is the review baseline, not the revision certified by the historical payment report.
-- Current task: approved governance remediation and commit preparation. Batches 1–3 tooling is implemented. DW-025's narrow orchestration/test correction is locally verified; Batch 4 acceptance remains blocked. Resolve delivery commit identity from Git history; the historical report does not certify it. No new skills or global model settings.
+- Updated: 2026-11-10. Branch at review: `dev`; repository baseline: `f52b06c` (clean and aligned with `origin/dev`). This is the current governance baseline, not the revision certified by the historical payment report.
+- Current task: approved AI framework gap review and controlled expansion. The existing five skills remain preserved; frontend and payment-provider guidance was added only after live-surface review. DW-025's narrow orchestration/test correction is locally verified; DW-026/DW-027 acceptance remains blocked. No Azure or Phase 10 runtime work was started.
 - Phase 10 remains **paused**. Its reporting and Azure work are planned, not implemented by this governance task. Phase 11 is not started.
 - Existing commits: `6c467a5` contains tenant identity and Phase 10 payment/Docker implementation; `b3f7ed5` contains dropdown styling and P11-W0 planning; `802bdfe` records the remaining Phase 10/11 plans. None alone establishes Azure acceptance.
-- Latest governance regression: **28 passed, one symlink NOT TESTED, exit 1/partial**. Evidence: `TestResults/AIGovernance/regression-57932721cb3d47ef9e7cba5ca5c7e517/summary.json`. AI/docs/diff checks passed; five skills remain canonical. No elevation or runtime access. Hosted CI has not run; publishing this candidate/dispatch requires separate approval.
+- Latest historical governance regression: **28 passed, one symlink NOT TESTED, exit 1/partial**. Evidence: `TestResults/AIGovernance/regression-57932721cb3d47ef9e7cba5ca5c7e517/summary.json`. The current local AI customization and documentation checks pass for seven skills; no elevation or runtime access was used. Hosted CI has not run; publishing this candidate/dispatch requires separate approval.
 - Codex CLI `0.164.0-alpha.11.1` remains behaviorally untested. Restricted Copilot continuation was attempted: CLI reports `1.0.83-5`, execution uses runtime `1.0.56`. Configured model rejected; identical-permission per-run `auto` timed out after about two minutes and only verified owned processes were stopped. One scenario attempted/two launches; no behavioral PASS, eleven other scenarios unexecuted. Evidence: `TestResults/AIGovernance/remediation-20261110/summary.json`. Startup confirmed five skill descriptors and disabled mutation/MCP tools, not full guidance application or VS Code behavior.
 - [Phase 10 findings](../../docs/internal/phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog): DW-025 **closed locally** (environment contract 178 pass/0 fail; unchanged checker; mocked TenantC/arbitrary-tenant prepare/restore and unfiltered native matrix checks pass). Runtime wrapper's redundant sample-filtered invocation was removed. DW-026 symlink/hosted CI and DW-027 supported-model/controlled-client acceptance remain open. Parking is not a waiver.
 

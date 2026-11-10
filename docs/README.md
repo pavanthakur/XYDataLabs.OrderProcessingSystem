@@ -12,8 +12,9 @@ Choose the path that matches your intent:
 4. `guides/deployment/README.md` — deployment and infrastructure guidance, with the current Phase 10 Azure container-app path first and legacy bootstrap history below
 5. `guides/configuration/README.md` — secrets, identity, and environment guidance
 6. `reference/quick-command-reference.md` — daily commands and validation
-7. `architecture/decisions/` — architecture constraints and ADRs
-8. `internal/README.md` — active internal trackers and backlog, including the Phase 10 pre-Azure architecture baseline and execution checklist
+7. `reference/repository-reference.md` — current architecture, workspace ownership, AI routing, validation lanes, and safety boundaries
+8. `architecture/decisions/` — architecture constraints and ADRs
+9. `internal/README.md` — active internal trackers and backlog, including the Phase 10 pre-Azure architecture baseline and execution checklist
 
 ## Areas
 
