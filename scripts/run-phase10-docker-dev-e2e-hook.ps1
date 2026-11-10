@@ -53,7 +53,7 @@ $storageReportScript = Join-Path $PSScriptRoot 'inspect-phase10-docker-storage.p
 $acceptanceLockPath=Join-Path $workspaceRoot 'TestResults/phase10-docker-acceptance.lock'
 $acceptanceLockOwned=$false
 
-New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $runRoot -ErrorAction Stop | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $rootMarkerPath) -Force | Out-Null
 $previousPhase10RunId = $env:PHASE10_RUN_ID
 $previousPhase10RunRoot = $env:PHASE10_RUN_ROOT
@@ -110,7 +110,25 @@ $runSummary = [ordered]@{
     coldBuild = [bool]$ColdBuild
     paymentSuite = $PaymentSuite
     acceptanceProfile = $AcceptanceProfile
+    gitProvenance = @{ start = $null; finish = $null }
     error = $null
+}
+
+function Get-Phase10GitSnapshot {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+    try {
+        $git = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
+        $commit = @(& $git.Source -C $Directory rev-parse --verify HEAD 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $commit.Count -ne 1 -or $commit[0] -cnotmatch '^([0-9a-f]{40}|[0-9a-f]{64})$') {
+            throw 'Could not resolve a valid Git commit.'
+        }
+        $changes = @(& $git.Source --no-optional-locks -C $Directory status --porcelain=v1 --untracked-files=normal 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'Could not inspect Git worktree status.' }
+        return @{ commit = $commit[0]; worktree = $(if ($changes.Count -gt 0) { 'dirty' } else { 'clean' }) }
+    } catch {
+        Write-Warning 'Git provenance is unavailable; candidate identity remains unverified.'
+        return @{ commit = $null; worktree = 'unknown' }
+    }
 }
 
 function Write-RunSummary {
@@ -158,9 +176,63 @@ function Write-RunSummary {
     Set-Content -Path $runSummaryPath -Value $summaryLines -Encoding utf8
 }
 
+function Invoke-Phase10Preview {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+    $automationRoot = Join-Path $workspaceRoot 'automation'
+    $previewLog = Join-Path $Directory 'phase10-preview.log'
+    & npm --prefix $automationRoot run report:phase10-preview -- $Directory 2>&1 |
+        Protect-Phase10Log | Tee-Object -FilePath $previewLog | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $Directory 'phase10-preview.html') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $Directory 'index.html') -PathType Leaf)) {
+        throw 'Phase 10 preview generation failed; inspect the sanitized preview log.'
+    }
+}
+
+function Write-Phase10Completion {
+    param([Parameter(Mandatory = $true)][string]$Directory, [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Summary)
+    $paths = @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html')
+    foreach ($name in $paths) {
+        $item = Get-Item -LiteralPath (Join-Path $Directory $name) -Force
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Length -gt 2MB) {
+            throw 'Finalization artifact is not a bounded regular file.'
+        }
+    }
+    $packet = Get-Content -LiteralPath (Join-Path $Directory 'acceptance-packet.json') -Raw | ConvertFrom-Json
+    $savedSummary = Get-Content -LiteralPath (Join-Path $Directory 'run-summary.json') -Raw | ConvertFrom-Json
+    if ($Summary.status -notin @('passed', 'partial', 'failed') -or
+        [string]::IsNullOrWhiteSpace($Summary.runId) -or
+        $Summary.runId -cne (Split-Path -Leaf $Directory) -or
+        $savedSummary.runId -cne $Summary.runId -or
+        $packet.status -cne $Summary.status -or $savedSummary.status -cne $Summary.status -or
+        $packet.runRoot -cne $savedSummary.runRoot -or $savedSummary.runRoot -cne $Directory) {
+        throw 'Finalization artifacts have inconsistent run identity or status.'
+    }
+    $hashes = [ordered]@{}
+    foreach ($name in $paths) {
+        $hashes[$name] = (Get-FileHash -LiteralPath (Join-Path $Directory $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    $record = [ordered]@{
+        schema = 'phase10-completion-v3'
+        runId = $Summary.runId
+        status = $Summary.status
+        sha256 = $hashes
+    }
+    $temporary = Join-Path $Directory ('phase10-completion-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    $destination = Join-Path $Directory 'phase10-completion.json'
+    try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($record | ConvertTo-Json -Depth 5))
+        $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        [IO.File]::Move($temporary, $destination)
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+    }
+}
+
 try {
     $handle=[IO.File]::Open($acceptanceLockPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     try{$bytes=[Text.Encoding]::UTF8.GetBytes($runRoot);$handle.Write($bytes,0,$bytes.Length);$acceptanceLockOwned=$true}finally{$handle.Dispose()}
+    $runSummary.gitProvenance.start = Get-Phase10GitSnapshot -Directory $workspaceRoot
     if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Payment fixture recovery is required before deployment.' }
     if (@(Get-ChildItem (Join-Path $workspaceRoot 'TestResults') -Filter 'integration-active-*.lock').Count) { throw 'Active/interrupted integration execution must be reviewed before deployment.' }
     Assert-ScriptExists -Path $stackStartScript
@@ -205,15 +277,21 @@ try {
     }
 
     $runSummary.status = 'passed'
-    Write-Host 'Phase 10 Docker dev HTTP end-to-end validation hook completed successfully.' -ForegroundColor Green
+    Write-Host 'Phase 10 Docker dev HTTP execution completed; finalization is pending.' -ForegroundColor Cyan
 }
 catch {
     $runSummary.status = 'failed'
     $runSummary.error = $_.Exception.Message
-    Set-Content -Path $latestFailurePointerPath -Value $runRoot -Encoding utf8
+    try {
+        Set-Content -Path $latestFailurePointerPath -Value $runRoot -Encoding utf8
+    } catch {
+        Write-Warning 'Could not write the Phase 10 failure pointer; run evidence may be incomplete.'
+    }
     throw
 }
 finally {
+  $finalizationComplete = $true
+  try {
     $fixtureDirectory=Join-Path $workspaceRoot 'TestResults/DockerStorage/payment-state'
     $ownedFixtures=@(if(Test-Path $fixtureDirectory){Get-ChildItem $fixtureDirectory -Filter '*.json' | Where-Object LastWriteTimeUtc -ge ([DateTime]::Parse($runSummary.startedUtc).ToUniversalTime()) | ForEach-Object {Get-Content $_.FullName -Raw|ConvertFrom-Json}})
     $fixtureLockPresent=Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')
@@ -231,16 +309,76 @@ finally {
     if($runSummary.storageExitCode-ne 0){$runSummary.status='failed'}
     if(-not$allRestored){$runSummary.status='failed'}
     if($runFailed){$runSummary.status='failed'}
+    if($runSummary.status-eq'failed'){Set-Content -Path $latestFailurePointerPath -Value $runRoot -Encoding utf8}
     $steps=@($child.steps|Where-Object {$null-ne$_})
     foreach($name in @('foundations','smoke','integration','openpay-local-baseline','baseline-validation','customer-directory','tenantc-routing-regression','payments-deterministic','sandbox-payments','currency-order-entry','order-continuation','messaging-functions','persistence','provider-restoration')){
         if($name-notin$steps.name){$steps+=@{name=$name;status='not-run'}}
     }
     $profilePath=Join-Path $runRoot 'profile-summary.json'
     $deployment=if($runSummary.reusedExistingStack){'reused-ready-stack'}elseif(Test-Path $profilePath){(Get-Content $profilePath -Raw|ConvertFrom-Json).status}else{'not-run'}
+    $runSummary.gitProvenance.finish = Get-Phase10GitSnapshot -Directory $workspaceRoot
     $packet=@{status=$runSummary.status;runRoot=$runRoot;deployment=$deployment;steps=$steps;restoration=$restoration;storageExitCode=$runSummary.storageExitCode;deferrals=@('DW-023','DW-024');notCertified=@('fulfillment','monetary installments','deferred unresolved-order eligibility/recovery');note='Raw failed/partial evidence is preserved; capability gaps are not PASS.'}
     $packet|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $runRoot 'acceptance-packet.json')
     Write-RunSummary -Summary $runSummary
-    if($acceptanceLockOwned){Remove-Item -LiteralPath $acceptanceLockPath}
+    try {
+        Invoke-Phase10Preview -Directory $runRoot
+    } catch {
+        $finalizationComplete = $false
+        $runSummary.status = 'failed'
+        if ([string]::IsNullOrWhiteSpace($runSummary.error)) {
+            $runSummary.error = 'Phase 10 preview generation failed; inspect the sanitized preview log.'
+        } else {
+            $runSummary.error += ' Phase 10 preview generation also failed; inspect the sanitized preview log.'
+        }
+        $packet.status = 'failed'
+        $packet.reportPreview = 'failed'
+        $packet|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $runRoot 'acceptance-packet.json')
+        Write-RunSummary -Summary $runSummary
+        Set-Content -Path $latestFailurePointerPath -Value $runRoot -Encoding utf8
+        Write-Warning 'Phase 10 preview generation failed; the run is marked failed.'
+    }
+  } catch {
+    $finalizationComplete = $false
+    $runSummary.status = 'failed'
+    if ([string]::IsNullOrWhiteSpace($runSummary.error)) {
+        $runSummary.error = 'Phase 10 finalization failed; run evidence may be incomplete.'
+    } else {
+        $runSummary.error += ' Phase 10 finalization also failed; run evidence may be incomplete.'
+    }
+    Write-Warning 'Phase 10 finalization failed; run evidence may be incomplete.'
+    try {
+        if ($null -ne $packet) {
+            $packet.status = 'failed'
+            $packet|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $runRoot 'acceptance-packet.json')
+        }
+        Write-RunSummary -Summary $runSummary
+        Set-Content -Path $latestFailurePointerPath -Value $runRoot -Encoding utf8
+    } catch {
+        Write-Warning 'Could not persist failed finalization status; existing run evidence must not be trusted.'
+    }
+  } finally {
+    try {
+        if($acceptanceLockOwned){Remove-Item -LiteralPath $acceptanceLockPath}
+    } catch {
+        $finalizationComplete = $false
+        $runSummary.status = 'failed'
+        if ([string]::IsNullOrWhiteSpace($runSummary.error)) {
+            $runSummary.error = 'Could not remove the owned Phase 10 acceptance lock.'
+        } else {
+            $runSummary.error += ' Could not remove the owned Phase 10 acceptance lock.'
+        }
+        Write-Warning 'Could not remove the owned Phase 10 acceptance lock.'
+        try {
+            if ($null -ne $packet) {
+                $packet.status = 'failed'
+                $packet|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $runRoot 'acceptance-packet.json')
+            }
+            Write-RunSummary -Summary $runSummary
+            Set-Content -Path $latestFailurePointerPath -Value $runRoot -Encoding utf8
+        } catch {
+            Write-Warning 'Could not persist the lock cleanup failure; existing run evidence must not be trusted.'
+        }
+    }
     Write-Host "Phase 10 run summary: $runSummaryPath" -ForegroundColor Cyan
 
     if ([string]::IsNullOrWhiteSpace($previousPhase10RunId)) {
@@ -256,4 +394,16 @@ finally {
     else {
         $env:PHASE10_RUN_ROOT = $previousPhase10RunRoot
     }
+  }
+  if ($finalizationComplete) {
+    try {
+        Write-Phase10Completion -Directory $runRoot -Summary $runSummary
+    } catch {
+        $runSummary.status = 'failed'
+        Write-Warning 'Could not publish Phase 10 completion record; run evidence is incomplete.'
+    }
+  }
+}
+if ($runSummary.status -eq 'failed') {
+    throw 'Phase 10 finalization reported a failed run; inspect the run summary.'
 }

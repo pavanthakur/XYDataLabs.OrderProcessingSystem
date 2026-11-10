@@ -23,6 +23,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+. (Join-Path $PSScriptRoot 'phase10-nfr-aggregate.ps1')
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
@@ -49,7 +50,7 @@ Set-Content -LiteralPath (Join-Path $nfrRoot 'run-plan.txt') -Encoding utf8 -Val
     'Security: local Keycloak-backed API auth tests, browser PKCE/operator authorization proof, and artifact secret scan.',
     'Operational: Compose controls and restart diagnostics are reported independently from recovery.',
     'Recovery: retained image evidence and executed previous-image rollback/restore are reported independently.',
-    'Policy: categories are reported independently; the aggregate fails when any category fails.'
+    'Policy: categories are reported independently; the aggregate is passed only when every category passed. Failed => failed; skipped/blocked => incomplete (nonzero exit).'
 )
 
 $categories = [ordered]@{
@@ -153,6 +154,26 @@ function Invoke-CategoryCommand {
         Write-Progress "FAIL $Category/$Name - $($_.Exception.Message)"
         Write-NfrSummary
         return $false
+    }
+}
+
+function Invoke-IsolatedNfrIntegrationFilterSet {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilterExpression,
+        [Parameter(Mandatory = $true)][string]$ResultsDirectory
+    )
+
+    $filters = @($FilterExpression -split '\|' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($filters.Count -eq 0) { throw 'NFR integration filter set is empty.' }
+
+    $runner = Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1'
+    for ($index = 0; $index -lt $filters.Count; $index++) {
+        $filterResults = Join-Path $ResultsDirectory ('filter-{0:D2}' -f ($index + 1))
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $runner `
+            -Runtime docker-phase10 -TestFilter ([string]$filters[$index]) -ResultsDirectory $filterResults
+        if ($LASTEXITCODE -ne 0) {
+            throw "Isolated NFR integration filter $($index + 1) failed with exit code $LASTEXITCODE."
+        }
     }
 }
 
@@ -314,6 +335,111 @@ function Invoke-Phase10IdentityChecks {
     }
 }
 
+function Invoke-ConsumerOutageBacklogDrill {
+    param(
+        [Parameter(Mandatory = $true)][string]$TopicName,
+        [Parameter(Mandatory = $true)][string]$SqlConnectionString,
+        [Parameter(Mandatory = $true)][string]$ServiceBusConnectionString,
+        [ValidateRange(5, 100)][int]$MessageCount = 25,
+        [int]$RecoveryLimitSeconds = 1800
+    )
+
+    $composeArgs = Get-Phase10ComposeArguments
+    $consumers = @('inventory', 'notifications')
+    $runId = "phase10-drill-$([guid]::NewGuid().ToString('N'))"
+    $probeResultPath = Join-Path $nfrRoot 'consumer-outage-drill-probe.json'
+    $probeOutPath = Join-Path $nfrRoot 'consumer-outage-drill-probe.out.log'
+    $probeErrPath = Join-Path $nfrRoot 'consumer-outage-drill-probe.err.log'
+    $drillPath = Join-Path $nfrRoot 'consumer-outage-drill.json'
+    $drill = [ordered]@{
+        drill = 'consumer-outage-backlog-recovery'
+        runId = $runId
+        messageCount = $MessageCount
+        recoveryLimitSeconds = $RecoveryLimitSeconds
+        status = 'failed'
+        note = 'Consumers are stopped, the burst is published into the broker backlog, consumers are started, and the backlog must drain to exactly one effect per message.'
+    }
+    $previousSql = $env:PHASE10_NFR_SQL_CONNECTION_STRING
+    $previousBus = $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING
+    $probe = $null
+    try {
+        & docker @composeArgs stop @consumers
+        if ($LASTEXITCODE -ne 0) { throw "Stopping consumers failed with exit code $LASTEXITCODE." }
+        $drill.outageStartedUtc = [DateTimeOffset]::UtcNow.ToString('o')
+
+        $env:PHASE10_NFR_SQL_CONNECTION_STRING = $SqlConnectionString
+        $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING = $ServiceBusConnectionString
+        $probe = Start-Process -FilePath 'dotnet' -PassThru -WorkingDirectory $workspaceRoot `
+            -RedirectStandardOutput $probeOutPath -RedirectStandardError $probeErrPath -ArgumentList @(
+                'run', '--project', 'tools/Phase10.NfrProbe/Phase10.NfrProbe.csproj', '--no-build', '--',
+                '--sql-read-mode', 'docker-compose', '--topic', $TopicName, '--tenant-code', 'TenantA',
+                '--message-count', "$MessageCount", '--timeout-seconds', "$RecoveryLimitSeconds",
+                '--settle-seconds', '20', '--maximum-p95-seconds', "$RecoveryLimitSeconds",
+                '--run-id', $runId, '--result-path', $probeResultPath)
+        $null = $probe.Handle
+
+        $publishDeadline = [DateTimeOffset]::UtcNow.AddSeconds(180)
+        while ($true) {
+            $published = (Test-Path -LiteralPath $probeOutPath) -and
+                (Select-String -LiteralPath $probeOutPath -Pattern 'Published \d+ OrderCreatedV1' -Quiet)
+            if ($published) { break }
+            if ($probe.HasExited) { throw "Probe exited before publishing the backlog (exit $($probe.ExitCode))." }
+            if ([DateTimeOffset]::UtcNow -gt $publishDeadline) { throw 'Timed out waiting for the backlog to be published.' }
+            Start-Sleep -Seconds 2
+        }
+
+        $restartAt = [DateTimeOffset]::UtcNow
+        $drill.consumersStartedUtc = $restartAt.ToString('o')
+        & docker @composeArgs start @consumers
+        if ($LASTEXITCODE -ne 0) { throw "Starting consumers failed with exit code $LASTEXITCODE." }
+        Wait-ForUrl -Url 'http://localhost:5082/health/ready' -TimeoutSeconds 600
+        Wait-ForUrl -Url 'http://localhost:5083/health/ready' -TimeoutSeconds 600
+        $drill.consumersReadySeconds = [math]::Round(([DateTimeOffset]::UtcNow - $restartAt).TotalSeconds, 3)
+
+        if (-not $probe.WaitForExit($RecoveryLimitSeconds * 1000)) {
+            throw "Backlog did not drain within $RecoveryLimitSeconds seconds."
+        }
+        $probe.WaitForExit()
+        $drill.backlogRecoverySeconds = [math]::Round(([DateTimeOffset]::UtcNow - $restartAt).TotalSeconds, 3)
+        if ($probe.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $probeResultPath)) {
+            throw "Probe reported failure (exit $($probe.ExitCode)); see $probeResultPath."
+        }
+
+        $probeResult = Get-Content -LiteralPath $probeResultPath -Raw | ConvertFrom-Json
+        $drill.inventoryEffects = $probeResult.InventoryEffectCount
+        $drill.notificationEffects = $probeResult.NotificationEffectCount
+        $drill.inventoryInbox = $probeResult.InventoryInboxCount
+        $drill.notificationsInbox = $probeResult.NotificationsInboxCount
+        $drill.lostMessages = [math]::Max(0, $MessageCount - [math]::Min($probeResult.InventoryEffectCount, $probeResult.NotificationEffectCount))
+        $drill.duplicateEffects = [math]::Max(0, $probeResult.InventoryEffectCount - $MessageCount) +
+            [math]::Max(0, $probeResult.NotificationEffectCount - $MessageCount)
+        if ($drill.lostMessages -ne 0 -or $drill.duplicateEffects -ne 0) {
+            throw "Loss or duplicate effects detected: lost=$($drill.lostMessages) duplicates=$($drill.duplicateEffects)."
+        }
+        if ($drill.backlogRecoverySeconds -gt $RecoveryLimitSeconds) {
+            throw "Recovery took $($drill.backlogRecoverySeconds)s, above the $RecoveryLimitSeconds s limit."
+        }
+        $drill.status = 'passed'
+    }
+    catch {
+        $drill.error = $_.Exception.Message
+        throw
+    }
+    finally {
+        if ($null -ne $probe -and -not $probe.HasExited) { Stop-Process -Id $probe.Id -Force -ErrorAction SilentlyContinue }
+        & docker @composeArgs start @consumers
+        $drill.consumersRestoredExitCode = $LASTEXITCODE
+        if ($null -eq $previousSql) { Remove-Item Env:PHASE10_NFR_SQL_CONNECTION_STRING -ErrorAction SilentlyContinue }
+        else { $env:PHASE10_NFR_SQL_CONNECTION_STRING = $previousSql }
+        if ($null -eq $previousBus) { Remove-Item Env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING -ErrorAction SilentlyContinue }
+        else { $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING = $previousBus }
+        $drill | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $drillPath -Encoding utf8
+    }
+
+    Get-Content -LiteralPath $drillPath -Raw | Write-Host
+    $global:LASTEXITCODE = 0
+}
+
 function Write-CategorySummaryFile {
     param(
         [Parameter(Mandatory = $true)]
@@ -384,14 +510,15 @@ $paymentFilter = 'FullyQualifiedName~PaymentProviderSeed|FullyQualifiedName~Paym
 if (-not $SkipOperationalChecks) {
     $previousImageTag = Resolve-PreviousInventoryImageTag -ImageOwner $imageOwner
     if ([string]::IsNullOrWhiteSpace($previousImageTag)) {
-        throw 'Rollback prerequisite missing: set PHASE10_PREVIOUS_IMAGE_TAG to a retained inventory image tag, or keep a local image tagged like phase10-prev-*. L5 requires an executed rollback, not a documented-only plan.'
+        Write-Progress 'Rollback prerequisite missing (set PHASE10_PREVIOUS_IMAGE_TAG or retain a phase10-prev-* inventory image). Recovery will be BLOCKED; operational checks continue.'
     }
-
-    $currentInventoryImage = "ghcr.io/$imageOwner/orderprocessing-inventory:$currentImageTag"
-    $previousInventoryImage = "ghcr.io/$imageOwner/orderprocessing-inventory:$previousImageTag"
-    Assert-DockerImageExists -ImageName $currentInventoryImage
-    Assert-DockerImageExists -ImageName $previousInventoryImage
-    Write-Progress "Rollback prerequisite resolved. currentImage=$currentInventoryImage previousImage=$previousInventoryImage"
+    else {
+        $currentInventoryImage = "ghcr.io/$imageOwner/orderprocessing-inventory:$currentImageTag"
+        $previousInventoryImage = "ghcr.io/$imageOwner/orderprocessing-inventory:$previousImageTag"
+        Assert-DockerImageExists -ImageName $currentInventoryImage
+        Assert-DockerImageExists -ImageName $previousInventoryImage
+        Write-Progress "Rollback prerequisite resolved. currentImage=$currentInventoryImage previousImage=$previousInventoryImage"
+    }
 }
 
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
@@ -403,8 +530,7 @@ $env:PHASE10_NFR_SQL_CONNECTION_STRING = $sqlConnectionString
 $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING = $serviceBusConnectionString
 try {
     $functionalPassed = Invoke-CategoryCommand -Category 'functional' -Name 'Durability and tenant integration tests' -Command {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1') `
-            -Runtime docker-phase10 -TestFilter $functionalFilter.Split('|') -ResultsDirectory (Join-Path $nfrRoot 'functional')
+        Invoke-IsolatedNfrIntegrationFilterSet -FilterExpression $functionalFilter -ResultsDirectory (Join-Path $nfrRoot 'functional')
     }
 }
 finally {
@@ -525,8 +651,7 @@ try {
     $previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
     $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $sqlConnectionString
     $tenantPassed = Invoke-CategoryCommand -Category 'tenant' -Name 'Tenant routing and isolation integration tests' -Command {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1') `
-            -Runtime docker-phase10 -TestFilter $tenantFilter.Split('|') -ResultsDirectory (Join-Path $nfrRoot 'tenant')
+        Invoke-IsolatedNfrIntegrationFilterSet -FilterExpression $tenantFilter -ResultsDirectory (Join-Path $nfrRoot 'tenant')
     }
 }
 finally {
@@ -549,8 +674,7 @@ try {
     $previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
     $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING = $sqlConnectionString
     $paymentsPassed = Invoke-CategoryCommand -Category 'payments' -Name 'Payment provider integration tests' -Command {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts/invoke-integration-tests-isolated.ps1') `
-            -Runtime docker-phase10 -TestFilter $paymentFilter.Split('|') -ResultsDirectory (Join-Path $nfrRoot 'payments')
+        Invoke-IsolatedNfrIntegrationFilterSet -FilterExpression $paymentFilter -ResultsDirectory (Join-Path $nfrRoot 'payments')
     }
 }
 finally {
@@ -595,6 +719,7 @@ if ($SkipOperationalChecks) {
     Write-CategorySummaryFile -Category 'recovery'
 }
 else {
+    $recoveryBlocked = $false
     $composeArgs = Get-Phase10ComposeArguments
     $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Compose controls and running services' -Command {
         docker @composeArgs config --quiet
@@ -611,13 +736,28 @@ else {
             docker @composeArgs logs --tail 200 inventory notifications
         }
     }
+
+    if ($operationalPassed) {
+        $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Approved replay visibility (60s limit)' -Command {
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-local-messaging.ps1') `
+                -ArtifactDirectory (Join-Path $nfrRoot 'replay-proof')
+        }
+    }
+
+    if ($operationalPassed) {
+        $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Consumer outage backlog recovery drill' -Command {
+            Invoke-ConsumerOutageBacklogDrill -TopicName $topicName -SqlConnectionString $sqlConnectionString `
+                -ServiceBusConnectionString $serviceBusConnectionString
+        }
+    }
     $categories.operational.status = if ($operationalPassed) { 'passed' } else { 'failed' }
     Write-CategorySummaryFile -Category 'operational'
 
     if ([string]::IsNullOrWhiteSpace($previousImageTag)) {
         $recoveryPassed = $false
+        $recoveryBlocked = $true
         $categories.recovery.error =
-            'PHASE10_PREVIOUS_IMAGE_TAG is required so rollback is executed rather than documented only.'
+            'BLOCKED: a retained previous inventory image (PHASE10_PREVIOUS_IMAGE_TAG or phase10-prev-*) is required so rollback is executed rather than documented only.'
     }
     else {
         $recoveryPassed = Invoke-CategoryCommand -Category 'recovery' -Name 'Retained image digest evidence' -Command {
@@ -652,7 +792,7 @@ else {
             $recoveryPassed = $rollbackPassed -and $restorePassed -and $recoveryPassed
         }
     }
-    $categories.recovery.status = if ($recoveryPassed) { 'passed' } else { 'failed' }
+    $categories.recovery.status = if ($recoveryPassed) { 'passed' } elseif ($recoveryBlocked) { 'blocked' } else { 'failed' }
     Write-CategorySummaryFile -Category 'recovery'
 }
 
@@ -670,13 +810,15 @@ else {
 }
 Write-CategorySummaryFile -Category 'security'
 
-$allPassed = @($categories.Values | Where-Object { $_.status -eq 'failed' }).Count -eq 0
-$summary.status = if ($allPassed) { 'passed' } else { 'failed' }
+$aggregate = Get-Phase10NfrAggregate -Categories $categories
+$notPassed = $aggregate.NonPassing
+$summary.status = $aggregate.Status
+$summary.nonPassingCategories = $notPassed
 $summary.completedAtIst = (Get-IstNow).ToString('o')
 Set-Content -LiteralPath $currentStepPath -Value 'completed' -Encoding utf8
 Write-NfrSummary
     Write-Progress "$ProofName $($summary.status)."
 
-if (-not $allPassed) {
-    throw "$ProofName failed. Review $summaryPath and the category summaries."
+if ($summary.status -ne 'passed') {
+    throw "$ProofName $($summary.status). Non-passing categories: $($notPassed -join ', '). Review $summaryPath and the category summaries."
 }

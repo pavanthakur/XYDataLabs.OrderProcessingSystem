@@ -210,7 +210,7 @@ try {
     }
 
     Invoke-LoggedCommand -Name 'integration' -Script {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1') -ConsoleVerbosity $IntegrationConsoleVerbosity
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1') -ConsoleVerbosity $IntegrationConsoleVerbosity -CollectCoverage
     } | Out-Null
     $summary.steps += [ordered]@{
         name = 'integration'

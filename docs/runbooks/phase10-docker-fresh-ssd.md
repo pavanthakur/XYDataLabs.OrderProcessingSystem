@@ -1,5 +1,9 @@
 # Phase 10 fresh Docker storage on G:
 
+## Current non-Azure acceptance evidence (11 November 2026)
+
+The latest bounded Docker run is recorded at `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261110-localacceptance001/`. Its reconciliation file links the separate NFR run and records the dirty-candidate identity. Selected Docker build/readiness, integration, deterministic/sandbox payments, messaging/Functions, persistence, provider restoration, and storage checks passed. NFR functional, tenant, payment, security/identity, and the 100-message performance probe passed. A separate inventory/notifications restart diagnostic passed; the full operational/recovery failure drills were skipped and rollback is blocked without a verified retained image. The HTML dashboard remains provisional/BLOCKED. This is not Phase 10 closure or Azure acceptance. Do not reset volumes or retry charges to address these evidence gaps.
+
 This procedure replaces disposable local Docker state, not Azure resources. Keep the old disk offline until acceptance passes. Do not migrate a 642 GB disk onto a drive with 471 GB free.
 
 ## Safety and prerequisites
@@ -164,6 +168,39 @@ This preserves SQL/Azurite volumes, cold-builds current images, runs foundations
 `Resources/Configuration/tenant-bootstrap.local.json` is the versioned, non-secret local bootstrap contract for required seed tenants, provider defaults, and key references. Shared `dbo.Tenants` remains authoritative for tenant identity, active status, tier, and provider route; provider settings come from the tenant's resolved business database. Dedicated stores resolve through explicit Compose configuration references, not tenant-name rules. TenantC remains a regression case: its route lives in the shared registry and provider rows in its dedicated business DB. Do not add duplicate shared provider rows to make a join succeed.
 
 Normal bootstrap inserts missing seed data only; it does not rewrite credentials, routes, existing tenant statuses or deactivate additional tenants. A metadata mismatch fails validation instead of being hidden by reseeding.
+
+### Offline Phase 10 report
+
+The Docker hook writes `index.html` alongside its acceptance artifacts. Open it with:
+
+```powershell
+$run = 'TestResults/Playwright/phase10-docker-http/<run-id>'
+Invoke-Item (Join-Path $run 'index.html')
+```
+
+To render an existing, unrendered run without starting tests or accessing Docker, SQL, or providers (the output files are create-once; use a fresh copy/run directory if outputs already exist):
+
+```powershell
+npm --prefix automation run report:phase10-preview -- TestResults/Playwright/phase10-docker-http/<run-id>
+npm --prefix automation run verify:phase10-completion -- TestResults/Playwright/phase10-docker-http/<run-id>
+```
+
+For reviewed sharing, first verify the completion record and inspect the exact allowlisted report files. Do not ZIP the entire run folder: raw logs, screenshots and provider artifacts may need separate sanitization. From the repository root, create a ZIP containing only the sanitized summary set:
+
+```powershell
+$run = 'TestResults/Playwright/phase10-docker-http/<run-id>'
+$zip = "TestResults/Phase10-report-$((Split-Path $run -Leaf)).zip"
+Compress-Archive -LiteralPath @(
+    (Join-Path $run 'index.html'),
+    (Join-Path $run 'phase10-preview.html'),
+    (Join-Path $run 'phase10-coverage-summary.json'),
+    (Join-Path $run 'phase10-completion.json'),
+    (Join-Path $run 'acceptance-packet.json'),
+    (Join-Path $run 'run-summary.json')
+) -DestinationPath $zip -NoClobber
+```
+
+This is a provisional reporting view, not a PASS certificate or Phase 10 closure. The report's completeness, individual outcomes and acceptance status are distinct; retain raw failure evidence separately and do not package it unless reviewed.
 
 ### Manual browser handoff: simulation versus sandbox
 

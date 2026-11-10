@@ -912,7 +912,8 @@ What it does:
 Useful switches:
 
 - `-UseCleanReset` resets the service-bus path before the performance canary.
-- `-SkipOperationalChecks` skips the rollback/diagnostics section when you only need functional and performance proof.
+- `-SkipOperationalChecks` skips the operational and recovery categories for a partial functional/performance run. The result is `incomplete` with a nonzero exit; it is not acceptance evidence.
+- A missing retained previous inventory image no longer stops the run: operational checks continue and `recovery` is recorded as `blocked`, so the aggregate is `incomplete`, never `passed`.
 - `-SkipStartIfNeeded` fails fast if the Docker Dev HTTP stack is not already up.
 
 ### Phase 10 Pre-Azure Milestones
