@@ -23,7 +23,7 @@ $patterns = [ordered]@{
 }
 
 $cwd = Resolve-Path $Root
-$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*','*/docs/*','*/Resources/*','repomix-output.xml','*/frontend/node_modules/*')
+$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*','*/docs/*','*/Resources/*','repomix-output.xml','*/frontend/node_modules/*','*/node_modules/*','*/.artifacts/*','*/TestResults/*','*/bin/*','*/obj/*')
 $files = Get-ChildItem -Path $cwd -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $full = $_.FullName -replace '\\','/'
     foreach ($g in $ignoreGlobs) { if ($full -like $g) { return $false } }
