@@ -1,5 +1,5 @@
 ---
-applyTo: "**/XYDataLabs.OrderProcessingSystem.Domain/Entities/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/DTO/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/Features/Payments/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/**/*.cs,**/XYDataLabs.OrderProcessingSystem.API/Controllers/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/**/*.cs"
+applyTo: "**/XYDataLabs.OrderProcessingSystem.Domain/Entities/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/DTO/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/Features/Payments/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/DataContext/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/Multitenancy/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/Payments/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/SeedData/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/Events/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/Webhooks/**/*.cs,**/XYDataLabs.OrderProcessingSystem.API/Controllers/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/**/*.cs"
 ---
 # Multitenant Payment Schema Rules — XYDataLabs.OrderProcessingSystem
 
@@ -108,16 +108,9 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - Seed defaults come from `DbInitializer.GetUse3DSecureSeedDefault`. Razorpay seeds `false` for all tenants so the runtime uses hosted `provider_checkout`; OpenPay and future providers seed `true` unless explicitly changed. Re-seed never overwrites existing DB values.
 - Future per-tenant payment flags (e.g. per-tenant MerchantId) should follow the same pattern: column on `PaymentProvider`, not appsettings.
 
-## ConfigureTenantOwnership pattern
-- Every new tenant-owned entity MUST be registered in `ConfigureTenantOwnership<T>()` in `OnModelCreating()`.
-- This single call configures: FK to `Tenants(Id)`, global query filter on `TenantId`, and `DeleteBehavior.Restrict`.
-- Do NOT manually configure these three concerns individually — always use `ConfigureTenantOwnership<T>()`.
-- After adding the call, also add the corresponding `DbSet<T>` to both `OrderProcessingSystemDbContext` and `IAppDbContext`.
-
-## IAppDbContext parity rule
-- `IAppDbContext` must expose every `DbSet<T>` from `OrderProcessingSystemDbContext` **except** `DbSet<Tenant>`.
-- `Tenant` is a system entity — tenant queries go through `ITenantRegistry` or `ITenantResolver`, never through `IAppDbContext`.
-- Architecture test `IAppDbContext_DbSets_Must_Match_OrderProcessingSystemDbContext_Minus_Tenant` enforces this at CI.
+## Ownership registration and parity
+- Register every new tenant-owned entity only via `ConfigureTenantOwnership<T>()` in `OnModelCreating()` (FK, query filter, `DeleteBehavior.Restrict`); never configure these individually.
+- Add its `DbSet<T>` to both `OrderProcessingSystemDbContext` and `IAppDbContext` (parity test `IAppDbContext_DbSets_Must_Match_OrderProcessingSystemDbContext_Minus_Tenant` enforces this; `Tenant` is excluded).
 
 ## IgnoreQueryFilters exemption rule
 - `.IgnoreQueryFilters()` bypasses tenant isolation and is restricted to an architecture-test allow-list.
@@ -126,13 +119,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - Any new usage requires: (1) a code-review justification documenting why cross-tenant access is safe, and (2) adding the filename to the allow-list in `ArchitectureTests.IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only`.
 
 ## EF and migrations
-- Current baseline starts from `RebaselineMultitenantPaymentSchema`.
-- `TenantA` and `TenantB` must be seeded in the baseline migration `Up()`.
-- Every new tenant-owned table migration must include:
-  - FK to `Tenants`
-  - required tenant-scoped indexes
-- After creating any migration, run a drift check with a second migration and confirm it is empty.
-- Remove the temporary drift-check migration after verification.
+- Every new tenant-owned table migration needs an FK to `Tenants` and tenant-scoped indexes. Workflow, drift check and seed placement: `ef-migrations.instructions.md`.
 
 ## Non-request operations
 - `DbInitializer`, background jobs, test fixtures, and any out-of-band creation flow must pass `TenantId` explicitly.
@@ -142,39 +129,10 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 
 ## Required test coverage
 
-### Architecture tests (`MultiTenantSchemaTests`)
-- Migration drift detection (`EfMigrationDriftTests`)
-- Tenant-scoped composite index presence on payment entities
-- Tenant global query filter presence on tenant-owned entities; absence on Tenant entity
-- Customer-facing DTO identifier surface compliance (no internal IDs exposed)
-- `TenantTierConstants` defines `SharedPool` and `Dedicated` values
-- `Tenant.TenantTier` defaults to `SharedPool`
-- `TenantRegistryDbContext` has no query filter on Tenant
-
-### Middleware / integration tests (`TenantMiddlewareTests`)
-- 400 for missing tenant header
-- 400 for unknown tenant code
-- 403 for Suspended / Decommissioned tenant status
-- Runtime configuration endpoint returns DB tenants without auth
-
-### SharedPool tenant isolation tests (`TenantIsolationTests`)
-- Per-entity query-filter isolation: tenants in the same DB see only their own data
-- No dependency on shared baseline tenant rows (tests create their own tenants)
-
-### Dedicated tenant tests (`DedicatedTenantTests`)
-
-**Middleware / status scenarios (single-DB factory):**
-- Dedicated + unprovisioned (null CS) + Active → 400 (fail-loud, not silent shared-pool fallback)
-- Dedicated + unprovisioned (null CS) + Suspended → 400 (unresolvable takes priority over status)
-- Dedicated + provisioned + Suspended → 403
-- Dedicated + provisioned + Decommissioned → 403
-- Dedicated + provisioned + Active → 200 (routed to dedicated DB)
-- SharedPool tenant coexists with Dedicated tenants without interference
-
-**Physical DB isolation scenarios (routing-aware factory):**
-- Data written to dedicated tenant is physically present in dedicated DB (direct SQL verification)
-- Dedicated tenant data NOT visible via direct query on shared-pool DB
-- SharedPool tenant data NOT visible via direct query on dedicated DB
+- Architecture (`MultiTenantSchemaTests`, `EfMigrationDriftTests`): migration drift, tenant composite indexes, query filter on tenant-owned entities (not `Tenant`), no internal IDs in customer DTOs, tier constants/default, `TenantRegistryDbContext` has no filter.
+- Middleware (`TenantMiddlewareTests`): 400 missing/unknown tenant code; 403 Suspended/Decommissioned; runtime-configuration endpoint works without auth.
+- SharedPool isolation (`TenantIsolationTests`): per-entity filter isolation; tests create their own tenants, no reliance on baseline rows.
+- Dedicated (`DedicatedTenantTests`): unprovisioned → 400 even if Suspended (unresolvable wins); provisioned Suspended/Decommissioned → 403; provisioned Active → 200 routed to the dedicated DB; coexistence with SharedPool; physical isolation verified by direct SQL on both databases.
 
 ### New feature guardrail
 When adding a new tenant-owned entity or feature:
