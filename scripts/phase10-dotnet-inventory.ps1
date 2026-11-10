@@ -2,6 +2,16 @@
 # Raw test names are held only in memory and are never written to evidence.
 #Requires -Version 7.0
 
+# dotnet emits UTF-8; a legacy console code page would corrupt non-ASCII test names and break reconciliation.
+function Invoke-Phase10Utf8Native {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][scriptblock]$Command)
+    $previous = [Console]::OutputEncoding
+    try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { $previous = $null }
+    try { & $Command }
+    finally { if ($null -ne $previous) { [Console]::OutputEncoding = $previous } }
+}
+
 function Get-Phase10DiscoveredDotnetTests {
     [CmdletBinding()]
     param(
@@ -10,7 +20,7 @@ function Get-Phase10DiscoveredDotnetTests {
     )
     $arguments = @('test', $TestProject, '--list-tests', '--verbosity', 'quiet')
     if (-not [string]::IsNullOrWhiteSpace($Filter)) { $arguments += @('--filter', $Filter) }
-    $output = @(& dotnet @arguments 2>&1)
+    $output = @(Invoke-Phase10Utf8Native { & dotnet @arguments 2>&1 })
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) { throw 'Current-candidate .NET test discovery failed; details omitted.' }
     $lines = @($output | ForEach-Object { [string]$_ })

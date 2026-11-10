@@ -4,6 +4,18 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $root 'scripts\phase10-dotnet-inventory.ps1')
 $temp = Join-Path ([IO.Path]::GetTempPath()) ("phase10-dotnet-inventory-{0}" -f [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($temp)
+
+# Non-ASCII test names (e.g. truncated arguments) must survive a legacy console code page.
+$originalEncoding = [Console]::OutputEncoding
+try {
+    [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437)
+    $decoded = @(Invoke-Phase10Utf8Native {
+        & pwsh -NoProfile -Command '$b=[Text.UTF8Encoding]::new($false).GetBytes("a" + [char]0x00B7 + [char]0x00B7 + "b"); $o=[Console]::OpenStandardOutput(); $o.Write($b,0,$b.Length); $o.Flush()'
+    })
+    if (($decoded -join '') -cne ('a' + [char]0x00B7 + [char]0x00B7 + 'b')) { throw 'UTF-8 native output was corrupted by the console code page.' }
+    if ([Console]::OutputEncoding.CodePage -ne 437) { throw 'Console output encoding was not restored.' }
+}
+finally { [Console]::OutputEncoding = $originalEncoding }
 $names = @(
     'XYDataLabs.OrderProcessingSystem.Integration.Tests.ScenarioTests.FirstCase',
     'XYDataLabs.OrderProcessingSystem.Integration.Tests.ScenarioTests.ParameterizedCase(value: 7)'

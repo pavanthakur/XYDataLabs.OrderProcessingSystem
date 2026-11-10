@@ -3,6 +3,7 @@
 param([Parameter(Mandatory)][string]$ArtifactDirectory)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+. (Join-Path $PSScriptRoot 'phase10-dotnet-inventory.ps1')
 $root=Split-Path -Parent $PSScriptRoot
 $artifact=[IO.Path]::GetFullPath($ArtifactDirectory)
 if(-not $artifact.StartsWith(([IO.Path]::GetFullPath((Join-Path $root 'TestResults')).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw 'Test artifacts must remain under project TestResults.'}
@@ -210,7 +211,7 @@ try{
         if (Test-Path -LiteralPath $testCoverageRoot) { throw "Backend coverage output already exists for $name; refusing to overwrite evidence." }
         $projectPath=Join-Path $root "tests/XYDataLabs.OrderProcessingSystem.$name.Tests/XYDataLabs.OrderProcessingSystem.$name.Tests.csproj"
         $discoveryStarted=[DateTime]::UtcNow
-        $discoveryOutput=@(& dotnet test $projectPath --list-tests --verbosity quiet 2>&1)
+        $discoveryOutput=@(Invoke-Phase10Utf8Native { & dotnet test $projectPath --list-tests --verbosity quiet 2>&1 })
         $discoveryExit=$LASTEXITCODE
         $discoveryLines=@($discoveryOutput|ForEach-Object {[string]$_})
         $discoveryMarker=-1
