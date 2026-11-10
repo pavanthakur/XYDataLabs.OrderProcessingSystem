@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: "Quality gate after any feature, task, script, or fix — automatically runs build (warnings-as-errors), all unit tests, and a secret/credential scan; then checks 6 categories: documented, guardrailed, unit tested, integration tested, automated in CI, and AI context current"
+description: "Scope-aware completion gate: run applicable safe validation, preserve required build/test/security and phase gates, and report documentation, guardrails, tests, automation and context with actual evidence and approval limits"
 ---
 
 Run this after completing any feature, task, script, fix, workflow change, or phase checkpoint update.
@@ -10,7 +10,9 @@ If a gap is deferred, record it in `docs/internal/DEFERRED-WORK-LOG.md` with own
 
 ## Step 0 — Run automated checks first
 
-Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below. If the task touched the payment automation workspace or workflow surfaces, run the additional automation block as well and use it for category 5. If the task closes or freezes a phase or named sub-phase and it touched Docker runtime orchestration, payment automation runtime targets, local setup orchestration, or closeout workflow surfaces, run the Docker validation bundle block as well and use it for category 5.
+Read `AGENTS.md` and classify the changed slice before selecting checks. The blocks below are the maintained validation catalog, not permission to run every command for every task. For governance/docs changes, use AI customization, relevant link/metadata/security checks and focused validator tests; record application-only checks as NOT APPLICABLE with rationale when no application boundary changed. For application changes, retain the required build, tests and security checks; retain mandatory phase, automation and Docker evidence when their existing conditions apply.
+
+Inspect side effects first. Database access, Docker lifecycle/reset, provider transactions, Azure/directory operations and Git writes require explicit scoped approval under the shared rules. If a required check lacks approval, tooling or evidence, report BLOCKED/NOT TESTED and do not claim closeout PASS or silently waive it. Do not start another workstream or commit/push automatically. Use observed results for categories 2–5; metadata checks do not establish runtime or fresh-session behavioral acceptance.
 
 **Build (warnings as errors):**
 ```powershell
@@ -55,7 +57,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 - [ ] Is the feature/change described in the relevant README, guide, or copilot-instructions.md?
 - [ ] If a new script was added: does `scripts/README.md` (or the owning folder README) document it with usage, parameters, and purpose?
 - [ ] If a new workflow was added: does `.github/workflows/README.md` reference it?
-- [ ] If a new prompt was added: does `.github/prompts/README.md` document it, and is it listed in `copilot-instructions.md` §9?
+- [ ] If a prompt/agent was added or changed: is it in its owning `.github/prompts/README.md` index, with valid shared/Copilot entry links? Skills belong in `.github/skills/README.md`; do not require duplicate inventories in short entry files.
 - [ ] If a new architectural decision was made: is there an ADR in `docs/architecture/decisions/`?
 - [ ] If this task closed or materially advanced a curriculum/architecture phase: are all phase-status surfaces aligned (`ARCHITECTURE-EVOLUTION.md`, `docs/learning/curriculum/1_MASTER_CURRICULUM.md`, `docs/learning/curriculum/README.md`, `docs/internal/AZURE-PROGRESS-EVALUATION.md`, active implementation notes, `.github/instructions/curriculum.instructions.md`, `docs/DEVELOPER-OPERATING-MODEL.md` when focus changed, and `.github/copilot-instructions.md` if it contains a phase snapshot)?
 - [ ] If this task finalized Phase 10.1 or any Phase 10 local-baseline document: are `docs/guides/development/phase10-tool-prerequisites.md`, `docs/internal/phase10-implementation-checklist.md`, and `ARCHITECTURE-EVOLUTION.md` consistent about the current next step?
@@ -96,7 +98,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 ## 6. Copilot Context
 
 - [ ] Is `copilot-instructions.md` still accurate? (Run `/XYDataLabs-context-audit` if unsure)
-- [ ] Are relevant `/memories/repo/` files up to date with any new resource names or conventions?
+- [ ] Is the concise repository-relative `memories/repo/active-work.md` current, evidence-qualified and linked to owners rather than duplicating resource inventories? Do not require nonexistent records or write personal memory.
 - [ ] If this task changed current phase or next-phase status: has `/XYDataLabs-context-audit` been run, or has equivalent manual verification confirmed there is no status-surface drift?
 - [ ] If this task closes Phase 9, a Phase 9 closure lane, or the Phase 10 local baseline / transport lane: are the numbered VS Code task sequences for both `local-http` and `docker-dev-http` documented and aligned with the closeout roadmap before declaring completion?
 - [ ] If this task touched Azure deployment or container image delivery: did you apply the enterprise default review stance automatically?
@@ -111,22 +113,24 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 ---
 
 For each unchecked item, either:
-- **Fix it now** (preferred) — implement the missing piece, then mark it done
+- **Fix it within approved scope** (preferred) — verify the missing piece, then mark it done; do not expand into application/runtime repair without approval
 - **Record it** — add an entry to `docs/internal/DEFERRED-WORK-LOG.md` with a clear owner, reason, risk, review date, and closure trigger
 
 ## Summary
 
 Report results in this table:
 
+Use PASS / FAIL / BLOCKED / NOT TESTED / NOT APPLICABLE with rationale. DEFERRED requires the existing approved deferral path, not an invented waiver. Separate structural, observed-agent and software-runtime evidence; none substitutes for the others. A pre-existing required-check failure remains FAIL even when outside this task's repair scope.
+
 | Category | Result | Notes |
 |---|---|---|
-| Build | ✅ / ❌ | |
-| Secret scan | ✅ clean / ❌ N hits | |
-| Unit tests | ✅ / ❌ | |
-| Integration/Arch tests | ✅ / ❌ | |
-| Documentation | ✅ / ⚠️ gaps fixed / ❌ deferred | |
-| Guardrails | ✅ / ⚠️ gaps fixed / ❌ deferred | |
-| Automation | ✅ / ⚠️ gaps fixed / ❌ deferred | |
-| Copilot context | ✅ / ⚠️ gaps fixed / ❌ deferred | |
+| Build | status | command/scope or applicability rationale |
+| Secret scan | status | scope and safe finding counts, never matched values |
+| Unit tests | status | actual commands/results |
+| Integration/Arch tests | status | actual commands/results or applicability rationale |
+| Documentation | status | owning references and link checks |
+| Guardrails | status | remaining risks and any approved deferral reference |
+| Automation | status | applicable checks and missing evidence |
+| AI context | status | structural results; behavioral acceptance separately labelled |
 
-After printing the table: update `/memories/repo/active-work.md` — set `## Last Session` to today's date + what was just completed, and refresh `## Pending / Next Actions` with the next concrete task.
+After material approved work, refresh the concise repository-relative `memories/repo/active-work.md` with actual changes/results, evidence limits and one next action. Preserve unresolved constraints and pause/review boundaries. Read-only questions do not require routine updates; no automatic Git writes or next workstream.

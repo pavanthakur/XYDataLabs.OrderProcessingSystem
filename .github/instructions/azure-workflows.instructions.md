@@ -3,10 +3,11 @@ applyTo: "**/.github/workflows/**"
 ---
 # GitHub Actions Conventions — XYDataLabs.OrderProcessingSystem
 
-## Two-Workflow Split
+## Setup, Current Deployment And Legacy Paths
 - `azure-initial-setup.yml` — ONE-TIME only: Phase 0 (GitHub App), Phase 1a (OIDC app registration), Phase 1b (secrets)
-- `azure-bootstrap.yml` — LEGACY App Service day-to-day: Phase 2 (infra), Deploy API, Deploy UI, Phase X (cleanup)
-- `infra-deploy.yml` — CURRENT Phase 10 path: subscription-scoped Container Apps infrastructure for gateway, Orders, Inventory, Notifications, and UI
+- `phase10-deploy-orchestrator.yml` — CURRENT direct Phase 10 operator entrypoint for image build plus deploy/cleanup orchestration
+- `build-phase10-images.yml` and `infra-deploy.yml` — internal child workflows, not the direct operator path
+- `azure-bootstrap.yml` — LEGACY App Service compatibility/history, not the supported Phase 10 target
 
 ## OIDC Authentication Pattern (all workflows)
 ```yaml
@@ -29,13 +30,8 @@ Never use stored passwords or service principal secrets — always OIDC.
 | `staging` | staging | `-stg` (NOT `-staging`) |
 | `main` | prod | `-prod` |
 
-## Deployment Testing Pattern (most common)
-Actions → "Azure Bootstrap & Deploy" → Run workflow:
-- Branch: `dev`, Environment: `dev`
-- ✅ Deploy API — check to push API changes
-- ☐ Bootstrap Infrastructure — uncheck (infra already exists)
-- ☐ Deploy UI — only if UI changed
-- ☐ Phase X Cleanup — NEVER check unless tearing down
+## Current Deployment Guidance
+Read `.github/workflows/README-INFRA-DEPLOY.md` and `docs/runbooks/phase10-azure-smoke.md`, then propose the existing wrapper inputs for the approved environment. Deployment, directory changes and resource cleanup require explicit scoped approval; do not execute them to refresh context or while the workstream is paused. Preserve required setup/preflight gates. Cleanup stays disabled for ordinary additive deployment and requires separate destructive-operation approval.
 
 ## Legacy App Service Names
 - API: `pavanthakur-orderprocessing-api-xyapp-dev`

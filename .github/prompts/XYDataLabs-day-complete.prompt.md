@@ -1,24 +1,32 @@
 ---
 agent: agent
-description: "After a curriculum day or phase-freeze closeout: asks what you completed, then auto-routes — updates curriculum, roadmap/status surfaces, reference docs, memory, implementation evidence, and mandatory automation validation when relevant"
+description: "After material approved work or a pause: routes relevant documentation and concise handoff updates, preserves evidence limits and completion gates, and requires explicit approval for consequential operations"
 ---
 
 # Day Completion Routing
 
 The user has just completed or partially completed a curriculum day, or is closing out / freezing an architecture phase.
 
-Ask the user: "What did you complete today? Describe what you built, ran, verified, or froze."
+Use the current task and observed evidence to identify what was completed, partially completed or paused. Ask what was done only if that information is missing; do not reconstruct the whole repository.
 
-Then, based on their answer, apply the following routing rules automatically — do NOT ask for permission for each one, just do them all:
+Apply only the following routes relevant to the approved scope. A governance-only task or pause does not imply curriculum completion, phase closeout or permission to start the next workstream.
+
+## Approval And Evidence Boundaries
+
+- Inspect Git status/HEAD, relevant plan sections and evidence through bounded read-only checks. Treat `memories/repo/active-work.md` as a checkpoint, not proof; unavailable evidence is unavailable, not PASS. Record environment, revision or UNKNOWN, scope and limitations for material claims.
+- Git staging, commit, push, merge, tag/branch creation and other Git writes require explicit authorization for the intended operation. Quality checks do not grant that authorization. Prepare a reviewed file list, diff and proposed commands/message; never stage all unrelated work automatically.
+- Tests must fit the approved task. Identify side effects before execution: database queries/mutations, Docker lifecycle/reset, sandbox/live charges, refunds, Azure deployment/directory/firewall changes and other consequential operations require explicit scoped approval. A destructive reset requires immediate per-operation approval.
+- If required validation needs unavailable tools, credentials, evidence or unapproved side effects, report NOT TESTED/BLOCKED and preserve the gate. Do not silently waive it or record completion. Existing deferral rules still apply.
+- Paths under `memories/repo/` refer to this repository, not a personal memory store. Do not create missing memory files or write personal/global memory as part of closeout; use existing owning docs or report the missing reference. Never store credentials or sensitive payment payloads.
 
 ## Routing Rules
 
-1. **Always: Mark curriculum checkboxes**
+1. **If the task actually completed curriculum items within approved scope:**
    - Open `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
    - Mark completed items `[x]`, update the `**Completed:**` date line
 
-2. **If any CLI commands were run** (az, dotnet ef, git, sqlcmd, docker, pwsh):
-   - Add them to the matching section in `docs/reference/quick-command-reference.md`
+2. **If the task established or changed a reusable command/procedure** (not every invocation):
+   - Update it in the matching section in `docs/reference/quick-command-reference.md`; avoid copying routine output or existing commands
    - Also add them to the appropriate canonical topic file under `docs/reference/`:
 
      | Topic | File |
@@ -30,22 +38,22 @@ Then, based on their answer, apply the following routing rules automatically —
 
    - Create a new section in both files if the topic doesn't exist yet
 
-3. **If a technology/tool was chosen over an alternative:**
+3. **If an approved consequential architecture decision needs an ADR:**
    - Create a new ADR in `docs/architecture/decisions/ADR-NNN-title.md`
    - Use ADR-000-template.md format: Status / Context / Decision / Consequences
    - Next ADR number = highest existing number + 1
 
-4. **If a reusable pattern was learned (applies to future projects):**
-   - Add a bullet to the relevant section in `/memories/architect-patterns.md`
+4. **If an approved reusable pattern materially affects future work:**
+   - Update the existing owning architecture/reference document; do not create or update a personal memory store
 
-5. **If a new Azure resource, FQDN, or credential was created:**
-   - Update `/memories/repo/azure-resources.md`
+5. **If an approved operation changed the Azure resource contract:**
+   - Update its existing owning configuration/runbook; an existing repository memory index may link there. Record secret references only, never credential values; do not place generated FQDNs in the stable runtime target catalog
 
-6. **If a new .NET class, project, or convention was established:**
-   - Update `/memories/repo/dotnet-conventions.md`
+6. **If the task established a material .NET convention or project boundary:**
+   - Update the existing owning guidance; update `memories/repo/dotnet-conventions.md` only if it exists and needs correction
 
 7. **If a workflow/deployment gotcha was discovered:**
-   - Add to `/memories/repo/workflow-split.md`
+   - Update the existing workflow runbook; `memories/repo/workflow-split.md`, if present, should link to its owner rather than duplicate it
 
 8. **If a full week is now complete** (all days in the week have ✅ Completed dates):
    - Update the week heading in `1_MASTER_CURRICULUM.md` to add `— Complete` suffix:
@@ -74,7 +82,7 @@ Then, based on their answer, apply the following routing rules automatically —
     - Treat architecture-status drift across these files as a blocking inconsistency to fix before finishing
     - If the work is a phase freeze/closeout, do not stop at the checklist change; confirm the phase now reads consistently as complete/next across all status surfaces in the same session
 
-10. **Always: Record unique implementation detail for the completed day**
+10. **If the approved task produced unique implementation detail worth retaining:**
    - Open `docs/learning/implementation-notes/implementation-notes-days-29-38.md`
    - Add a `## Day N: <Title>` section if the day had notable implementation nuance
    - Include:
@@ -87,30 +95,30 @@ Then, based on their answer, apply the following routing rules automatically —
    - Skip this step if the day was purely checklist tasks with no unique detail worth preserving
 
 11. **If any multi-environment file was modified** (Bicep modules, parameter files, sharedsettings, workflows):
-    - Verify the change is applied to ALL three environments — dev + staging + prod:
+    - Review applicability across ALL three environments — dev + staging + prod; preserve intentional environment policy differences:
       - `infra/parameters/dev.json` → `staging.json` → `prod.json`
       - `sharedsettings.dev.json` → `sharedsettings.stg.json` → `sharedsettings.prod.json`
     - Staging Azure resource names use suffix `stg` (not `staging`) — e.g. `rg-orderprocessing-stg`
     - If a Bicep module adds new params, add placeholder entries in all 3 parameter files
-    - Flag any environment that was missed and apply the missing change before committing
+    - Flag any missing required environment change; do not expand the approved scope or deploy environments automatically
 
 12. **If the work touched the payment automation workspace, Docker runtime orchestration, or their shared workflow surfaces** (`automation/`, `Resources/Docker/`, `/XYDataLabs-payment-automation`, verification-adapter contracts, or payment automation operator docs):
-      - Run the documented dry-run validation matrix before treating the work as complete:
+      - After inspecting the scripts for side effects and confirming scope/approval, run the documented dry-run validation matrix before treating the work as complete:
          - `npm --prefix automation run run:local:matrix:dry`
          - `npm --prefix automation run run:docker:matrix:dry`
          - `npm --prefix automation run run:azure:matrix:dry`
       - Record the pass/fail outcome in the active implementation-notes file when the day had meaningful automation work
-      - If the changed slice is runtime-specific and the target is available in the same session, run the narrowest real target path as additional evidence
-   - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, generate the real Docker validation bundle in the same session with `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` or the narrowest applicable mapped target set, and record the generated bundle path in the implementation notes
+      - If the changed slice is runtime-specific and the real target run is explicitly approved, run the narrowest applicable path as additional evidence; target availability alone is not authorization
+   - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, the real Docker validation bundle remains required. Inspect the command's effects and obtain any necessary scoped approval before running `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` or the narrowest applicable mapped target set; record the generated bundle path. Without approval/evidence, report the gate BLOCKED/NOT TESTED, not complete
       - Treat a missing automation validation run as a blocking gap for phase closeout, not an optional follow-up
 
 13. **If the closing commit closes a major architectural seam (Phase 7, 8, 11, 13, 14) or precedes an irreversible architectural change** (microservices split, primary key strategy change, multi-region rollout):
-    - Cut a snapshot pair per `docs/internal/branch-and-blueprint-strategy.md` (decision: ADR-018):
+    - Prepare a snapshot-pair proposal per `docs/internal/branch-and-blueprint-strategy.md` (decision: ADR-018); create it only after explicit approval:
       - Annotated tag: `v-YYYYMMDD-phase<N>-<slug>` (e.g. `v-20260510-phase8-frontend-spa`)
       - Backup branch: `dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N>` (e.g. `dev-backup-20260510-FrontendSPA-Upto-Phase8`)
     - Both pointers reference the same anchor commit (the closing commit of the seam)
     - Tag message must follow §1.3 of the strategy doc: phase, anchor commit, companion branch, ADRs ratified, automation matrix link, Docker matrix status, Azure status, intentionally-absent items
-    - Push tag and branch to origin
+    - Propose pushing the tag and branch to origin; execute only with explicit push authorization for those exact refs
     - The branch protection rule on `dev-backup-**` must already exist (one-time GitHub Settings step — instructions in §1.5 of the strategy doc); flag if missing
     - Skip this step for minor phase closeouts (8.5, 8.7, 9.5) and ordinary Day Complete runs
 
@@ -121,7 +129,7 @@ Then, based on their answer, apply the following routing rules automatically —
 - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, do not ask "Ready to commit?" until the Docker validation bundle command above produced a bundle with the expected summary files or an explicit deferral was recorded
 - For a phase freeze/closeout, do not ask "Ready to commit?" until both mandatory checks above are complete in the same session
 - If the work is Phase 10 local baseline reconciliation, or it changed the Phase 10 toolchain / prompt / task surfaces, make sure the day-complete route updated the Phase 10 status line before considering the session closed
-- **Always: Update `/memories/repo/active-work.md`** — overwrite the `## Last Session` block with today's date + bullet list of what was done, and update `## Pending / Next Actions` with the next concrete task. Keep `## Recent Key Facts` current. Also refresh the `## If returning after a long gap` block: update the active phase name, the next action, and any startup gotchas that changed (DB name, port, seed state). This block is read by someone returning after weeks away — write it for that person. This is the file loaded at the start of every new session.
+- **After material approved implementation, verification or a pause, refresh repository-relative `memories/repo/active-work.md`** — keep the checkpoint under 8 KiB and record date, observed branch/revision context, changes, validation commands/results, evidence scope/limits and one next action. UNKNOWN revision binding and unavailable artifacts must stay explicit. Move superseded narrative out of active context; retain useful history in Git and existing evidence. Preserve unresolved safety constraints and unrelated work; if another task changed the handoff, reconcile rather than overwrite. Read-only questions do not require routine updates. Never claim live revalidation or completion that did not occur.
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`
-- Ask: "Ready to commit?"
+- Stop with the reviewed diff, validation results, limitations and proposed commit message. Ask for explicit Git-operation approval only when the user wants that next step; never begin the next phase or technical workstream automatically.

@@ -1,33 +1,36 @@
 ---
 agent: agent
-description: "Session start: reads active-work.md and orients the AI with current phase, last session summary, pending actions, and key file entry points — zero exploration needed"
+description: "Session start: uses the concise repository handoff with bounded read-only verification to report current scope, evidence limits, pending actions and key entry points"
 ---
 
 # Day Start
 
-Read the file `/memories/repo/active-work.md` using the memory tool.
+Read repository-relative `memories/repo/active-work.md` through the available filesystem or repository tool. It is a checkpoint, not authoritative proof of runtime correctness; do not require a special memory tool or read personal memory stores.
 
-Then report back in this exact format — no prose, no re-exploration:
+Perform bounded read-only verification: inspect `git status --short` and HEAD, open the active plan section, and inspect only the evidence references material to the user's task. Do not load the full history or rediscover the whole repository. If tools or evidence are unavailable, state that limitation rather than trusting the checkpoint as verified.
+
+Then report in this format, distinguishing observed facts from historical or unverified claims:
 
 ---
 
 ## Current Phase
-[phase number and name from active-work.md]
+[phase and pause/approval state checked against the relevant plan]
 
 ## Last Session Summary
-[what was done — commits, gate results, files changed — directly from active-work.md]
+[concise checkpoint summary; identify historical evidence and any missing revision binding]
+
+## Evidence And Limits
+[environment, revision or UNKNOWN, report reference and scope; missing evidence is unavailable, not PASS; flag conflicts without silently resolving them]
 
 ## Pending Next Actions
-[numbered list from active-work.md, verbatim]
+[next task from the active plan/checkpoint; preserve pause and approval boundaries]
 
 ## Key Files for This Phase
-[file paths from active-work.md — if not listed yet, say "not populated yet — will be added at phase kickoff"]
+[only relevant plan, code or evidence paths; report missing references explicitly]
 
 ## Ready
-Type a task or say "start Phase X.Y" to begin.
+Await a scoped task or approval. Do not automatically start a phase or technical workstream.
 
 ---
 
-Do NOT run `git status`, `dotnet build`, or any terminal command unless the user explicitly asks.
-Do NOT search the codebase to verify or supplement what is in active-work.md.
-active-work.md is the authoritative source — trust it.
+Day Start is read-only: no file edits, automatic full builds/tests, Git writes, database queries/mutations, Docker lifecycle operations, provider calls, or Azure operations. A historical PASS proves only its recorded environment/scope/revision; do not present it as current-candidate or Azure acceptance. Any needed consequential revalidation requires a separate approved task.

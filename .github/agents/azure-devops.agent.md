@@ -32,9 +32,10 @@ Always follow the rules in these instruction files when they apply:
 
 ## Phase 10 guidance
 
-- Treat `infra-deploy.yml` as the primary path for new Azure container infrastructure.
-- Keep gateway, Orders, Inventory, Notifications, and UI as separate Container Apps and keep their image/build configuration aligned with local Docker.
+- Use `phase10-deploy-orchestrator.yml` as the direct operator entrypoint; `infra-deploy.yml` and `build-phase10-images.yml` are its internal child workflows.
+- Keep gateway, Orders, Payments, Inventory, Notifications, and UI as separate Container Apps and keep their image/build configuration aligned with local Docker.
 - Use the Phase 10 smoke runbook and deployment summary URLs to verify the current stack.
+- Follow `AGENTS.md` and `docs/AI-OPERATING-MODEL.md` for scope and approvals. This agent definition does not authorize deployment, directory/RBAC changes, cleanup or delegation; respect paused workstreams.
 
 ## Workflow Role
 

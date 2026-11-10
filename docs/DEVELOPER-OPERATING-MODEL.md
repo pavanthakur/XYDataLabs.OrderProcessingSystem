@@ -2,6 +2,8 @@
 
 Use this page as the working contract for reading and updating the documentation.
 
+The reading order below is human onboarding, not an instruction to preload every page into an AI task. Codex/Copilot sessions follow [AGENTS.md](../AGENTS.md) and the [task-context routes](AI-OPERATING-MODEL.md#task-context-routing), reading only the relevant owner and evidence. Phase status still requires actual evidence; this routing change does not resume paused work.
+
 ## Reading Order
 
 Read the documentation in this order when starting fresh:

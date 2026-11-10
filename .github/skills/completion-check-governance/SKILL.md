@@ -35,8 +35,8 @@ Open the relevant sources before running the closeout gate:
 
 ## Operating Rules
 
-1. Run executable checks first.
-   - Use the prompt's build, test, and secret-scan path before evaluating the checklist.
+1. Classify the changed slice, then run its applicable safe executable checks.
+   - Use the prompt's validation catalog and rubric; do not run application suites merely for metadata changes. Preserve required gates when their conditions apply, and report unapproved/unavailable checks as BLOCKED/NOT TESTED rather than waive them. Follow shared scope/approval rules in `AGENTS.md`.
 2. Treat correctness and safety gaps as non-negotiable.
    - Follow the rubric for security, tenant isolation, deployment safety, shared repo truth, and missing validation.
 3. Fix gaps now when they are within scope.
@@ -74,7 +74,7 @@ Open the relevant sources before running the closeout gate:
 ## Common Checks
 
 - Shared AI assets changed without `pwsh scripts/validate-ai-customization.ps1`
-- New discovery surfaces were added but not documented in the owning README or `.github/copilot-instructions.md`
+- New discovery surfaces are missing from their owning index, or shared/Copilot entry links no longer reach that owner
 - A code change landed without the narrowest matching unit or integration test
 - A workflow or script change introduced an undocumented or non-automated manual step
 - A gap is being deferred even though it affects correctness, security, tenant isolation, deployment safety, or shared repo truth

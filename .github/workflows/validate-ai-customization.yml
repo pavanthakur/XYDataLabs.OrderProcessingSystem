@@ -4,6 +4,9 @@ on:
   push:
     branches: [ main, dev, staging ]
     paths:
+      - 'AGENTS.md'
+      - 'memories/repo/**'
+      - 'scripts/tests/test-ai-customization.ps1'
       - '.github/copilot-instructions.md'
       - '.github/completion-check-rubric.md'
       - '.github/instructions/**'
@@ -21,6 +24,9 @@ on:
       - 'scripts/README.md'
   pull_request:
     paths:
+      - 'AGENTS.md'
+      - 'memories/repo/**'
+      - 'scripts/tests/test-ai-customization.ps1'
       - '.github/copilot-instructions.md'
       - '.github/completion-check-rubric.md'
       - '.github/instructions/**'
@@ -44,7 +50,11 @@ permissions:
 jobs:
   validate:
     name: Validate shared AI assets
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -54,9 +64,25 @@ jobs:
         shell: pwsh
         run: scripts/validate-ai-customization.ps1
 
+      - name: Test governance validator with isolated positive and negative fixtures
+        shell: pwsh
+        run: scripts/tests/test-ai-customization.ps1 -ArtifactDirectory TestResults/AIGovernance/ci
+
+      - name: Preserve sanitized governance test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ai-governance-${{ matrix.os }}
+          path: |
+            TestResults/AIGovernance/ci/summary.json
+            TestResults/AIGovernance/ci/logs/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Summary
         if: always()
         shell: pwsh
         run: |
           Write-Host 'AI customization validation complete. See step output for details.'
-          Write-Host 'Checks: required governance files | frontmatter metadata | prompt and agent discoverability | completion-check governance references'
+          Write-Host 'Checks: safe repository paths | instruction budgets | metadata/discovery | evidence consistency | known unsafe directives | sanitized diagnostics | isolated regression fixtures'
+          Write-Host 'Structural validation is not agent behavior or runtime acceptance. Review each step outcome; this summary does not override failures.'

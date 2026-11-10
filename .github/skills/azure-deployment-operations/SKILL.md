@@ -1,6 +1,6 @@
 ---
 name: azure-deployment-operations
-description: "Use when working on Azure bootstrap, deployment workflows, OIDC setup, App Service rollout checks, Bicep validation, health probes, or deployment troubleshooting for this repository."
+description: "Use when planning or reviewing this repository's Phase 10 Container Apps deployment, OIDC, Bicep, runtime validation or Azure troubleshooting; consult legacy App Service guidance only for explicit compatibility work."
 ---
 
 # Azure Deployment Operations
@@ -14,7 +14,7 @@ Use when the task involves any of the following:
 - GitHub Actions deployment workflows under `.github/workflows/`
 - Azure bootstrap or initial setup flows
 - OIDC credential setup or troubleshooting
-- App Service deployment verification and health probes
+- Container Apps deployment verification and readiness probes; legacy App Service checks only when explicitly requested
 - Bicep preflight validation or parameter consistency
 - Deployment troubleshooting across `dev`, `staging`, or `prod`
 
@@ -29,8 +29,9 @@ Do not use this skill for:
 Open the relevant sources before changing deployment behavior:
 
 - `.github/workflows/README.md`
+- `.github/workflows/README-INFRA-DEPLOY.md` and `docs/runbooks/phase10-azure-smoke.md` for the current Phase 10 path
 - `.github/workflows/README-AZURE-INITIAL-SETUP.md`
-- `.github/workflows/README-AZURE-BOOTSTRAP.md`
+- `.github/workflows/README-AZURE-BOOTSTRAP.md` only for legacy compatibility/history
 - `.github/instructions/azure-workflows.instructions.md`
 - `docs/guides/deployment/README.md`
 - `docs/reference/quick-command-reference.md`
@@ -48,9 +49,10 @@ Runtime target convention for Phase 10+ automation:
 - Keep `allowGeneratedAzureUrlFallback` explicit for every Azure target and default it to `false`; any temporary fallback run must be visibly reported as partial, not fully accepted.
 - Deployment/IaC may create resources from suffix parameters; post-deploy automation must consume stable configured names from `runtime-targets.json` or workflow outputs derived from it.
 
-1. Keep the two-workflow split intact.
+1. Preserve setup, current deployment and legacy responsibilities.
    - `azure-initial-setup.yml` is one-time setup.
-   - `azure-bootstrap.yml` is the day-to-day coordinated deployment entrypoint.
+   - `phase10-deploy-orchestrator.yml` is the direct Phase 10 operator entrypoint; it calls `build-phase10-images.yml` and `infra-deploy.yml` internally.
+   - `azure-bootstrap.yml` is the legacy App Service compatibility path, not the current day-to-day deployment target.
 2. Enforce branch-to-environment mapping.
    - `dev -> dev`
    - `staging -> staging`
@@ -62,7 +64,9 @@ Runtime target convention for Phase 10+ automation:
 5. Respect Azure naming constraints.
    - staging resource suffix is `stg`, not `staging`
 6. Keep the deployment guard intact.
-   - API/UI deploys must remain blocked when bootstrap fails.
+   - Required setup/preflight failures block dependent delivery; do not bypass the owning workflow's gates.
+7. Follow the shared approval boundaries in `AGENTS.md` and `docs/AI-OPERATING-MODEL.md`.
+   - Reading a skill, a planned rollout or a successful local test is not approval to deploy, change directory/RBAC settings, reset resources or access provider secrets. Preserve paused scope; report unapproved/missing validation as BLOCKED/NOT TESTED.
 
 ## Recommended Execution Flow
 

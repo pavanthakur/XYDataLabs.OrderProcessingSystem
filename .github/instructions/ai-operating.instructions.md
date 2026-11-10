@@ -5,6 +5,7 @@ description: "Repo-wide local AI slice-sizing and drift-control rules"
 
 # AI Operating Rules
 
+- Follow root `AGENTS.md` for shared behavior; `docs/AI-OPERATING-MODEL.md` owns task routing, approvals and client compatibility. Do not duplicate those rules or inventories here.
 - Keep every task slice-sized.
 - Do not expand scope beyond the accepted handoff.
 - Prefer the minimum set of files needed to make progress.

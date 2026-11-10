@@ -105,20 +105,38 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\export-github-run-log.ps
 2. Tell Codex the export is complete.
 3. Codex reads `TestResults/GitHubActions/latest-job.log` and continues diagnosis.
 
+### test-phase10-payment-fixture.ps1
+
+Focused Phase 10 fixture/orchestration regression (no live SQL, Docker or providers):
+
+```powershell
+pwsh -NoProfile -File scripts/test-phase10-payment-fixture.ps1
+```
+
+Preserves the TenantC shared-registry/dedicated-provider characterization, covers an arbitrary tenant using an explicit mapping, and captures native baseline/extended matrix arguments to reject tenant/provider filtering. Generated mock reports are not runtime acceptance.
+
 ### validate-ai-customization.ps1
 
 Deterministic validator for shared Copilot customization assets.
 
 **Purpose**:
-- Validates repo-shared AI governance files and discovery surfaces
+- Validates shared guidance, entry/handoff budgets, safe links/paths, frontmatter, canonical discovery, checkpoint evidence consistency and selected unsafe/sensitive patterns. Short client entries link owning indexes; structural results are not fresh-session behavior or runtime certification.
 - Checks instruction/prompt/agent/skill frontmatter requirements
-- Verifies prompt, agent, and skill discoverability in the shared README and Copilot index surfaces
+- Verifies each prompt/agent/skill in its owning index and the short shared/Copilot entry links to those owners
 - Confirms `/XYDataLabs-completion-check` references the shared rubric and deferred-work register
 
 **Usage**:
 ```powershell
 pwsh .\scripts\validate-ai-customization.ps1
 ```
+
+Run isolated positive/negative regression fixtures (no Docker, SQL, provider or AI service):
+
+```powershell
+pwsh -NoProfile -File scripts/tests/test-ai-customization.ps1
+```
+
+Optional `-RepositoryRoot` selects the source repository; `-ArtifactDirectory` must stay under its TestResults directory. The runner preserves per-case logs and `summary.json` under `TestResults/AIGovernance/`; fixtures are synthetic/disposable but are not automatically deleted. A permission-dependent NOT TESTED case yields a partial packet/nonzero exit, not PASS. The existing governance CI runs this on Windows/Linux and publishes sanitized logs, never fixture copies.
 
 **When to Use**:
 - After changing `.github/copilot-instructions.md`

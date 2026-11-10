@@ -1,6 +1,6 @@
 # Skills README
 
-This folder contains repo-owned Copilot skills for workflows that are repeated, stable, and too large to express cleanly as prompts alone.
+This folder is the canonical home for the five existing repository skills. Copilot discovery depends on the supported client/harness; Codex uses explicit routing from `AGENTS.md` unless native discovery is actually observed. Do not duplicate these bodies into another skill library.
 
 Use skills sparingly. A skill is justified only when:
 
@@ -14,7 +14,7 @@ For the governing protocol, see `docs/AI-OPERATING-MODEL.md`.
 
 | Skill | Folder | Use when |
 |-------|--------|----------|
-| Azure Deployment Operations | `.github/skills/azure-deployment-operations/` | Working on Azure bootstrap, deployment workflows, OIDC validation, App Service rollout checks, Bicep preflight, or deployment troubleshooting in this repo |
+| Azure Deployment Operations | `.github/skills/azure-deployment-operations/` | Planning/reviewing the current Phase 10 Container Apps wrapper, OIDC, Bicep, readiness or Azure troubleshooting; legacy App Service guidance only for explicit compatibility work |
 | CQRS Backend Implementation | `.github/skills/cqrs-backend-implementation/` | Working on C# backend code in this repo: Domain entities, CQRS handlers, DTOs, Infrastructure data access, API controllers, migrations, or backend test coverage |
 | Code Review Guardrails | `.github/skills/code-review-guardrails/` | Reviewing changes in this repo for architecture compliance, tenant safety, security issues, CQRS correctness, migration safety, or missing backend test coverage |
 | Completion Check Governance | `.github/skills/completion-check-governance/` | Closing out a task with the repo-standard completion gate: build, tests, secret scan, documentation, automation, Copilot-context checks, and deferral decisions |
@@ -25,5 +25,6 @@ For the governing protocol, see `docs/AI-OPERATING-MODEL.md`.
 1. Each skill lives in its own folder with a `SKILL.md` file.
 2. `SKILL.md` must include YAML frontmatter with `name` and `description`.
 3. The `description` must contain clear discovery phrases such as `Use when...` so the skill can be found reliably.
-4. When a skill is added or changed, update this README, `.github/copilot-instructions.md`, and run `pwsh scripts/validate-ai-customization.ps1`.
+4. When a skill is added or changed, update this owning index, keep the shared/Copilot entry links to it valid, and run `pwsh scripts/validate-ai-customization.ps1`. Do not repeat every skill name/body in always-loaded instructions.
 5. Skills complement prompts and agents; they do not replace the canonical docs or CI validation path.
+6. Read the selected `SKILL.md` completely and retrieve only its applicable required references. Native discovery, explicit reading and tool permissions are separate capabilities; an index entry is not execution approval or permission to delegate.
