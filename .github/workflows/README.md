@@ -35,7 +35,7 @@ Use this rule before removing anything:
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `04 Phase 10 Azure Payment Matrix` | Validation | Yes, after transport smoke | Runs the all-tenant Azure browser/payment matrix against live Phase 10 Container Apps URLs and uploads one run packet |
-| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Optional | Mirrors the local Docker Dev HTTP hook in CI |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Do not dispatch for acceptance | Retained workflow; hosted execution cannot satisfy the local Docker safety guard. The accepted check is the manual local Docker hook under DW-028 Option A. |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
 | `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for ACR image tags, historical GHCR cleanup-only package versions, and workflow artifacts |
@@ -53,11 +53,11 @@ Use the numbered workflows in this order:
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
 | `04` | `04 Phase 10 Azure Payment Matrix` | Prove all-tenant browser/payment E2E against the live Azure Container Apps URLs |
-| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local/CI parity for the containerized service graph |
+| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted parity excluded under DW-028 Option A; run the equivalent local Docker hook manually |
 
-Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner is always a fresh machine, so the workflow starts its own Docker stack instead of trying to reuse one. It generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values and installs the EF Core CLI before starting Docker because the real local file and local tools are intentionally machine-specific. Reusing an already running stack is supported only by the local script switch `-SkipStartIfNeeded`.
+Under DW-028 Option A, do not dispatch workflow `99` as an acceptance gate: the hosted runner cannot satisfy the local Docker named-pipe safety guard. Keep that guard unchanged. Run `scripts/run-phase10-docker-dev-e2e-hook.ps1` on the local Docker Desktop host for the manual Docker acceptance; claim hosted status only for other applicable workflows that actually run on the target SHA. A future hosted-safe Docker profile requires separate review.
 
-The CI run packet is deterministic and single-rooted:
+Historical hosted workflow run packets used this deterministic single-root layout; it is not current acceptance evidence under DW-028:
 
 - Run packet root: `TestResults/Playwright/phase10-docker-http/phase10-docker-dev-http-<github.run_id>-<github.run_attempt>`
 - Run summary: `run-summary.md`
@@ -82,7 +82,7 @@ Before approving any workflow or infrastructure change, ask:
 | If you want to... | Click this workflow |
 |---|---|
 | Bootstrap or refresh the shared Phase 10 ACR foundation and provider registration | `00 Azure Platform Foundation` |
-| Verify the local Docker Dev HTTP hook in CI | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` |
+| Run the manual local Docker Dev HTTP acceptance | Use `scripts/run-phase10-docker-dev-e2e-hook.ps1` or the matching VS Code task; do not dispatch workflow `99` for acceptance |
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
 | Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
@@ -102,7 +102,7 @@ Before approving any workflow or infrastructure change, ask:
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
 | `04 Phase 10 Azure Payment Matrix` | Post-transport payment E2E | No | No | No | No | Current validation |
-| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; equivalent local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
 | `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR plus historical GHCR cleanup-only plus artifact retention only | Current internal |
@@ -134,7 +134,7 @@ or the VS Code task:
 | `phase10-deploy-orchestrator.yml` | Manual Phase 10 wrapper for build + deploy or cleanup | Keep as the only direct Phase 10 entrypoint | Yes, if changing wrapper flow |
 | `phase10-azure-runtime-smoke.yml` | Manual Phase 10 runtime/API/UI smoke after deploy | Keep as the direct post-deploy runtime proof | Yes, if changing gateway/API/UI runtime contracts |
 | `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
-| `phase10-docker-dev-http-e2e.yml` | CI mirror of the local Phase 10 Docker hook | Keep | Yes, if changing hook or log paths |
+| `phase10-docker-dev-http-e2e.yml` | Retained hosted workflow; excluded from acceptance under DW-028 Option A; manual local hook is the Docker acceptance path | Keep | Yes, if changing hook or log paths |
 | `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 ACR, historical GHCR cleanup-only, and artifact housekeeping | Keep | Yes, if changing retention thresholds |
 | `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
 | `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
@@ -167,18 +167,18 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `publish-template-package.yml` | Manual | Artifact only or package registry | **[See README-PUBLISH-TEMPLATE-PACKAGE.md](./README-PUBLISH-TEMPLATE-PACKAGE.md)** - Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it |
 | `validate-template-package-governance.yml` | Pull requests for Layer 1 template changes, or manual | Validation only | **[See README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md](./README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md)** - Forces a `PackageVersion` decision for Layer 1 template changes and runs packaged smoke validation |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
-| `validate-ai-customization.yml` | Shared AI customization changes | Push/PR on selected paths, or manual | Windows/Linux structural validation and isolated regression fixtures for shared instructions, handoff, discovery and evidence metadata; sanitized summary/log artifacts. Not behavioral or runtime acceptance |
+| `validate-ai-customization.yml` | Shared AI customization changes | Push/PR on selected paths, or manual | Windows/Linux structural validation, isolated regression fixtures and process-level runner exit tests; separate sanitized summaries/logs. Not behavioral or runtime acceptance |
 | `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
 
-### Phase 10 Hook Mapping
+### Phase 10 Local Hook and Historical Workflow Mapping
 
-The `phase10-docker-dev-http-e2e.yml` workflow is the CI mirror of the local Phase 10 hook:
+The local Phase 10 hook is the accepted Docker check. The `phase10-docker-dev-http-e2e.yml` hosted workflow is excluded from acceptance under DW-028 Option A:
 
 - Local entrypoint: `scripts/run-phase10-docker-dev-e2e-hook.ps1`
 - Preferred automation alias: `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`
 - Compatibility automation alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`
 - VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
-- CI entrypoint: `.github/workflows/phase10-docker-dev-http-e2e.yml`
+- Retained hosted workflow (not an accepted gate): `.github/workflows/phase10-docker-dev-http-e2e.yml`
 - GitHub summary pointers:
   - `TestResults/Playwright/phase10-docker-http/latest-playwright-run.txt`
   - `TestResults/Playwright/phase10-docker-http/latest-playwright-smoke.txt`
@@ -187,7 +187,7 @@ The `phase10-docker-dev-http-e2e.yml` workflow is the CI mirror of the local Pha
   - `TestResults/Playwright/phase10-docker-http/phase10-docker-dev-http-<github.run_id>-<github.run_attempt>/run-summary.json`
   - `phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}`
 
-Use the local hook for interactive debugging and the CI workflow to prove the same sequence still passes on a runner and produces the expected artifacts.
+Use the local hook for interactive debugging and acceptance. Do not claim hosted Docker parity from workflow `99`; its safety guard intentionally permits only local Docker Desktop.
 
 The local hook runs clean Azure-parity by default: it recreates the local Phase 10 stack, applies EF migrations, verifies SQL/Redis/payment-provider baseline readiness, and then runs smoke, integration, and matrix validation. Use the direct script switch `-ReuseExistingStack` only for faster diagnosis when you intentionally want to keep the current local containers and database state.
 
@@ -210,7 +210,7 @@ For the local HTTP launcher, the same operator idea applies:
 | `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that drives build + deploy or cleanup |
 | `phase10-azure-runtime-smoke.yml` | Phase 10 post-deploy Gateway/API/UI runtime validation |
 | `phase10-azure-transport-smoke.yml` | Phase 10 post-deploy broker publish/consume/DLQ/controlled-replay validation; not deployed Function proof |
-| `phase10-docker-dev-http-e2e.yml` | Phase 10 Docker Dev HTTP merge gate and artifact-producing validation path |
+| `phase10-docker-dev-http-e2e.yml` | Retained hosted workflow; excluded from acceptance under DW-028 Option A. The manual local hook is the Docker acceptance path. |
 
 **Support workflows** exist for specialized validation, secondary entrypoints, or troubleshooting rather than the default delivery path:
 
@@ -243,7 +243,7 @@ For Phase 10, the expected click path is:
 3. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally.
 4. Run `02 Phase 10 Azure Runtime Smoke` for the same environment.
 5. Run `03 Phase 10 Azure Transport Smoke` for the same environment.
-6. Optionally run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` when you want CI parity for the local Docker hook.
+6. Confirm the approved manual local Docker acceptance and applicable hosted checks are green on the release-candidate SHA. Do not dispatch workflow `99` for hosted parity under DW-028 Option A.
 7. Use `cleanupInfra=true` when you want teardown instead of deployment.
 
 In plain terms:
@@ -253,7 +253,7 @@ In plain terms:
 | `01` | Azure delivery entrypoint. Use it for deploy, dry run, or cleanup. |
 | `02` | Runtime proof. Use it after Azure deploy to verify gateway/API/UI behavior. |
 | `03` | Broker transport proof. Use it after runtime smoke to verify Service Bus fan-out, DLQ, and controlled replay; verify deployed Function invocation separately in Phase 10.4. |
-| `99` | Optional local parity check. Use it when you want the Docker container graph to behave like the current Phase 10 Azure shape on a runner. |
+| `99` | The equivalent Docker check is manual/local under DW-028 Option A. Hosted workflow parity is excluded; keep its Docker safety guard unchanged. |
 
 The runtime and transport smoke workflows resolve their resource group, gateway, UI, and Service Bus targets from the selected environment. They do not ask for a region input.
 

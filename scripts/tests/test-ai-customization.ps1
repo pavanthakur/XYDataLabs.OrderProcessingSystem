@@ -130,8 +130,14 @@ try {
         param($f)
         $outside = Join-Path (Split-Path $f -Parent) 'owned-outside-reference'
         [void][IO.Directory]::CreateDirectory($outside)
-        try { [void](New-Item -ItemType SymbolicLink -Path (Join-Path $f '.github/prompts/outside-link') -Target $outside -ErrorAction Stop) }
-        catch { throw 'SYMLINK_UNAVAILABLE' }
+        $link = Join-Path $f '.github/prompts/outside-link'
+        try { [void](New-Item -ItemType SymbolicLink -Path $link -Target $outside -ErrorAction Stop) }
+        catch {
+            # Directory junctions are reparse points too and can be created on Windows
+            # without the symlink privilege. Use one for the same boundary assertion.
+            try { [void](New-Item -ItemType Junction -Path $link -Target $outside -ErrorAction Stop) }
+            catch { throw 'SYMLINK_UNAVAILABLE' }
+        }
     } 'AI103'
 } catch {
     $runError = 'Regression runner aborted; inspect safe case logs and command exit status.'
@@ -143,4 +149,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $artifact 'summary.json'), (@{status=$status;expectedCount=$expectedCount;actualCount=$results.Count;error=$runError;kind='structural-regression';runtimeAcceptance='not-tested';results=@($results)} | ConvertTo-Json -Depth 8), $utf8)
     Write-Output "Structural regression summary: $status; failed=$failed; not-tested=$notTested; artifacts=$artifact"
 }
-if ($failed -or $notTested -or $results.Count -ne $expectedCount) { exit 1 }
+if ($failed -or $notTested -or $runError -or $results.Count -ne $expectedCount) { exit 1 }
+# Expected-failure validator subprocesses leave LASTEXITCODE=1. Do not leak that
+# value into a successful GitHub pwsh step after all required cases passed.
+exit 0

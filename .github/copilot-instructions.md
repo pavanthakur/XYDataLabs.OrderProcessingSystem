@@ -14,7 +14,8 @@ Use [the AI operating model](../docs/AI-OPERATING-MODEL.md#task-context-routing)
 
 - File-pattern instructions live in [instructions/](instructions/). Copilot applies them according to supported client/settings behavior; other tools must not assume `applyTo` metadata is interpreted automatically.
 - [The prompt/agent index](prompts/README.md) owns command and role discovery. Select the relevant workflow; do not load every prompt or automatically launch another agent.
-- [The skill index](skills/README.md) owns discovery of the five existing skills. Read the selected skill's full entry and only its required task-specific references.
+- [The skill index](skills/README.md) owns discovery of the repository skills. Read the selected skill's full entry and only its required task-specific references.
+- [The repository reference guide](../docs/reference/repository-reference.md) provides current orientation, workspace ownership, validation lanes, and AI routing without duplicating those inventories here. This guide must be explicitly audited and restored with current-repository corrections where still accurate.
 - [Architecture and ADRs](../ARCHITECTURE.md) own invariants; [the documentation hub](../docs/README.md) owns human navigation. Do not copy their inventories or status snapshots here.
 - Reuse phase plans for approved scope, the existing handoff for continuation, and raw results for evidence. Never create competing memory or roadmap files.
 

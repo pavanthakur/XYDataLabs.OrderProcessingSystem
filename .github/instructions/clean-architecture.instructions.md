@@ -55,56 +55,25 @@ API (→ Application, → Infrastructure, → SharedKernel) ← composition root
 - Referenced by all layers — keep it lightweight
 - No business logic — only shared primitives and cross-cutting utilities
 
-## Patterns & Conventions
+## Patterns & Conventions (core)
 
-### Data Access
-- Use `IAppDbContext` (defined in Application) — never concrete `OrderProcessingSystemDbContext`
-- No Repository/Unit of Work wrapper — `IAppDbContext` is the abstraction
-- Infrastructure's DbContext implements `IAppDbContext`
+- Data access: `IAppDbContext` only (no concrete DbContext, no Repository/UoW wrapper).
+- CQRS is hand-rolled (no MediatR): `ICommand`/`IQuery`, handlers, `IDispatcher`; features live in `Application/Features/{Feature}/Commands|Queries/`.
+- `Result<T>` for business outcomes; controllers map it to the `ApiResponse<T>` envelope. `PaymentProviderCustomerActionException` = terminal decline (`Failed`, no retry); all other gateway exceptions → `UnknownNeedsReconciliation`.
+- Structured logging only (`Log.Information("{Key}", value)`), never string interpolation.
 
-### CQRS (Hand-Rolled, no MediatR)
-- `ICommand<TResult>` / `IQuery<TResult>` — marker interfaces
-- `ICommandHandler<TCommand, TResult>` / `IQueryHandler<TQuery, TResult>` — handlers
-- `IPipelineBehavior<TRequest, TResult>` — cross-cutting (validation, logging, caching)
-- `IDispatcher` — resolves and invokes handlers from DI
-- Feature folder structure: `Application/Features/{Feature}/Commands/`, `Queries/`
-
-### Error Handling
-- Use `Result<T>` for business outcomes — not exceptions
-- Exceptions are for truly exceptional situations (infrastructure failures, bugs)
-- Controllers map `Result<T>` → `ApiResponse<T>` → HTTP status codes
-- `PaymentProviderCustomerActionException` (SharedKernel) = terminal provider decline — map to `PaymentAttemptStatus.Failed`, no retry. All other gateway exceptions → `UnknownNeedsReconciliation`.
-
-### API Responses
-- ALL endpoints return `ApiResponse<T>` with `{ Success, Data, Message, Errors }`
-- URL-segment API versioning: `/api/v{version}/[controller]`
-
-### Caching
-- `ICacheService` interface in Application, Redis implementation in Infrastructure
-- `CachingBehavior<TRequest, TResult>` CQRS pipeline — queries opt in via `ICacheable`
-- Commands always bypass cache (and can invalidate)
-
-### Observability
-- OpenTelemetry for distributed tracing via `AddObservability(serviceName)` in SharedKernel
-- Custom `ActivitySource` per bounded context for business operation spans
-- Structured logging only: `Log.Information("{Key}", value)` — never string interpolation
-
-### Multi-Tenancy (Hybrid — SharedPool + Dedicated)
-- Two tiers: `SharedPool` (default, shared DB with TenantId discriminator) and `Dedicated` (separate physical DB per tenant). See ADR-007.
-- Tenant-owned entities inherit `BaseAuditableEntity` or `BaseAuditableCreateEntity` — provides `TenantId` + audit columns. Never redeclare `TenantId` on derived entities.
-- **ConfigureTenantOwnership<T>()**: Single method in `OnModelCreating()` that configures FK to Tenants + global query filter + DeleteBehavior.Restrict. Every new tenant-owned entity MUST be registered here.
-- **IAppDbContext parity**: Every `DbSet<T>` on `OrderProcessingSystemDbContext` (except `Tenant`) must appear on `IAppDbContext`. Architecture tests enforce this.
-- **IgnoreQueryFilters rule**: Bypasses tenant isolation — usage is restricted to an architecture-test allow-list. Any new usage must be reviewed for tenant safety and added to the allow-list explicitly.
-- `HeaderTenantProvider` resolves `X-Tenant-Code` to canonical tenant context (`TenantId`, `TenantCode`, `TenantExternalId`, `ConnectionString`, `IsSharedPool`)
-- Missing or unknown tenant code returns HTTP 400; suspended or decommissioned tenant returns HTTP 403
-- `Tenants` is a system table — excluded from query filters, `IAppDbContext`, and tenant stamping
-- **Controllers must never accept TenantId, TenantCode, or TenantExternalId as parameters or in request DTOs.** Tenant context comes from middleware only.
-- Non-request operations must set `TenantId` explicitly instead of relying on ambient tenant context
+### Multi-Tenancy (non-negotiable)
+- Tiers `SharedPool` and `Dedicated` (ADR-007). Tenant-owned entities inherit `BaseAuditableEntity`/`BaseAuditableCreateEntity`; never redeclare `TenantId`.
+- Register every new tenant-owned entity in `ConfigureTenantOwnership<T>()` and expose its `DbSet<T>` on `IAppDbContext` (except `Tenant`).
+- `IgnoreQueryFilters` is restricted to the architecture-test allow-list.
+- Missing/unknown tenant code → HTTP 400; suspended/decommissioned → 403. `Tenants` is a system table.
+- **Controllers must never accept TenantId, TenantCode or TenantExternalId as parameters or in request DTOs.** Tenant context comes from middleware only.
+- Non-request operations set `TenantId` explicitly.
 
 ### Payment Configuration Safety
-- `IsProduction = false` is the required default in all `sharedsettings.{env}.json` files. Startup logs `"TEST mode"` or `"LIVE mode"`.
-- `RazorpayConfigValidator` cross-checks key prefix (`rzp_test_*` / `rzp_live_*`) against `IsProduction` at startup — mismatch fails startup immediately.
-- Never put per-tenant runtime config (`Use3DSecure`, provider routing) in sharedsettings. DB is the source of truth.
+- `IsProduction = false` by default; Razorpay key prefix is cross-checked at startup. Per-tenant runtime config (`Use3DSecure`, provider routing) lives in the database, never in sharedsettings.
+
+Detail (caching, observability, pipeline behaviors, full tenancy wiring): `.github/skills/cqrs-backend-implementation/clean-architecture-patterns.md`.
 
 ## Red Flags — Reject These in Code Review
 

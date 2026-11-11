@@ -6,7 +6,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
-    [string]$ConsoleVerbosity = 'minimal'
+    [string]$ConsoleVerbosity = 'minimal',
+
+    [switch]$CollectCoverage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,7 +75,7 @@ try {
     }
 
     & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $WorkspaceRoot 'scripts\invoke-integration-tests-isolated.ps1') `
-        -Runtime docker-phase10 -TestFilter 'Category=Integration' -ResultsDirectory $runDir -ConsoleVerbosity $ConsoleVerbosity 2>&1 |
+        -Runtime docker-phase10 -TestFilter 'Category=Integration' -ResultsDirectory $runDir -ConsoleVerbosity $ConsoleVerbosity -CollectCoverage:$CollectCoverage 2>&1 |
         Protect-Phase10Log | Tee-Object -FilePath (Join-Path $runDir $logName)
     $exitCode = $LASTEXITCODE
     if ($exitCode -eq 0) {

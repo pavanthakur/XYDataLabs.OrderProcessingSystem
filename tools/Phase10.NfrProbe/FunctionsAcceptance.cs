@@ -6,6 +6,8 @@ namespace XYDataLabs.OrderProcessingSystem.Tools.Phase10.NfrProbe;
 
 internal static class FunctionsAcceptance
 {
+    private const double MaximumReplayVisibilitySeconds = 60;
+
     public static async Task<int> RunAsync(ProbeOptions options)
     {
         var result = new Dictionary<string, object?> { ["status"]="failed",["runtime"]="local-docker",["startedUtc"]=DateTime.UtcNow };
@@ -75,8 +77,12 @@ internal static class FunctionsAcceptance
             replay.ApplicationProperties["ReplayRequestId"]=replayRequestId.ToString("D");
             replay.ApplicationProperties["ReplayApproved"]=true;
             await using var requests=client.CreateSender("dlq-replay-requests");
+            var replayClock=System.Diagnostics.Stopwatch.StartNew();
             await requests.SendMessageAsync(replay);
             await Poll("SELECT 1 FROM operations.DlqReplayRequests r JOIN operations.DlqQuarantineRecords q ON q.Id=r.QuarantineId WHERE r.Id=@r AND r.ProcessedUtc IS NOT NULL AND q.State='Replayed'",("@r",replayRequestId));
+            var replaySeconds=Math.Round(replayClock.Elapsed.TotalSeconds,3);
+            result["replayVisibilitySeconds"]=replaySeconds; result["replayVisibilityLimitSeconds"]=MaximumReplayVisibilitySeconds;
+            if(replaySeconds>MaximumReplayVisibilitySeconds){result["replay"]="threshold-exceeded"; throw new InvalidOperationException("Approved replay was not visible within the limit.");}
             result["replay"]="passed";
             await Poll("SELECT 1 WHERE (SELECT COUNT(*) FROM inventory.InventoryReservations WHERE CorrelationId=@c)=1 AND (SELECT COUNT(*) FROM notifications.NotificationDeliveries WHERE CorrelationId=@c)=1",("@c",correlation));
             result["downstreamEffects"]="passed";result["status"]="passed";

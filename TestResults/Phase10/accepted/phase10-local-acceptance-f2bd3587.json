@@ -1,0 +1,50 @@
+{
+  "schema": "phase10-sanitized-evidence-summary-v1",
+  "acceptance": {
+    "verdict": "PASS",
+    "scope": "non-azure-local",
+    "environment": "docker-dev",
+    "commit": "f2bd358702ca763bb6010fb2adbc9b0db230cbd9",
+    "worktreeAtRun": "CLEAN",
+    "l6Verdict": "INCOMPLETE"
+  },
+  "source": {
+    "reconciliationArtifact": "TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-024241244/phase10-acceptance-reconciliation.json",
+    "sha256": "67882f7839adc99c112b23a4af68ccf7eaefef547ec672ba02e014ef0d031417",
+    "e2eRun": "phase10-docker-http-20261111-024241244",
+    "nfrRun": "phase10-docker-nfr-20261111-023057463",
+    "createdUtc": "2026-11-10T21:46:01.490Z"
+  },
+  "passed": {
+    "deterministicPaymentJourneys": 6,
+    "sandboxPaymentJourneys": 6,
+    "tenants": ["TenantA", "TenantB", "TenantC"],
+    "providers": ["Razorpay", "OpenPay"],
+    "messageBurst": {
+      "expected": 100,
+      "observedEffects": 100,
+      "p95Seconds": 2.0058,
+      "limitSeconds": 30
+    },
+    "approvedReplayVisibilitySeconds": {
+      "observed": 1.071,
+      "limit": 60
+    },
+    "consumerOutageRecovery": {
+      "lostEffects": 0,
+      "duplicateEffects": 0,
+      "recoverySeconds": 26.081,
+      "limitSeconds": 1800
+    },
+    "rollback": "single-service local image swap and restore; not an ACA revision rollback",
+    "l5rReport": "reconciled with measured backend, frontend, and integration coverage"
+  },
+  "notCertified": [
+    "full Phase 10 L6 acceptance",
+    "hosted workflow 99 parity",
+    "Azure deployment",
+    "DW-023 order continuation and unresolved-payment recovery",
+    "DW-024 provider capability, including visible OpenPay 3DS challenge and Razorpay S2S",
+    "ACA revision rollback"
+  ]
+}

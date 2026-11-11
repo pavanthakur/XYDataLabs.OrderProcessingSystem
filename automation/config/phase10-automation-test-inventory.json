@@ -1,0 +1,62 @@
+{
+  "schema": "phase10-automation-test-inventory-v1",
+  "suites": [
+    {
+      "id": "test-payment-evidence",
+      "file": "src/browser/payment-evidence.test.ts",
+      "tests": [
+        "confirmed payment cannot replace required visible-challenge evidence",
+        "real final provider confirmation is required",
+        "sandbox never accepts simulation, unknown mode or live configuration",
+        "order amounts and currencies must be confirmed, never invented from local data"
+      ]
+    },
+    {
+      "id": "test-acceptance-coverage",
+      "file": "src/cli/payment-acceptance-coverage.test.ts",
+      "tests": [
+        "accepts complete all-tenant two-provider coverage in any execution order",
+        "rejects omitted, duplicate, unexpected, and empty coverage"
+      ]
+    },
+    {
+      "id": "test-verification-polling",
+      "file": "src/verification/verification-polling.test.ts",
+      "tests": [
+        "read-only polling waits for evidence rather than sleeping before every check",
+        "expired verification never converts missing evidence into PASS"
+      ]
+    },
+    {
+      "id": "test-callbacks",
+      "file": "src/browser/callback-outcome.test.ts",
+      "tests": [
+        "a callback with no loading panel and no result is not complete",
+        "the observed resource-not-found callback fails, never completes",
+        "errors override stale success content",
+        "pending information never counts as payment success",
+        "a success banner while reconciliation is loading remains pending",
+        "only a settled explicit success completes the journey"
+      ]
+    },
+    {
+      "id": "test-callbacks-browser",
+      "file": "src/browser/callback-outcome.browser.test.ts",
+      "tests": [
+        "browser callback guard rejects visible errors and waits for real success",
+        "resource-not-found is a failure even with no loading panel",
+        "missing initial loading panel does not race ahead of reconciliation",
+        "unresolved callback times out as pending, not completed",
+        "page errors cannot be hidden by a stale success banner"
+      ]
+    },
+    {
+      "id": "test-provider-challenges-browser",
+      "file": "src/browser/provider-challenge.browser.test.ts",
+      "tests": [
+        "controlled challenge navigation/rejection/timeout never prove provider success",
+        "payment diagnostics strip checkout session query strings"
+      ]
+    }
+  ]
+}

@@ -72,6 +72,12 @@ TestResults/*
 !TestResults/Integration/
 !TestResults/PaymentMatrix/
 !TestResults/Playwright/
+!TestResults/Phase10/
+TestResults/Phase10/*
+!TestResults/Phase10/accepted/
+TestResults/Phase10/accepted/*
+!TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json
+!TestResults/Phase10/accepted/phase10-preazure-image-evidence-58c361a9.json
 TestResults/Integration/*
 TestResults/PaymentMatrix/*
 TestResults/Playwright/*

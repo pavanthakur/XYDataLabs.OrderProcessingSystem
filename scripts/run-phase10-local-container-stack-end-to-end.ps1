@@ -26,6 +26,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-acceptance-report.ps1')
+. (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
 Assert-Phase10ComposeProject
 if ($RemoveImages) { throw '-RemoveImages is retired. Review image cleanup separately; shared tags must not be force-deleted.' }
 if ($RemoveVolumes -and -not $CleanupOnExit) { throw '-RemoveVolumes requires -CleanupOnExit.' }
@@ -173,6 +174,14 @@ try {
     $dockerAvailable = $true
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec 300
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec 300
+    $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+    $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
+    $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+    $imageRunId = Split-Path -Leaf $runDir
+    Get-Phase10DockerImageManifest -RunId $imageRunId -CapturePoint before `
+        -OutputPath (Join-Path $runDir 'docker-image-identities-before.json') -ComposeFile $composeFile `
+        -EnvExampleFile $envExampleFile -EnvFile $envFile -WorkspaceRoot $workspaceRoot -ArtifactRoot $runDir | Out-Null
+    $summary.imageIdentityEvidence = 'captured-before'
     $summary.steps += [ordered]@{
         name = 'readiness'
         status = 'passed'
@@ -210,7 +219,7 @@ try {
     }
 
     Invoke-LoggedCommand -Name 'integration' -Script {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1') -ConsoleVerbosity $IntegrationConsoleVerbosity
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1') -ConsoleVerbosity $IntegrationConsoleVerbosity -CollectCoverage
     } | Out-Null
     $summary.steps += [ordered]@{
         name = 'integration'
@@ -262,6 +271,28 @@ try {
         if ($sandbox.status -eq 'failed') { $runFailed=$true } elseif ($sandbox.status -ne 'passed') { $runPartial=$true }
     }
     if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Fixture lock remains; refuse messaging/restart.' }
+    # Derived from this run's own evidence: dedicated-tier tenants come from the seed contract, never a hardcoded tenant name.
+    $dedicatedTenants = @((Get-Content (Join-Path $runDir 'seed-contract.json') -Raw | ConvertFrom-Json).tenants |
+        Where-Object { $_.status -eq 'Active' -and $_.tier -eq 'Dedicated' } | ForEach-Object { $_.tenant })
+    $fixtureCheck = @((Get-Content (Join-Path $runDir 'foundations/summary.json') -Raw | ConvertFrom-Json).results | Where-Object { $_.name -eq 'fixture-regression' })
+    $routingSuites = @(if ($PaymentSuite -in @('deterministic', 'both')) { 'deterministic' }; if ($PaymentSuite -in @('sandbox', 'both')) { 'sandbox' })
+    $routingMissing = @()
+    foreach ($routingSuite in $routingSuites) {
+        $routingRows = @(Get-ChildItem $paymentReportRoot -Directory -Filter "payment-acceptance-$routingSuite-*" | ForEach-Object {
+            $routingSummary = Join-Path $_.FullName 'summary.json'
+            if (Test-Path $routingSummary) { (Get-Content $routingSummary -Raw | ConvertFrom-Json).results.rows }
+        })
+        foreach ($dedicatedTenant in $dedicatedTenants) {
+            if (-not @($routingRows | Where-Object { $_.tenantCode -eq $dedicatedTenant -and $_.journeyOutcome -eq 'completed' -and $_.verificationOutcome -eq 'passed' }).Count) {
+                $routingMissing += "$routingSuite/$dedicatedTenant"
+            }
+        }
+    }
+    $routingFixturePassed = $fixtureCheck.Count -eq 1 -and $fixtureCheck[0].status -eq 'passed'
+    $routingStatus = if ($dedicatedTenants.Count -eq 0) { 'blocked' }
+        elseif ($routingFixturePassed -and $routingMissing.Count -eq 0) { 'passed' } else { 'failed' }
+    $summary.steps += @{name='tenantc-routing-regression';status=$routingStatus;dedicatedTenants=$dedicatedTenants;missingVerifiedJourneys=$routingMissing;fixtureRegression=$routingFixturePassed;derivedFrom='foundations fixture-regression plus dedicated-tenant verified journeys in each selected payment suite'}
+    if ($routingStatus -eq 'failed') { $runFailed = $true } elseif ($routingStatus -eq 'blocked') { $runPartial = $true }
     try {
         Invoke-LoggedCommand -Name 'currency-order-entry' -Script { npm --prefix (Join-Path $workspaceRoot 'automation') run test:payment-currency:browser } | Out-Null
         $summary.steps += @{name='currency-order-entry';status='passed'}
@@ -321,6 +352,26 @@ catch {
 }
 finally {
     try {
+        if ($dockerAvailable -and -not (Test-Path -LiteralPath (Join-Path $runDir 'docker-image-identities-after.json'))) {
+            try {
+                $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+                $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
+                $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+                Get-Phase10DockerImageManifest -RunId (Split-Path -Leaf $runDir) -CapturePoint after `
+                    -OutputPath (Join-Path $runDir 'docker-image-identities-after.json') -ComposeFile $composeFile `
+                    -EnvExampleFile $envExampleFile -EnvFile $envFile -WorkspaceRoot $workspaceRoot -ArtifactRoot $runDir | Out-Null
+                $beforeImages = Get-Content -LiteralPath (Join-Path $runDir 'docker-image-identities-before.json') -Raw | ConvertFrom-Json
+                $afterImages = Get-Content -LiteralPath (Join-Path $runDir 'docker-image-identities-after.json') -Raw | ConvertFrom-Json
+                if (-not (Test-Phase10DockerImageManifestsMatch -Before $beforeImages -After $afterImages)) {
+                    throw 'Final Docker image inventory does not match the captured candidate inventory.'
+                }
+                $summary.imageIdentityEvidence = 'captured-and-matched'
+            } catch {
+                $runFailed = $true
+                $summary.imageIdentityEvidence = 'incomplete'
+                Add-Content -Path $progressLogPath -Value "Image identity finalization failed: $($_.Exception.Message)"
+            }
+        }
         if ($dockerAvailable -and $CleanupOnExit) {
             Write-ProgressLine 'Running cleanup for Phase 10 local container stack...'
             $downArguments = @(

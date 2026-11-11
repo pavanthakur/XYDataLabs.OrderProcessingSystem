@@ -15,11 +15,32 @@ param(
 
     [switch]$SkipOperationalChecks,
 
-    [switch]$SkipStartIfNeeded
+    [switch]$SkipStartIfNeeded,
+
+    [string]$ExpectedImageManifest
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+. (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
+if (-not [string]::IsNullOrWhiteSpace($ExpectedImageManifest) -and -not $SkipStartIfNeeded) {
+    throw '-ExpectedImageManifest requires -SkipStartIfNeeded so NFR cannot start or rebuild a different stack.'
+}
+if (-not [string]::IsNullOrWhiteSpace($ExpectedImageManifest)) {
+    if (-not (Test-Path -LiteralPath $ExpectedImageManifest -PathType Leaf)) { throw 'Expected E2E image identity manifest is missing.' }
+    $expectedItem = Get-Item -LiteralPath $ExpectedImageManifest -Force
+    if (($expectedItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $expectedItem.Length -gt 2MB) {
+        throw 'Expected E2E image identity manifest is not a bounded regular file.'
+    }
+    try { $expectedImages = Get-Content -LiteralPath $ExpectedImageManifest -Raw | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw 'Expected E2E image identity manifest is malformed.' }
+    if (-not (Test-Phase10DockerImageManifestShape -Manifest $expectedImages -ExpectedCapturePoint before)) {
+        throw 'Expected E2E image identity manifest is incomplete, foreign, or malformed.'
+    }
+    if ($expectedImages.candidate.worktree -cne 'clean') {
+        throw 'Expected E2E image identity manifest must be bound to a clean candidate.'
+    }
+}
 Assert-Phase10ComposeProject
 Assert-Phase10PortOwnership -Ports @(5080, 5022, (Get-Phase10SqlHostPort))
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
@@ -104,6 +125,23 @@ try {
         Write-WrapperProgress 'The Phase 10 Docker Dev HTTP stack is already reachable.'
     }
 
+    $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+    $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
+    $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+    $nfrEvidenceRoot = Join-Path $runDir 'nfr'
+    [void][IO.Directory]::CreateDirectory($nfrEvidenceRoot)
+    $imageBeforePath = Join-Path $runDir 'docker-image-identities-before.json'
+    $imageAfterPath = Join-Path $runDir 'docker-image-identities-after.json'
+    $imageBefore = Get-Phase10DockerImageManifest -RunId (Split-Path -Leaf $runDir) -CapturePoint before `
+        -OutputPath $imageBeforePath -ComposeFile $composeFile -EnvExampleFile $envExampleFile -EnvFile $envFile `
+        -WorkspaceRoot $workspaceRoot -ArtifactRoot $runDir
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedImageManifest)) {
+        Assert-Phase10DockerImageManifestMatches -Expected $expectedImages -Actual $imageBefore
+    }
+    $wrapperSummary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+    $wrapperSummary | Add-Member -NotePropertyName dockerImageIdentitiesBefore -NotePropertyValue 'docker-image-identities-before.json' -Force
+    $wrapperSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding utf8
+
     Set-Content -LiteralPath $currentStepPath -Value 'local-proof' -Encoding utf8
     Write-WrapperProgress 'Running the shared NFR proof engine against the Docker stack.'
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $localProofScript `
@@ -119,6 +157,16 @@ try {
         throw "Phase 10 docker NFR proof failed with exit code $LASTEXITCODE."
     }
 
+    $imageAfter = Get-Phase10DockerImageManifest -RunId (Split-Path -Leaf $runDir) -CapturePoint after `
+        -OutputPath $imageAfterPath -ComposeFile $composeFile -EnvExampleFile $envExampleFile -EnvFile $envFile `
+        -WorkspaceRoot $workspaceRoot -ArtifactRoot $runDir
+    if (-not (Test-Phase10DockerImageManifestsMatch -Before $imageBefore -After $imageAfter)) {
+        throw 'NFR completion image inventory differs from its captured candidate inventory.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedImageManifest)) {
+        Assert-Phase10DockerImageManifestMatches -Expected $expectedImages -Actual $imageAfter
+    }
+
     Set-Content -LiteralPath $currentStepPath -Value 'completed' -Encoding utf8
     Set-Content -LiteralPath $summaryPath -Encoding utf8 -Value (@{
         target = 'phase10-docker-nfr'
@@ -127,6 +175,8 @@ try {
         completedUtc = (Get-Date).ToUniversalTime().ToString('o')
         runDir = $runDir
         localProofRunRoot = Join-Path $runDir 'nfr'
+        dockerImageIdentitiesBefore = 'docker-image-identities-before.json'
+        dockerImageIdentitiesAfter = 'docker-image-identities-after.json'
         proofScript = $localProofScript
         latestPointerPath = $latestPointerPath
         failurePointerPath = $failurePointerPath

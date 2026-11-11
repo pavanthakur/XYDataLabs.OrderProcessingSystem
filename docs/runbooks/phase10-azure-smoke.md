@@ -114,7 +114,7 @@ After local pre-Azure validation reaches L6 on the target commit SHA, use this p
 
 | Sequence | Workflow | Required usage |
 |---|---|---|
-| 1 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Required clean-room CI parity gate before Azure when the change affects Compose, gateway, service images, workflow, Bicep, transport, or payment automation. |
+| 1 | Manual local Docker Dev HTTP acceptance | Run the local hook on the reviewed release-candidate SHA. Under DW-028 Option A, hosted workflow `99` is excluded; preserve its Docker safety guard and do not claim hosted parity. |
 | 2 | `00 Azure Platform Foundation` | Run only when provider registration, persistent ACR, or pull identity must be created or refreshed. Skip it for routine deploys when the platform foundation already exists. |
 | 3 | `01 Phase 10 Azure Deploy Orchestrator` | Required Azure deploy entrypoint for dry run, deploy, or intentional cleanup. |
 | 4 | `02 Phase 10 Azure Runtime Smoke` | Required immediately after a successful deploy. |
@@ -123,7 +123,7 @@ After local pre-Azure validation reaches L6 on the target commit SHA, use this p
 
 Promotion rules:
 
-- Do not start Azure deployment work until local L6 and workflow `99` are both green for the same commit SHA.
+- Do not start Azure deployment work until local L6 and all applicable hosted checks are green for the same commit SHA. The Docker hook is accepted through the manual local run; workflow `99` hosted parity is excluded under DW-028 Option A.
 - Treat `00` as a conditional platform-maintenance step, not part of every routine deployment.
 - Use `01` in `dryRun=true` mode first for infrastructure-affecting changes.
 - Use `01` with `cleanupInfra=true` only when intentionally removing or resetting an environment.
@@ -159,13 +159,13 @@ Operator note:
 - The August 11, 2026 transport-smoke pass is stronger than the earlier utility-only shape: it resolves active tenant topology from the deployed runtime, validates tenant/provider and dedicated-database contracts, and verifies durable SQL effects before completing the DLQ/replay proof.
 
 Rule of thumb:
-- Run `99` first as the clean-room pre-deployment parity gate before Azure when a change affects Compose, gateway, service images, workflow, Bicep, transport, or payment-matrix behavior.
+- Run the manual local Docker hook as the pre-deployment Docker acceptance when a change affects Compose, gateway, service images, transport, or payment-matrix behavior. Under DW-028 Option A, do not dispatch hosted workflow `99` for parity.
 - Run `00` once before the first app deploy, and again only if you intentionally recreate the platform foundation or need to refresh subscription-level provider registration.
 - Run `01` when you want to deploy Azure resources. Use the same workflow in cleanup mode only when intentionally removing or resetting an environment.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
 - Run `04` after `03` passes when you want the Azure equivalent of the local all-tenant Docker payment matrix.
-- Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
+- Workflow `99` is not an accepted hosted check under DW-028 Option A because its safety guard requires local Docker Desktop. Run the local hook on the Docker Desktop host; do not weaken the guard to make a hosted run pass.
 
 Runtime smoke backend-route guardrail:
 
@@ -187,13 +187,13 @@ Default selection guidance:
 - Keep `Assign AcrPull=false` for normal dev/staging/prod runs.
 - Use `Assign AcrPull=true` only for a privileged platform-admin run that already has `roleAssignments/write`.
 - In `00`, use `Dry Run=false` when you want provider registration and platform resources actually created or refreshed. `Dry Run=true` is non-mutating and skips provider registration.
-- Use `99` only for optional local or CI parity checks, not for the main Azure environment lifecycle.
+- Use the local Docker hook for the manual acceptance check. Hosted workflow `99` parity is excluded; it is not part of the Azure environment lifecycle.
 
 ### Environment-Specific GitHub Actions Checklists
 
-Use the same gate order in all environments:
+Use the same gate order in all environments; the local Docker acceptance is a precondition for the release candidate, not an environment-specific Azure action:
 
-1. `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)`
+1. Confirm the manual local Docker acceptance and applicable hosted checks passed on the target commit; do not dispatch hosted workflow `99`.
 2. `00 Azure Platform Foundation` only when needed
 3. `01 Phase 10 Azure Deploy Orchestrator` in dry-run mode first
 4. `01 Phase 10 Azure Deploy Orchestrator` real deploy
@@ -212,15 +212,7 @@ Resource-name note:
 
 Run this after local pre-Azure L6 is green on the target commit SHA.
 
-1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)`.
-   - Input:
-     - `stabilizationDelaySeconds = 120`
-   - Wait for:
-     - smoke
-     - integration
-     - payment matrix
-     - full validation
-   - Stop if it fails.
+1. Confirm the manual local Docker acceptance and applicable hosted checks passed on this exact release-candidate SHA. Workflow `99` hosted parity is excluded under DW-028 Option A; do not dispatch it.
 2. Decide whether `00 Azure Platform Foundation` is needed.
    - Run it only if:
      - this is the first Phase 10 Azure run in the subscription
@@ -286,10 +278,7 @@ Run this after local pre-Azure L6 is green on the target commit SHA.
 
 Use this after `dev` is green and you want the same release candidate validated in staging.
 
-1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` on the same target commit SHA.
-   - Input:
-     - `stabilizationDelaySeconds = 120`
-   - Stop if it fails.
+1. Confirm the already completed manual local Docker acceptance and applicable hosted checks are bound to this same target commit SHA. Workflow `99` hosted parity is excluded under DW-028 Option A.
 2. Decide whether `00 Azure Platform Foundation` is needed.
    - In normal staging promotion it is usually skipped because the platform foundation is already shared and persistent.
    - Inputs when needed:
@@ -330,10 +319,7 @@ Use this after `dev` is green and you want the same release candidate validated 
 
 Use this only after `staging` is green and the production change is approved.
 
-1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` on the same target commit SHA.
-   - Input:
-     - `stabilizationDelaySeconds = 120`
-   - Stop if it fails.
+1. Confirm the already completed manual local Docker acceptance and applicable hosted checks are bound to this same target commit SHA. Workflow `99` hosted parity is excluded under DW-028 Option A.
 2. Decide whether `00 Azure Platform Foundation` is needed.
    - This should normally be skipped for production promotion unless the shared platform foundation actually needs refresh.
    - Inputs when needed:
@@ -369,7 +355,7 @@ Use this only after `staging` is green and the production change is approved.
 
 Stop rules for all environments:
 
-- If `99` fails, do not run Azure.
+- If the manual local Docker acceptance or any required hosted check fails, do not run Azure. Hosted workflow `99` is excluded under DW-028 Option A and is not a required pass.
 - If `01` dry run looks wrong, do not run real deploy.
 - If `02` fails, do not run `03`.
 - If `03` fails, do not run `04`.
@@ -411,7 +397,7 @@ The Azure-generated Container Apps hostnames from a deployment run are diagnosti
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
 | `04 Phase 10 Azure Payment Matrix` | Post-transport payment E2E | No | No | No | No | Current validation |
-| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
 | `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR plus historical GHCR retention plus artifact retention | Current internal |
