@@ -276,7 +276,7 @@ Assert-FileContains -RelativePath 'scripts/verify-payment-run-azure.ps1' -RegexP
 Assert-FileNotContains -RelativePath 'scripts/verify-payment-run-physical.ps1' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'physical payment verifier does not hardcode sample tenant codes in active execution logic'
 Assert-FileNotContains -RelativePath 'automation/src/catalog/api-tenant-execution-catalog.ts' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'automation tenant catalog does not infer topology from sample tenant codes'
 Assert-FileNotContains -RelativePath 'automation/src/orchestrator/payment-automation-executor.ts' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'payment automation executor does not hardcode sample tenant codes'
-Assert-FileNotContains -RelativePath 'scripts/run-phase10-local-container-stack-end-to-end.ps1' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'local Phase 10 end-to-end wrapper does not pass hardcoded sample tenant lists'
+Assert-FileNotContains -RelativePath 'scripts/run-phase10-local-container-stack-end-to-end.ps1' -RegexPattern '\bTenant[ABC]\b(?!-routing-regression)' -Description 'local Phase 10 end-to-end wrapper does not pass hardcoded sample tenant lists (the tenantc-routing-regression step identifier is exempt)'
 
 Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern '\$envSuffix = if \(\$Environment -eq ''staging''\) \{ ''stg'' \} else \{ \$Environment \}' -Description 'runtime smoke script staging normalization'
 Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern 'Gateway backend route contract' -Description 'runtime smoke includes gateway backend route validation'
