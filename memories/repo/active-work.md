@@ -28,7 +28,7 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## Pending / Next Actions
 
-1. Phase 10 closes only after L6 (architecture conformance, CI workflow `99` on a pushed SHA) and the separately approved Azure stages. Push and Azure need explicit approval.
+1. L6 gate A (architecture conformance) passed locally on 2026-11-11 (`TestResults/Phase10/local-preazure/20261111-070847708_architecture-conformance`). Hosted CI workflow `99` is NOT PASS: runs 42939552311, 42939786442 and 42940094227 failed. Fixed: runner pinned to `ubuntu-24.04`, run-root creation. Remaining: the Docker safety guard allows only local Docker Desktop (by design), tracked as DW-028; do not weaken the guard. Phase 10 closes only after DW-028 is decided and the separately approved Azure stages.
 2. Phase 11 (DW-023/DW-024) is separate: [plan](../../docs/internal/phase11-implementation-plan.md), [Deferred Work Log](../../docs/internal/DEFERRED-WORK-LOG.md).
 
 ## Recent Key Facts And Safety Boundaries
