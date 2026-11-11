@@ -32,7 +32,7 @@ permissions:
 jobs:
   phase10-docker-dev-http-e2e:
     name: 99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       STABILIZATION_DELAY_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.stabilizationDelaySeconds || 120 }}
