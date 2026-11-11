@@ -445,7 +445,19 @@ If any one of those items is not true, Phase 10 is still in progress.
 
 ## Remaining Pre-Azure Implementation Board
 
-### Non-Azure Acceptance Checkpoint — 11 November 2026
+### Current Non-Azure Acceptance and L6 Checkpoint — 12 November 2026
+
+**Result: bounded non-Azure Docker acceptance and the three scoped L6 gates passed on clean candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`.** The Docker E2E run `phase10-docker-http-20261111-230915653` and NFR run `phase10-docker-nfr-20261111-234505649` use the same 13 service image IDs and reconcile to PASS. The sealed L5-R report has no issues and contains measured backend, frontend, and integration coverage. A current-candidate architecture conformance run passed 42 architecture-invariant tests and one Gateway topology test. Hosted checks on this SHA passed: [AI Customization](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43078347658) on Windows and Linux, [Documentation Links](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43078354940), and [Drift Scanner](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43070162309). Under DW-028 Option A, hosted workflow `99` is excluded and its local manual Docker check remains the acceptance path.
+
+| Gate | Current bounded verdict | Evidence and limits |
+|---|---|---|
+| A — Architecture conformance | **PASS** | Candidate `494ab4fd`; `TestResults/Phase10/local-preazure/20261111-235924285_architecture-conformance` (42 architecture invariants + 1 Gateway topology test). |
+| B — Local Docker, operations, NFR and rollback | **PASS (bounded local evidence)** | Candidate `494ab4fd`; E2E/NFR runs above. Six deterministic and six sandbox payments across TenantA/B/C × Razorpay/OpenPay; 100/100 message effects at 2.273 s P95; replay 1.080 s; outage recovery 26.201 s with zero loss/duplicates; Inventory rollback and restore passed. |
+| C — Deployment-readiness hosted checks | **PASS under DW-028 Option A** | Same candidate SHA: AI Customization Windows/Linux, Documentation Links, and Drift Scanner passed. Workflow `99` hosted parity is intentionally excluded. No mandatory-PR requirement was introduced. |
+
+The sanitized tracked projection is `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`; the exact reconciliation and raw evidence remain in ignored local `TestResults`. This is **not full Phase 10 closure**: Azure and the combined `l6-ci-parity-and-azure` acceptance remain NOT-RUN; DW-023/DW-024 remain Phase 11 deferrals; visible OpenPay 3DS, Razorpay S2S, fulfillment, installments, and ACA revision rollback are not certified. The checklist evidence is bound to candidate `494ab4fd`, not to later documentation-only commits.
+
+### Historical Non-Azure Acceptance Checkpoint — 11 November 2026
 
 **Result: non-Azure local acceptance PASS on one clean committed candidate `f2bd3587`.** The owner authorized the non-Azure implementation and local acceptance run; Azure and Phase 11 stayed excluded. At the time this checkpoint was first recorded, nothing had been pushed; subsequent documentation-only scope/evidence updates are recorded below and at `3659a743`. Run `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` combines the sealed Docker E2E run (`phase10-docker-http-20261111-024241244`) and the NFR run (`phase10-docker-nfr-20261111-023057463`) into one verdict bound to a single commit with a clean worktree at start and finish. The compact tracked evidence is `TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json`; its source checksum identifies the full reconciliation packet, which remains in ignored local `TestResults`.
 

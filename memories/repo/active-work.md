@@ -2,26 +2,27 @@
 
 Session navigation only—not proof. Verify current Git, code, evidence and runtime state before acting.
 
-## Checkpoint — 11 November 2026
+## Checkpoint — 12 November 2026
 
-- Review revision: `58c361a`
-- Worktree state: `DIRTY`
-- Evidence status: `BLOCKED`
-- Evidence revision: `58c361a`
-- Evidence environment: `LOCAL DOCKER DESKTOP`
-- Evidence scope: `historical E2E/NFR image identity is unproven; implementation runtime not tested`
-- Evidence reference: `TestResults/Phase10/accepted/phase10-preazure-image-evidence-58c361a9.json`
-- Base revision: `58c361a9d0c594da604c0a274204c8dbb72090ea` (`dev`). The E2E/NFR runs below were clean at that revision. This checkout is now **DIRTY** from the Phase 10 image-integrity implementation; do not bind new acceptance to the base SHA.
-- Earlier accepted Docker summary at `f2bd3587` remains historical and unchanged. Gate A/C evidence is on `3659a743`; no single unified L6 candidate is claimed.
-- E2E `phase10-docker-http-20261111-103838867` and NFR `phase10-docker-nfr-20261111-102444152` passed under the former completion-v3 / reconciliation-v1 contract. E2E covered six deterministic and six sandbox positives across TenantA/B/C and Razorpay/OpenPay. NFR: 100 messages/effects; P95 2.16305 s (30 s limit); replay 1.085 s (60 s); recovery 28.027 s (1,800 s); zero lost/duplicate effects; local rollback/restore.
-- The old reconciler did not compare images. E2E start rollback evidence and the NFR retained-image log record Inventory image `d619aefc…`; a supplemental E2E image inventory recorded `926ef950…` after E2E completed, without a candidate SHA and outside the v3 completion hashes. Treat same-image proof as **BLOCKED**, not as a Docker PASS or FAIL. Sanitized record: `TestResults/Phase10/accepted/phase10-preazure-image-evidence-58c361a9.json`.
-- Current changes fix Gateway/Functions Docker restore inputs and add automatic 13-service image manifests, completion-v4 integrity, image-aware preview/reconciliation and tests. Focused code checks are recorded in the current implementation summary. A forced local Gateway publish resolved central package versions and NuGet audit found no vulnerable packages; this is not Docker image proof. Existing S1694/CA1062/MA0074 analyzer warnings and Openpay 1.0.25 NU1701 are recorded for disposition; none were suppressed. No Docker runtime rerun has exercised these changes. Historical image package versions remain UNKNOWN.
-- Runbook now labels the prior NFR-first order as historical and documents the pending v4 sequence: E2E, NFR against its exact image manifest, then explicit run-directory reconciliation. Documentation links pass; no runtime acceptance was run.
-- Phase 10 is **not complete**. Azure stages are NOT RUN. DW-028 Option A remains accepted (workflow 99 local/manual; hosted parity excluded). DW-027 remains BLOCKED/NOT TESTED. DW-023/DW-024 remain Phase 11 deferrals. OpenPay visible 3DS and Razorpay S2S are uncertified.
+- Acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at both E2E and NFR start/finish. The current checkout may be dirty from this documentation/evidence closeout; verify Git before binding any new evidence.
+- Review revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
+- Worktree state: `UNKNOWN`
+- Verify Git state before continuing.
+- Evidence revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
+- Evidence environment: `LOCAL DOCKER DESKTOP ON G:`
+- Evidence scope: `bounded non-Azure local Docker acceptance; not full Phase 10 or Azure acceptance`
+- Evidence reference: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`
+- Evidence status: `HISTORICAL`
+- The pinned candidate's recorded verdict is **PASS, bounded non-Azure local acceptance**. Do not describe this as full Phase 10 closure or Azure acceptance.
+- E2E: `phase10-docker-http-20261111-230915653`; NFR: `phase10-docker-nfr-20261111-234505649`; the v4 reconciler returned PASS with all 13 image identities equal. Sanitized tracked summary: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`.
+- E2E passed cold build, foundations, smoke, isolated integration, identity, deterministic and sandbox journeys (TenantA/B/C × Razorpay/OpenPay), messaging/Functions, persistence after Docker restart, and settings restoration. Six positives per payment mode; six Razorpay failure/cancellation cases passed.
+- NFR passed all categories: 100/100 messages/effects at 2.273 s P95; replay visibility 1.080 s; outage recovery 26.201 s, zero lost/duplicate effects; retained Inventory rollback and restore passed. L5-R HTML had no issues and measured backend, frontend, and integration coverage.
+- L6 A passed on this candidate (42 architecture-invariant tests + 1 Gateway topology test). L6 B passed with bounded local evidence. L6 C passed under DW-028 Option A: Drift Scanner, AI Customization Windows/Linux, and Documentation Links passed on this SHA; workflow `99` hosted parity is excluded. See the checklist for action links and limits.
+- Azure and combined `l6-ci-parity-and-azure` remain NOT-RUN. DW-023/DW-024 remain Phase 11 deferrals. Fulfillment, installments, unresolved-payment recovery, visible OpenPay 3DS, Razorpay S2S, and ACA revision rollback remain uncertified.
 
 ## Next action
 
-Review the uncommitted implementation diff and safe-test packet. Before acceptance, get separate scoped authorization for Git candidate creation/push and for Docker cold build, E2E/payment acceptance, NFR, and persistence/recovery operations. Freeze one clean candidate, cold-build once, pass its E2E image manifest to NFR, then reconcile v4 evidence. Do not rerun payments solely to refresh documentation; never retry an ambiguous charge. Azure requires a later separate approval.
+Do not begin Azure work or Phase 11 automatically. The next step requires a separately approved Azure plan; no Azure resources, directory settings, or CI/CD deployment were touched during this acceptance.
 
 ## Safety / navigation
 
