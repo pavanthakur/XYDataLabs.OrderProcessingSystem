@@ -447,6 +447,8 @@ If any one of those items is not true, Phase 10 is still in progress.
 
 ### Current Non-Azure Acceptance and L6 Checkpoint — 12 November 2026
 
+**Status clarification (12 November): L6 gate C is closed/PASS for `494ab4fd` under DW-028 Option A, not pending or unrun.** The separate combined report gate `l6-ci-parity-and-azure` remains NOT-RUN because Azure acceptance has not been executed; it is not the scoped non-Azure L6 gate C. Workflow `99` is intentionally local-only, not a failed required hosted check. Proposed Checkpoint A improvements (no-PR CI triggers, service-path coverage and truthful summaries) are prospective delivery improvements, not remediation required to reopen or re-pass this accepted gate. Later candidates still require their applicable checks; no acceptance is transferred automatically.
+
 **Result: bounded non-Azure Docker acceptance and the three scoped L6 gates passed on clean candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`.** The Docker E2E run `phase10-docker-http-20261111-230915653` and NFR run `phase10-docker-nfr-20261111-234505649` use the same 13 service image IDs and reconcile to PASS. The sealed L5-R report has no issues and contains measured backend, frontend, and integration coverage. A current-candidate architecture conformance run passed 42 architecture-invariant tests and one Gateway topology test. Hosted checks on this SHA passed: [AI Customization](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43078347658) on Windows and Linux, [Documentation Links](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43078354940), and [Drift Scanner](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43070162309). Under DW-028 Option A, hosted workflow `99` is excluded and its local manual Docker check remains the acceptance path.
 
 | Gate | Current bounded verdict | Evidence and limits |
@@ -461,7 +463,9 @@ The sanitized tracked projection is `TestResults/Phase10/accepted/phase10-local-
 
 **Result: non-Azure local acceptance PASS on one clean committed candidate `f2bd3587`.** The owner authorized the non-Azure implementation and local acceptance run; Azure and Phase 11 stayed excluded. At the time this checkpoint was first recorded, nothing had been pushed; subsequent documentation-only scope/evidence updates are recorded below and at `3659a743`. Run `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` combines the sealed Docker E2E run (`phase10-docker-http-20261111-024241244`) and the NFR run (`phase10-docker-nfr-20261111-023057463`) into one verdict bound to a single commit with a clean worktree at start and finish. The compact tracked evidence is `TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json`; its source checksum identifies the full reconciliation packet, which remains in ignored local `TestResults`.
 
-### Non-Azure L6 Gate Verdicts (11 November 2026)
+### Historical Non-Azure L6 Gate Verdicts (11 November 2026)
+
+This dated record is superseded for current status by the 12 November checkpoint above. Its mixed-revision limitation is historical; same-candidate acceptance was subsequently established on `494ab4fd`.
 
 | Gate | Verdict | Evidence |
 |---|---|---|
@@ -481,6 +485,8 @@ Scope limits that remain explicit:
 4. A visible OpenPay 3DS challenge and Razorpay S2S remain uncertified.
 
 ### Pre-Azure Image-Integrity Implementation Checkpoint — 11 November 2026
+
+**Historical checkpoint, not the current action list.** The then-pending same-candidate/image-identity acceptance described below was subsequently completed on `494ab4fd`; see the 12 November checkpoint above. Preserve these earlier limitations as evidence history, not as instructions to repeat payment or Docker acceptance. Azure acceptance remains separately pending.
 
 **Runtime evidence on `58c361a9` is historical PASS under the old v1 reconciler, not image-bound acceptance.** The E2E run `phase10-docker-http-20261111-103838867` and NFR run `phase10-docker-nfr-20261111-102444152` both recorded the same clean source SHA `58c361a9d0c594da604c0a274204c8dbb72090ea`. E2E recorded six deterministic and six sandbox payment journeys across TenantA/B/C and both providers. NFR recorded 100 messages/effects, P95 **2.16305 s** (limit 30 s), replay visibility **1.085 s** (limit 60 s), backlog recovery **28.027 s** (limit 1,800 s), zero lost messages and zero duplicate effects, plus local image rollback/restore. The old reconciler returned PASS because it did not compare image identities.
 

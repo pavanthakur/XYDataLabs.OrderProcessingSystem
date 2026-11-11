@@ -2,6 +2,8 @@
 
 ## Current non-Azure acceptance evidence (12 November 2026)
 
+**L6 gate C is PASS under DW-028 Option A for `494ab4fd`, not an outstanding Docker/hosted-parity blocker.** The separately named combined `l6-ci-parity-and-azure` report gate remains NOT-RUN for Azure acceptance; do not interpret it as reopening non-Azure L6 C. See the 12 November checkpoint in the [canonical Phase 10 checklist](../internal/phase10-implementation-checklist.md) for same-candidate hosted run links. Planned no-PR CI improvements are separate prospective work, not a reason to repeat accepted payment runs.
+
 Non-Azure local acceptance **PASSED** on clean committed candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`. The cold-build Docker E2E run is `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-230915653/`; the same-candidate NFR run is `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261111-234505649/`. The reconciled verdict is `phase10-acceptance-reconciliation.json` in the E2E run, and its sanitized tracked projection is `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`. All 13 local service image IDs matched across E2E/NFR. E2E passed foundations, integration, deterministic and sandbox payments (three tenants × both providers), messaging/Functions, persistence after Docker Desktop restart, and settings restoration. NFR passed all seven categories; the 100-message burst had 100/100 messages and effects at 2.273 s P95, replay visibility was 1.080 s, outage recovery was 26.201 s with zero lost/duplicate effects, and the Inventory rollback/restore drill passed. This is bounded **non-Azure local acceptance**, not full Phase 10 or Azure acceptance. Under DW-028 Option A, workflow `99` remains a manual local check; its safety guard is unchanged and hosted parity is excluded. DW-023/DW-024, visible OpenPay 3DS challenge, Razorpay S2S, Azure deployment, and ACA revision rollback remain uncertified. Preserve raw reports; do not reset volumes or retry charges.
 
 The cold build completed without build errors but retained analyzer/package warnings (CA1062, CA1825, CA2000, MA0005, MA0047, MA0074, NU1701); they were not suppressed and remain for separate review, so this run is not warning-free.
@@ -357,7 +359,9 @@ Record cold-build, seed, smoke/integration/payment results, messaging/Functions 
 
 Deleting the retained folder requires **separate user approval**. Resolve the exact retained folder against the manifest, verify it is not Docker's active location, reject reparse points, and delete only that folder. Never remove `F:\DockerStorage`, `F:\DockerRetained`, a drive root, or unrelated backups recursively. No automatic F: deletion command is provided.
 
-### Current acceptance checkpoint — 9 November 2026
+### Historical acceptance checkpoint — 9 November 2026
+
+Superseded for current status by the 12 November acceptance checkpoint at the top of this runbook. The dated results and remaining steps below are historical, not instructions to repeat accepted Docker/payment testing.
 
 The user confirmed they independently deleted `F:\DockerRetained\DockerDesktopWSL-before-G`. It is no longer a recovery option; do not assume unrelated F: backups contain this Docker disk. Ask for immediate confirmation before testing the destructive project reset on G:.
 
