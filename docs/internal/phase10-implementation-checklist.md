@@ -21,7 +21,7 @@ Current architectural anchor flow:
 
 ## Phase 10 Implementation And Validation Lifecycle
 
-Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model: small local changes get fast checks, platform changes get full Docker and CI parity, and Azure is used only after local evidence is clean. Each stage may begin only after the previous required stage passes, unless an explicit exception is documented.
+Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model: small local changes get fast checks, platform changes get full Docker and applicable hosted checks, and Azure is used only after local evidence is clean. Hosted parity is required only where the runner can safely reproduce the target environment; approved exceptions must be explicit in the gate scope. Each stage may begin only after the previous required stage passes, unless an explicit exception is documented.
 
 ### Validation Stages
 
@@ -33,7 +33,7 @@ Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model
 | 3 | Local Application Debug | Docker runs backing services while Visual Studio, VS Code, or command-line hosts run the gateway, APIs, UI, workers, and Functions worker for breakpoints and fast defect fixes. |
 | 4 | Local Integration Validation | Integration tests prove SQL, Redis, Blob abstractions, messaging abstractions, startup wiring, idempotency, and tenant/provider behavior before browser E2E. |
 | 5 | Local Docker Compose End-to-End | Full local Docker validation proves profile startup, gateway routing, Playwright/browser smoke, integration suite, payment matrix, logs, and artifacts. The payment matrix evidence must include the persisted order id, order reference, amount, and currency for each tenant/provider journey. Required before Azure for gateway, auth, Docker, messaging, infrastructure, image, or deployment changes. |
-| 6 | CI Pre-Deployment Parity Gate | GitHub-hosted clean-room verification proves the solution succeeds on a fresh runner before Azure deployment. Use `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` as the CI mirror of the Docker Dev HTTP local path for Compose, gateway, service image, workflow, Bicep, transport, or payment-matrix changes. |
+| 6 | CI Pre-Deployment Validation Gate | GitHub-hosted checks validate the changes that can safely run on hosted runners before Azure deployment. Under DW-028 Option A, the local Docker hook is the manual acceptance check and hosted workflow `99` is excluded; never weaken its guard to obtain parity. |
 | 7 | Azure Deployment | `00 Azure Platform Foundation` runs only when provider registration, ACR, or pull identity must be created or refreshed. `01 Phase 10 Azure Deploy Orchestrator` deploys the selected environment. Use cleanup mode only when intentionally removing or resetting an environment. Use dry run first for infrastructure changes. |
 | 8 | Azure Infrastructure And Configuration Verification | Provisioned resources are healthy; managed identities are assigned; required environment variables are present; secrets resolve from Key Vault; Container Apps revisions are healthy; Function App host runs; Storage, Service Bus, SQL, and Redis are reachable. |
 | 9 | Azure Runtime Smoke | `02 Phase 10 Azure Runtime Smoke` proves gateway health, routed API JSON, UI route, and UI API proxy/bootstrap. |
@@ -45,14 +45,14 @@ Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model
 
 After local pre-Azure L6 passes on a target commit SHA, promote in this exact order:
 
-1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` as the CI clean-room parity gate.
+1. Run `scripts/run-phase10-docker-dev-e2e-hook.ps1` on local Docker Desktop for manual Docker acceptance. Hosted workflow `99` parity is excluded under DW-028 Option A.
 2. Run `00 Azure Platform Foundation` only if provider registration, persistent ACR, or pull identity must be created or refreshed.
 3. Run `01 Phase 10 Azure Deploy Orchestrator` with `dryRun=true` first for infrastructure-affecting changes, then with `dryRun=false` for the real deployment.
 4. Run `02 Phase 10 Azure Runtime Smoke`.
 5. Run `03 Phase 10 Azure Transport Smoke`.
 6. Run `04 Phase 10 Azure Payment Matrix`.
 
-Do not treat workflow numbering as execution order. `99` is the required pre-deployment parity gate, while `00` remains a conditional platform-foundation workflow.
+Do not treat workflow numbering as execution order. The local Docker hook is the manual acceptance check under DW-028 Option A; hosted workflow `99` parity is excluded, while other applicable hosted checks remain required on the reviewed SHA. Workflow `00` remains conditional platform-foundation deployment.
 
 Environment note:
 
@@ -447,7 +447,7 @@ If any one of those items is not true, Phase 10 is still in progress.
 
 ### Non-Azure Acceptance Checkpoint — 11 November 2026
 
-**Result: non-Azure local acceptance PASS on one clean committed candidate `f2bd3587`.** The owner authorized the non-Azure implementation and local acceptance run; Azure and Phase 11 stayed excluded and nothing was pushed. Run `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` combines the sealed Docker E2E run (`phase10-docker-http-20261111-024241244`) and the NFR run (`phase10-docker-nfr-20261111-023057463`) into one verdict bound to a single commit with a clean worktree at start and finish. Evidence file: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-024241244/phase10-acceptance-reconciliation.json`.
+**Result: non-Azure local acceptance PASS on one clean committed candidate `f2bd3587`.** The owner authorized the non-Azure implementation and local acceptance run; Azure and Phase 11 stayed excluded and nothing was pushed. Run `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` combines the sealed Docker E2E run (`phase10-docker-http-20261111-024241244`) and the NFR run (`phase10-docker-nfr-20261111-023057463`) into one verdict bound to a single commit with a clean worktree at start and finish. The compact tracked evidence is `TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json`; its source checksum identifies the full reconciliation packet, which remains in ignored local `TestResults`.
 
 Passed gates: sealed completion, foundations, smoke, integration, OpenPay baseline, baseline validation, customer directory, TenantC routing, deterministic and sandbox payments (3 tenants x 2 providers), currency order entry, messaging/Functions, persistence restart, provider restoration, storage; L5-R report with no reconciliation issues and measured backend, frontend and integration coverage; NFR functional, performance, tenant, payments, operational, recovery and security; 100-message burst (P95 2.0 s, limit 30 s); approved replay visibility 1.07 s (limit 60 s); consumer-outage backlog recovery 26 s with 0 lost and 0 duplicate effects (limit 30 min); rollback to the previous inventory image executed and the current image restored.
 
@@ -455,12 +455,12 @@ Scope limits that remain explicit:
 
 1. **Rollback evidence is a single-service local image swap.** The previous image `phase10-prev-290d0fba` was built from a clean export of the committed base `290d0fba` (provenance in `TestResults/Phase10/rollback-baseline/290d0fba/provenance.json`). No application source differs from the base, so it proves the swap/restore mechanism and schema readiness, not a behavioural difference, and it is not an ACA revision rollback. Images are locally built and have no registry digest.
 2. **DW-023 order continuation and DW-024 provider capability remain deferred to Phase 11** and are never counted as PASS. Fulfillment, installments and unresolved-payment recovery are not certified.
-3. **L6 is not complete.** CI parity workflow `99` on a pushed SHA, the architecture conformance gate on that SHA, and every Azure stage (`00`-`04`) are NOT-RUN and need separate approval. Phase 10 is closed only when those also pass.
+3. **L6 is not complete.** DW-028 Option A is accepted: the local Docker hook is the manual Docker Desktop check; hosted workflow `99` parity is excluded and its safety guard is unchanged. The hook passed within the bounded acceptance on `f2bd3587`. Applicable hosted checks and architecture conformance must still be verified against the reviewed pushed SHA; Azure stages (`00`-`04`) remain NOT-RUN and separately approval-gated.
 4. A visible OpenPay 3DS challenge and Razorpay S2S remain uncertified.
 
-Findings fixed while reaching this result: skipped or blocked NFR categories were counted as passed (now `incomplete`, covered by `scripts/tests/test-phase10-nfr-aggregate.ps1`); a missing rollback image blocked the drills; non-ASCII test names broke discovered-versus-TRX reconciliation (UTF-8 helper, covered by `scripts/tests/test-phase10-dotnet-inventory.ps1`); `tenantc-routing-regression` was never produced and is now derived from run evidence; the report preview wrongly flagged integration bookkeeping JSON. Any code change after `f2bd3587` requires rerunning both runs and the reconciler.
+Findings fixed while reaching this result: skipped or blocked NFR categories were counted as passed (now `incomplete`, covered by `scripts/tests/test-phase10-nfr-aggregate.ps1`); a missing rollback image blocked the drills; non-ASCII test names broke discovered-versus-TRX reconciliation (UTF-8 helper, covered by `scripts/tests/test-phase10-dotnet-inventory.ps1`); `tenantc-routing-regression` was never produced and is now derived from run evidence; the report preview wrongly flagged integration bookkeeping JSON. Changes to application/runtime behavior, payment flows, images, or evidence generation after `f2bd3587` invalidate affected evidence; CI/governance-only changes require their applicable targeted checks and do not inherit an L6 PASS.
 
-Remaining work, in order: push approval and L6/CI parity; then the approved Azure stages (see the Azure TODO below); Phase 11 for the deferrals.
+Remaining work, in order: review and separately authorize commit/push of the scope/evidence correction; verify all applicable hosted checks and architecture evidence on that exact SHA (excluding workflow `99` hosted parity); update the L6 verdict only after they pass. Azure remains a later, separately approved stage; DW-023/DW-024 remain Phase 11 deferrals.
 
 Use this board instead of the older transport-first wave notes. It matches the finalized L0-L6 architecture and keeps the next change sets aligned with the current Phase 10 objective.
 
@@ -478,7 +478,7 @@ Use this board instead of the older transport-first wave notes. It matches the f
 | L4 | Portable local identity and policy enforcement | UI auth wiring, Gateway auth, downstream auth, Keycloak config, identity tests | PKCE flow passes; `401/403` behavior correct; operator-only replay approval |
 | L5 | Functional, performance, operational, security, and rollback proof | NFR harness, identity proof, test automation, diagnostics, rollback scripts/workflows | Functional/performance/operational/security categories pass independently |
 | L5-R (remaining) | Unified HTML automation and coverage dashboard | Existing test runners, TRX/JSON adapters, coverage configuration, static report generator | One per-run HTML entry point reconciles all required suites, coverage, Docker gates, and explicit deferrals; see the plan below |
-| L6 | Final pre-Azure acceptance | Architecture conformance gate, local Docker validation, CI workflow `99`, evidence packet docs | Architecture, operational, and deployment gates all green on one commit SHA |
+| L6 | Final pre-Azure acceptance | Architecture conformance gate, manual local Docker hook, applicable hosted checks, evidence packet docs; hosted workflow `99` excluded under DW-028 Option A | Architecture, operational, and deployment gates all green on one commit SHA; workflow `99` hosted parity is explicitly not claimed |
 
 ### Parked Findings — Phase 10 Remediation Backlog
 
@@ -582,7 +582,7 @@ Take the remaining work in this order unless a defect forces a narrower hotfix:
 5. Finish L4 Keycloak-based local identity proof with the portable JWT/OIDC model.
 6. Re-run L5 functional, performance, operational, security, and rollback evidence on the new architecture.
    - Complete L5-R unified HTML reporting and coverage collection; validate the dashboard against the raw results for that run before local reporting closeout.
-7. Close L6 only after architecture conformance, local Docker validation, and CI parity all match the same commit SHA.
+7. Close L6 only after architecture conformance, manual local Docker acceptance, and all applicable hosted checks are verified on the same commit SHA. The local hook is the accepted Docker check; hosted workflow `99` is excluded under DW-028 Option A and must not be labeled hosted PASS.
 
 Do not invert that order by using Azure deployment proof as a substitute for unfinished local architecture work.
 

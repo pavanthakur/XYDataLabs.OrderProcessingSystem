@@ -1,6 +1,6 @@
 # Active Work
 
-This is a session checkpoint, not proof of current runtime correctness. Verify material claims against the relevant plan, code and evidence. Historical details remain in Git history and the existing reports; do not replay old recovery instructions automatically.
+This is a session checkpoint, not proof of current runtime correctness. The provenance block below binds the accepted local run and its clean state at run time; it does not describe the current checkout. Verify material claims against the relevant plan, code and evidence. Historical details remain in Git history and the existing reports; do not replay old recovery instructions automatically.
 
 ## Checkpoint Provenance
 
@@ -10,25 +10,26 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 - Evidence revision: `f2bd3587`
 - Evidence environment: `docker-dev`
 - Evidence scope: `non-azure-local`
-- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-024241244/phase10-acceptance-reconciliation.json`
+- Evidence reference: `TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json`
 
 ## Last Session
 
-- Updated: 2026-11-11. Branch `dev`. Non-Azure local acceptance **PASS** on one clean committed candidate `f2bd3587` (commits `5a117599`, `d84b9f60`, `0a5e4602`, `f2bd3587`; later commits are documentation only). Verdict from `npm --prefix automation run reconcile:phase10-acceptance` over E2E run `phase10-docker-http-20261111-024241244` and NFR run `phase10-docker-nfr-20261111-023057463`: sealed completion, foundations, smoke, integration, deterministic and sandbox payments (3 tenants x 2 providers), TenantC routing, messaging/Functions, persistence restart, restoration, L5-R report (no issues, all coverage measured), NFR categories, 100-message burst (P95 2.0 s), approved replay 1.07 s (limit 60 s), consumer-outage backlog recovery 26 s with 0 lost/0 duplicate (limit 30 min), and rollback executed and restored.
+- Updated: 2026-11-11. Current branch `dev`, HEAD `2bae6ef6`; worktree is being updated for the approved DW-028 scope decision and tracked sanitized evidence. The bounded non-Azure local acceptance **PASS** is on clean committed candidate `f2bd3587` (full SHA and source checksum in the tracked summary). Commits after that candidate include workflow, environment-contract-validator, and documentation changes; they do not silently inherit the local result as full L6 acceptance. The reconciler covered sealed completion, foundations, smoke, integration, deterministic and sandbox payments (3 tenants x 2 providers), TenantC routing, messaging/Functions, persistence, restoration, L5-R coverage/reporting, NFR categories, 100-message burst (P95 2.0 s), replay visibility 1.07 s, consumer-outage recovery 26 s with 0 lost/0 duplicate, and a single-service local rollback/restore.
 - Fixes made on the way: skipped/blocked NFR categories are `incomplete`, never `passed`; rollback prerequisite no longer blocks drills; non-ASCII test names broke discovery reconciliation (UTF-8 helper); `tenantc-routing-regression` is now derived from run evidence; report no longer flags integration bookkeeping JSON.
 - Rollback proof scope: a locally built previous inventory image (`phase10-prev-290d0fba`, built from a clean export of `290d0fba`, provenance under `TestResults/Phase10/rollback-baseline/290d0fba/`) swapped in and restored. No application source differs from the base, so this proves the swap/restore mechanism and schema readiness, not a behavioural difference, and is not an ACA revision rollback.
-- Not done: L6 CI parity (workflow `99`) and every Azure stage are NOT-RUN; DW-023 and DW-024 stay deferred to Phase 11. Nothing was pushed. `origin/dev` showed `d84b9f60` mid-session although no push was run from here; investigate before any push.
+- DW-028 decision: Option A accepted 2026-11-11. The local Docker hook is manual acceptance; hosted workflow `99` parity is explicitly excluded and the Docker safety guard remains unchanged. Do not claim hosted workflow `99` PASS.
+- L6 is still incomplete. On `2bae6ef6`, documentation links and Drift Scanner passed, while hosted AI customization failed AI109 because the evidence artifact was ignored/unavailable in checkout. This change tracks a sanitized summary; rerun applicable hosted checks on the reviewed pushed commit before updating the L6 verdict. No commit or push has been performed. Azure stages remain NOT-RUN and separately approval-gated; DW-023/DW-024 remain Phase 11 deferrals.
 - DW-027 (controlled-client behavioral acceptance) remains open; AI-context token measurement is still byte-estimated.
 
 ## Verified Evidence And Limits
 
-- The PASS covers only the `non-azure-local` scope on `f2bd3587`: it does not certify Phase 10 completion, Azure, CI parity, fulfillment, installments, unresolved-payment recovery, a visible OpenPay 3DS challenge or Razorpay S2S.
+- The PASS covers only the `non-azure-local` scope on `f2bd3587`: it does not certify Phase 10 completion, Azure, hosted workflow `99`, fulfillment, installments, unresolved-payment recovery, a visible OpenPay 3DS challenge or Razorpay S2S.
 - Images are locally built (no registry digest); the candidate is identified by commit and local image IDs.
-- Docs edits after `f2bd3587` change no code; rerun the reconciler if any code changes.
+- The app/runtime acceptance is bound to `f2bd3587`. Later changes include CI workflow and environment-contract tooling; validate those on the target SHA. Changes to app/runtime behavior, payment flows, images, or the evidence generator invalidate the corresponding local acceptance and require rerunning affected gates.
 
 ## Pending / Next Actions
 
-1. L6 gate A (architecture conformance) passed locally on 2026-11-11 (`TestResults/Phase10/local-preazure/20261111-070847708_architecture-conformance`). Hosted CI workflow `99` is NOT PASS: runs 42939552311, 42939786442 and 42940094227 failed. Fixed: runner pinned to `ubuntu-24.04`, run-root creation. Remaining: the Docker safety guard allows only local Docker Desktop (by design), tracked as DW-028; do not weaken the guard. Phase 10 closes only after DW-028 is decided and the separately approved Azure stages.
+1. L6 gate A passed locally on 2026-11-11 (`TestResults/Phase10/local-preazure/20261111-070847708_architecture-conformance`). DW-028 is decided as local-only/manual under Option A; keep the guard unchanged. Gate C remains pending applicable hosted checks on a reviewed pushed SHA. Before this update, hosted run 42940645353 failed AI109; runs 42940645447 (documentation links) and 42940645321 (Drift Scanner) passed on `2bae6ef6`. After this work is separately committed/pushed, verify the new run results; do not claim overall Gate C PASS until all applicable checks pass.
 2. Phase 11 (DW-023/DW-024) is separate: [plan](../../docs/internal/phase11-implementation-plan.md), [Deferred Work Log](../../docs/internal/DEFERRED-WORK-LOG.md).
 
 ## Recent Key Facts And Safety Boundaries
@@ -42,4 +43,4 @@ This is a session checkpoint, not proof of current runtime correctness. Verify m
 
 ## If Returning After A Long Gap
 
-Read this checkpoint, inspect Git status/HEAD and the Phase 10 plan section, then check only evidence material to the task. Phase 10 local acceptance passed; the next step is a separately approved L6/CI parity run, not an automatic push, Azure deployment or payment reset.
+Read this checkpoint, inspect Git status/HEAD and the Phase 10 plan section, then check only evidence material to the task. Bounded Docker acceptance passed on `f2bd3587`; the next step is review and separately authorized commit/push, then hosted-check verification on that exact SHA. Workflow `99` stays local-only under DW-028 Option A. No automatic push, Azure deployment or payment reset.
