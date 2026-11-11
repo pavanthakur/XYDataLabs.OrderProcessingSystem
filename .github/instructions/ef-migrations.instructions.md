@@ -1,5 +1,5 @@
 ---
-applyTo: "**/Infrastructure/**,**/Migrations/**,**/DataContext/**"
+applyTo: "**/Infrastructure/Migrations/**,**/Infrastructure/DataContext/**,**/Infrastructure/SeedData/**"
 ---
 # EF Core Conventions — XYDataLabs.OrderProcessingSystem
 
@@ -24,15 +24,8 @@ dotnet ef migrations add <MigrationName> `
   --project XYDataLabs.OrderProcessingSystem.Infrastructure `
   --startup-project XYDataLabs.OrderProcessingSystem.API `
   --context OrderProcessingSystemDbContext
-
-# Apply to Azure SQL (with firewall rule open for current IP)
-$ip = (Invoke-RestMethod https://api.ipify.org)
-az sql server firewall-rule create --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --name "dev-machine" --start-ip-address $ip --end-ip-address $ip
-$sqlPwd = Read-Host "Enter Azure SQL password" -MaskInput
-$azureCs = "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;User ID=sqladmin;Password=$sqlPwd;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-dotnet ef database update --project XYDataLabs.OrderProcessingSystem.Infrastructure --startup-project XYDataLabs.OrderProcessingSystem.API --connection $azureCs
-az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --name "dev-machine"
 ```
+Azure application (`dotnet ef database update --connection ...`) needs explicit approval; use `run-database-migrations.ps1` and never embed credentials in a connection string.
 
 ## Applied Migrations (current baseline)
 1. `20260324195231_InitialCreate` — full schema (MaskedCardNumber, no CVV2, BillingCustomerId FK)
@@ -44,49 +37,14 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 
 ## Current Schema Notes
-- `Tenants` is the tenant authority table — TenantA and TenantB are seeded by `20260324202503_SeedBaselineTenants` migration; TenantC (Dedicated tier) is seeded by `20260324210853_SeedDedicatedTenantC` migration (all with IF NOT EXISTS SQL for Azure safety)
-- `Tenants` includes `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool'). The `ConnectionString` column was removed by migration `RemoveConnectionStringFromTenant` — connection strings are never stored in the database (ADR-009)
-- TenantA and TenantB are SharedPool; TenantC is Dedicated. Connection strings are resolved at runtime from `IConfiguration["DedicatedTenantConnectionStrings:{Code}"]`
-- `TenantRegistryDbContext` owns the `Tenants` DbSet for tenant resolution (no query filters, no ITenantProvider dependency)
-- `OrderProcessingSystemDbContext` still configures `Tenants` entity for FK integrity from business entities
+- `Tenants` is the tenant authority table, seeded by the baseline migrations above (IF NOT EXISTS guards for Azure re-apply). It has `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool'); no connection string column (ADR-009).
+- `TenantRegistryDbContext` owns the `Tenants` DbSet for resolution; `OrderProcessingSystemDbContext` still maps `Tenants` for FK integrity. Tenant tiers, dedicated connection strings and query-filter rules: `multitenant-payment-schema.instructions.md`.
+- Required composite indexes include `CardTransactions (TenantId, CustomerOrderId)`, `CardTransactions (TenantId, AttemptOrderId)`, `PayinLogs (TenantId, AttemptOrderId)`, `TransactionStatusHistories (TenantId, AttemptOrderId)`.
 
-## DbInitializer — Startup Bootstrap Sequence
-
-Entry points: `DbInitializer.InitializeSharedPool(context, configuration, applyMigrations)` and `DbInitializer.InitializeDedicatedTenants(mainContext, configuration, applyMigrations, integrationEventMapperRegistry)`
-
-Called from `Program.cs` as:
-```csharp
-DbInitializer.InitializeSharedPool(dbContext, app.Configuration, applyMigrations: !isAzure);
-DbInitializer.InitializeDedicatedTenants(dbContext, app.Configuration, applyMigrations: !isAzure, ...);
-```
-
-**Phase 1** — Shared-pool sample data:
-1. `Database.Migrate()` — applies pending migrations (seeds TenantA, TenantB, TenantC)
-2. Seeds customers, products, orders, OpenPay providers for TenantA and TenantB on the shared DB
-
-**Phase 2** — `SeedDedicatedTenants()` — Dedicated-DB bootstrap:
-1. Finds all Dedicated-tier tenants; reads each connection string from `IConfiguration["DedicatedTenantConnectionStrings:{Code}"]`
-2. For each: creates a scoped `OrderProcessingSystemDbContext` with `NullTenantProvider`
-3. Runs `Database.Migrate()` on the dedicated DB
-4. Seeds full sample data (customers, products, orders, OpenPay provider with correct TenantId)
-
-**NullTenantProvider pattern:**
-`NullTenantProvider` is a null-object `ITenantProvider` with `HasTenantContext = false`. It prevents the EF Core query filter from throwing NullReferenceException when creating data in a non-request context. The query filter short-circuits to `true` (all rows visible), which is correct for dedicated-DB seeding where physical isolation replaces query-filter isolation.
-
-**DedicatedTenantConnectionStrings config section:**
-```json
-"DedicatedTenantConnectionStrings": {
-  "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;..."
-}
-```
-Each key matches a `Tenant.Code`. `SeedDedicatedTenants()` reads this section at runtime to resolve each dedicated DB connection string — connection strings are never written to the `Tenants` table (ADR-009).
-- Tenant-owned tables use `TenantId int NOT NULL` as an FK to `Tenants.Id`
-- `Tenants` is excluded from global query filters; tenant-owned entities are filtered by `ITenantProvider.TenantId`
-- Required composite indexes currently include:
-  - `CardTransactions (TenantId, CustomerOrderId)`
-  - `CardTransactions (TenantId, AttemptOrderId)`
-  - `PayinLogs (TenantId, AttemptOrderId)`
-  - `TransactionStatusHistories (TenantId, AttemptOrderId)`
+## DbInitializer — Startup Bootstrap
+`Program.cs` calls `DbInitializer.InitializeSharedPool(...)` then `DbInitializer.InitializeDedicatedTenants(...)` with `applyMigrations: !isAzure`.
+1. Shared pool: `Database.Migrate()` (seeds TenantA/B/C), then sample data for TenantA and TenantB.
+2. Dedicated: `SeedDedicatedTenants()` finds Dedicated-tier tenants, reads `DedicatedTenantConnectionStrings:{Code}` from `IConfiguration`, creates a scoped context with `NullTenantProvider`, migrates and seeds sample data with the correct `TenantId`. Connection strings are never written to `Tenants`.
 
 ## Safe Migration Workflow
 1. **Generate**: `dotnet ef migrations add <Name> --project Infrastructure --startup-project API`
@@ -128,4 +86,4 @@ Rule: if the database is structurally valid without these rows, they belong in `
 
 Do not move baseline reference rows out of the migration without an explicit architecture review. Doing so weakens deterministic database bootstrapping and breaks any environment that skips `DbInitializer` (for example, CI pipeline fresh migrations).
 
-Multi-tenancy schema rules are in `multitenant-payment-schema.instructions.md` (auto-attached alongside this file for all Infrastructure files).
+Multi-tenancy schema rules are in `multitenant-payment-schema.instructions.md` (attached for DataContext, Multitenancy, Payments, SeedData, Events and Webhooks files; read it explicitly for other Infrastructure work touching tenants).

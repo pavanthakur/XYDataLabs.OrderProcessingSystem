@@ -23,7 +23,7 @@ $patterns = [ordered]@{
 }
 
 $cwd = Resolve-Path $Root
-$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*','*/docs/*','*/Resources/*','repomix-output.xml','*/frontend/node_modules/*')
+$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*','*/docs/*','*/Resources/*','repomix-output.xml','*/frontend/node_modules/*','*/node_modules/*','*/.artifacts/*','*/TestResults/*','*/bin/*','*/obj/*')
 $files = Get-ChildItem -Path $cwd -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $full = $_.FullName -replace '\\','/'
     foreach ($g in $ignoreGlobs) { if ($full -like $g) { return $false } }
@@ -52,8 +52,8 @@ foreach ($f in $files) {
     if ($f.Extension -ieq '.ps1') {
         foreach ($p in $patterns.High) {
             if ($text -match $p) {
-                # ignore legitimate ai-runtime files and the scanner itself
-                if ($f.FullName -match '\\ai-runtime\\' -or $f.Name -ieq 'drift-scanner.ps1' -or $f.Name -ieq 'logger.ps1') { continue }
+                # ignore legitimate ai-runtime files, the scanner itself, and the fixture test that executes extracted in-repo function definitions
+                if ($f.FullName -match '\\ai-runtime\\' -or $f.Name -ieq 'drift-scanner.ps1' -or $f.Name -ieq 'logger.ps1' -or $f.Name -ieq 'test-phase10-payment-fixture.ps1') { continue }
                 $high += @{ file = $f.FullName; pattern = $p }
             }
         }

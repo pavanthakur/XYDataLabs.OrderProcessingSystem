@@ -727,7 +727,8 @@ Effort: 1-2 days plus remediation.
 - Full Docker stack passes.
 - Playwright smoke passes.
 - Dynamic payment matrix passes.
-- Workflow `99` passes on a clean runner.
+- The local Docker hook is the manual acceptance check under DW-028 Option A; hosted workflow `99` parity is explicitly excluded, and its Docker safety guard remains unchanged. Do not claim a hosted PASS for this workflow.
+- All other applicable hosted checks pass on the reviewed target commit; report their exact SHA and run evidence.
 - Commit SHA and image digests match evidence.
 
 All three gates are mandatory and cannot compensate for one another.
@@ -840,7 +841,7 @@ Azure validation may begin only when:
 
 - L0-L6 have passed.
 - Architecture, operational, and deployment gates are independently green.
-- Workflow `99` reproduces the result on a clean runner.
+- The manual local Docker hook and applicable hosted checks are bound to the reviewed target SHA; hosted workflow `99` parity is excluded under DW-028 Option A.
 - Evidence references one commit SHA and matching image digests.
 - No critical risk, compatibility fallback, or undocumented exception remains.
 

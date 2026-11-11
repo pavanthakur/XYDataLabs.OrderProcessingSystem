@@ -41,8 +41,10 @@ internal static class Program
                 RunId = runId,
                 StartedUtc = startedUtc,
                 CompletedUtc = DateTimeOffset.UtcNow,
-                ExpectedMessages = options.MessageCount
+                ExpectedMessages = options.MessageCount,
+                SettleSeconds = options.SettleSeconds
             };
+            result = result with { CompletionSeconds = Math.Round((result.CompletedUtc - startedUtc).TotalSeconds, 3) };
 
             var passed = result.InventoryInboxCount == options.MessageCount
                 && result.NotificationsInboxCount == options.MessageCount
@@ -160,6 +162,12 @@ internal static class Program
                 && latest.InventoryEffectCount >= options.MessageCount
                 && latest.NotificationEffectCount >= options.MessageCount)
             {
+                if (options.SettleSeconds > 0)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(options.SettleSeconds)).ConfigureAwait(false);
+                    latest = await ReadResultAsync(options, runId).ConfigureAwait(false);
+                }
+
                 return latest;
             }
 
@@ -418,6 +426,8 @@ internal sealed record ProbeResult
     public int InventoryEffectCount { get; init; }
     public int NotificationEffectCount { get; init; }
     public double P95Seconds { get; init; }
+    public int SettleSeconds { get; init; }
+    public double CompletionSeconds { get; init; }
     public string? Error { get; init; }
 }
 
@@ -432,7 +442,8 @@ internal sealed record ProbeOptions(
     int TimeoutSeconds,
     double MaximumP95Seconds,
     string ResultPath,
-    string? RunId)
+    string? RunId,
+    int SettleSeconds = 0)
 {
     public static ProbeOptions FromArgs(string[] args)
     {
@@ -448,7 +459,8 @@ internal sealed record ProbeOptions(
             int.Parse(Get(values, "timeout-seconds", "180")),
             double.Parse(Get(values, "maximum-p95-seconds", "30")),
             Required(values, "result-path"),
-            values.GetValueOrDefault("run-id"));
+            values.GetValueOrDefault("run-id"),
+            int.Parse(Get(values, "settle-seconds", "0")));
     }
 
     private static Dictionary<string, string> Parse(string[] args)

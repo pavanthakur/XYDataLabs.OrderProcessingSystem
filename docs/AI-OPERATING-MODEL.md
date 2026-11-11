@@ -93,7 +93,7 @@ Preserve Continue/Aider/Ollama configurations unchanged. Native discovery, expli
 | 0 | Read-only baseline and compatibility assessment | Distinguish current facts, external guidance and unknowns |
 | 1 | Concise evidence-qualified handoff and safe session/feature prompts | Structural checks only; preserve all uncommitted work |
 | 2 | Shared entry points, ownership/routes and corrected specialist references | Existing validation stays green through a minimal index-reader adjustment; no behavior certification |
-| 3 | Extended deterministic validator, negative fixtures and governance CI coverage | Implemented in this change set; final local result 28 passed / 1 NOT TESTED (symlink permission), partial/nonzero. Hosted Windows/Linux workflow execution pending; DW-026 |
+| 3 | Extended deterministic validator, negative fixtures and governance CI coverage | Implemented and accepted for hosted CI. Run 42802711936 at `1000ff6` passed on Windows/Linux after the explicit success exit and 14-case exit-status test (DW-026 closed). Earlier run 42795579199 at `d84cd8e` passed all 29 cases but exited 1; the historical local 28-pass/one-NOT-TESTED packet is retained |
 | 4 | Controlled fresh-session evaluations in Codex/Copilot | Procedure implemented; restricted Copilot CLI startup observed. Continuation attempted: configured model rejected, bounded per-run `auto` correction timed out. No behavioral PASS; all twelve outcomes remain BLOCKED/NOT TESTED. Codex execution controls still unverified; DW-027 |
 
 Stop after each batch with the scoped diff, actual commands/results, remaining findings and one next action. The owner's 10 November instruction permits remaining governance batches to proceed with issues parked in the [Phase 10 remediation backlog](internal/phase10-implementation-checklist.md#parked-findings-phase-10-remediation-backlog); it does not waive their gates. No automatic commit/push or next application phase. Phase 10/11 application work remains paused until separately resumed; governance validation does not certify runtime acceptance. Measure available token usage, repeated reads, unnecessary tool calls and rework over the next three material tasks; bytes are not token counts and unavailable usage metrics are not zero. Structural validation cannot prove arbitrary prose correctness or actual agent compliance.
@@ -163,6 +163,31 @@ For blocked readiness, record versions/help inspected, effective controls not es
 | `.github/workflows/validate-ai-customization.yml` | CI enforcement for shared AI asset changes |
 | `.vscode/tasks.json` | Optional local task entrypoints that mirror the shared AI validation path |
 
+## Knowledge-Preservation Gate
+
+Before removing or materially shortening a shared AI asset, compare it with the relevant committed predecessor and create a knowledge-preservation matrix. Cover at least:
+
+- Solution architecture and bounded contexts
+- CQRS, Clean Architecture, EF Core, and tenant isolation
+- Payment providers, provider verification, and idempotency
+- React/frontend and API integration
+- Docker/local development and testing
+- Azure deployment and runtime-target rules
+- Build, integration, E2E, security, approval, review, and completion workflows
+
+For each material section, record the original source, current canonical owner, discovery path, preservation status (`preserved`, `relocated`, `superseded`, or `missing`), and any required correction. A missing replacement owner blocks the knowledge restructuring until an approved destination exists. Do not restore stale inventories into always-loaded entry files; relocate useful content to its canonical owner and link it.
+
+## Controlled AI-Change Gates
+
+Shared AI changes use four separate gates:
+
+1. **Gate A — Discovery:** inventory the live repository and compare existing AI guidance with the committed predecessor.
+2. **Gate B — Design approval:** present the preservation matrix, gap/decision matrix, exact files, proposed routing, validation plan, and maintenance impact.
+3. **Gate C — Implementation:** merge only approved assets, preserve unrelated work, and do not infer implementation authorization from discovery approval.
+4. **Gate D — Acceptance:** run structural checks and controlled behavioral tests; report unavailable, unapproved, or unobserved evidence as `BLOCKED`, `NOT TESTED`, or `EVIDENCE UNAVAILABLE`.
+
+One prompt may describe all four gates, but it must stop at the design boundary until the proposed implementation is explicitly approved.
+
 ## Mandatory Change Protocol
 
 Use this sequence whenever a change touches `AGENTS.md`, the handoff, `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, `.github/agents/`, `.github/skills/`, or the AI governance docs/scripts tied to them.
@@ -178,6 +203,20 @@ Use this sequence whenever a change touches `AGENTS.md`, the handoff, `.github/c
 5. If `docs/` changed materially, run `node scripts/validate-doc-links.js`.
 6. If something remains incomplete, classify it using [.github/completion-check-rubric.md](../.github/completion-check-rubric.md) and record the deferral in [internal/DEFERRED-WORK-LOG.md](internal/DEFERRED-WORK-LOG.md).
 7. Present the diff and results at the batch/task review boundary. Staging, commit, push or merge requires explicit approval after the applicable checks agree; this protocol does not mandate a PR.
+
+## Skill Quality Contract
+
+Every new or materially changed skill must define its purpose, activation conditions, exclusions, required sources, related skills, progressive-disclosure references, implementation workflow, security and approval boundaries, validation path, and completion criteria. A valid `SKILL.md` and index row establish structure only; observed skill selection and correct application require separate controlled behavioral evidence.
+
+Skills must coordinate existing project conventions rather than duplicate prompt, architecture, or instruction bodies. Load metadata first, then the selected skill, then only required references and relevant code/tests. Do not initiate real financial, database, Docker, Azure, or Git operations automatically.
+
+## Feature-Development Orchestration
+
+When a feature-development workflow is justified, it must cover requirements, architecture, tenant/security impact, domain and API contracts, backend, frontend when applicable, persistence, messaging/integration, targeted tests, deployment impact, and completion review. It should orchestrate the existing CQRS, payment-provider, frontend, Azure, review, and completion guidance instead of copying their detailed procedures.
+
+## Token-Efficiency Evaluation
+
+Token-efficiency measurement is a follow-up evaluation, not a prerequisite for implementing an otherwise justified safe guidance change. Compare equivalent tasks at the same repository revision and acceptance criteria. Record context loaded, tool calls, total tokens when available, repeated reads, failures, task quality, and completion outcome. Do not describe byte counts as token savings or claim improvement from structural validation alone.
 
 ## Required Review Path
 

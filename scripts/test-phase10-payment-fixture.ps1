@@ -126,12 +126,15 @@ $workspaceRoot=Join-Path $root ('TestResults/DockerStorage/report-selftest-'+[gu
 $runRoot=Join-Path $workspaceRoot 'TestResults/run'
 [void][IO.Directory]::CreateDirectory($runRoot)
 @{status='partial';steps=@(@{name='sandbox-payments';status='partial'})}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $runRoot 'e2e-summary.json')
-$runSummary=[ordered]@{status='passed';startedUtc=[DateTime]::UtcNow.ToString('o');reusedExistingStack=$true}
+$runSummary=[ordered]@{status='passed';startedUtc=[DateTime]::UtcNow.ToString('o');reusedExistingStack=$true;gitProvenance=@{start=$null;finish=$null}}
 $storageReportScript='mock-storage';$runSummaryPath=Join-Path $runRoot 'run-summary.md';$acceptanceLockOwned=$false
 $previousPhase10RunId=$env:PHASE10_RUN_ID;$previousPhase10RunRoot=$env:PHASE10_RUN_ROOT
 function pwsh {$global:LASTEXITCODE=0;return '{}'}
 function Protect-Phase10Log {process{$_}}
 function Write-RunSummary {}
+function Invoke-Phase10Preview {}
+function Write-Phase10Completion {}
+function Get-Phase10GitSnapshot { return @{commit=$null;worktree='unknown'} }
 & ([scriptblock]::Create($finalCode))
 $packet=Get-Content (Join-Path $runRoot 'acceptance-packet.json') -Raw|ConvertFrom-Json
 if($packet.status-ne'partial'-or@($packet.steps|Where-Object status -eq 'not-run').Count-lt 1-or$packet.restoration.status-ne'passed'){throw 'Partial/not-run/restoration packet semantics failed.'}

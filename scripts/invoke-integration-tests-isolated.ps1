@@ -6,12 +6,15 @@ param(
     [Parameter(Mandatory)][ValidateSet('docker-phase10', 'local')][string]$Runtime,
     [Parameter(Mandatory)][string[]]$TestFilter,
     [Parameter(Mandatory)][string]$ResultsDirectory,
-    [ValidateSet('minimal', 'normal', 'detailed', 'quiet')][string]$ConsoleVerbosity = 'minimal'
+    [ValidateSet('minimal', 'normal', 'detailed', 'quiet')][string]$ConsoleVerbosity = 'minimal',
+    [switch]$CollectCoverage
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'integration-test-database.ps1')
+. (Join-Path $PSScriptRoot 'phase10-integration-coverage.ps1')
+. (Join-Path $PSScriptRoot 'phase10-dotnet-inventory.ps1')
 Assert-Phase10ComposeProject
 $connectionString = [Environment]::GetEnvironmentVariable('PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING')
 if ([string]::IsNullOrWhiteSpace($connectionString)) { throw 'Integration provisioning endpoint is not configured; credentials omitted.' }
@@ -69,6 +72,16 @@ try {
     $settings = if (Test-Path -LiteralPath $settingsPath) { Get-Phase10LocalSettings -Path $settingsPath } else { @{} }
     Initialize-Phase10LogRedaction -Settings $settings
     $script:phase10LogSecrets += @($builder.Password, $connectionString) | Where-Object { $_.Length -ge 4 }
+    $testProject = Join-Path $root 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
+    $assemblyPath = Join-Path $root 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/bin/Debug/net8.0/XYDataLabs.OrderProcessingSystem.Integration.Tests.dll'
+    $discoveries = [Collections.Generic.List[object]]::new()
+    foreach ($filter in $TestFilter) {
+        $discoveryStarted = [DateTime]::UtcNow
+        $names = Get-Phase10DiscoveredDotnetTests -TestProject $testProject -Filter $filter
+        if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { throw 'Discovered integration test assembly is missing.' }
+        $assemblyHash = (Get-FileHash -LiteralPath $assemblyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $discoveries.Add(@{ names = $names; startedUtc = $discoveryStarted.ToString('o'); assemblyHash = $assemblyHash })
+    }
     if ($Runtime -eq 'docker-phase10') {
         $dedicatedApplicationBuilder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($connectionString)
         $dedicatedApplicationBuilder['Initial Catalog'] = 'OrderProcessingSystem_TenantC_Dev'
@@ -79,16 +92,30 @@ try {
     }
     $lease = Initialize-IntegrationTestDatabasePair -ConnectionString $connectionString -ResultsDirectory $reportPath -Runtime $Runtime
     $env:ORDERPROCESSING_TEST_CONNECTION_STRING = $lease.SharedConnectionString
-    $testProject = Join-Path $root 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
     $exitCode = 0
     $index = 0
     foreach ($filter in $TestFilter) {
         $index++
         $trxName = 'integration-{0}.trx' -f $index
-        dotnet test $testProject --filter $filter --results-directory $reportPath `
-            --logger "trx;LogFileName=$trxName" --logger "console;verbosity=$ConsoleVerbosity" 2>&1 |
-            Protect-Phase10Log | Tee-Object -FilePath (Join-Path $reportPath ("integration-{0}.log" -f $index))
-        if ($LASTEXITCODE -ne 0) { $exitCode = $LASTEXITCODE; break }
+        $discovery = $discoveries[$index - 1]
+        if ($CollectCoverage) {
+            $exitCode = Invoke-Phase10IntegrationCoverage -TestProject $testProject -Filter $filter `
+                -ResultsDirectory $reportPath -Index $index -ConsoleVerbosity $ConsoleVerbosity `
+                -SettingsPath (Join-Path $root 'scripts\phase10-foundation-coverage.runsettings')
+        } else {
+            dotnet test $testProject --no-build --no-restore --filter $filter --results-directory $reportPath `
+                --logger "trx;LogFileName=$trxName" --logger "console;verbosity=$ConsoleVerbosity" 2>&1 |
+                Protect-Phase10Log | Tee-Object -FilePath (Join-Path $reportPath ("integration-{0}.log" -f $index))
+            $exitCode = $LASTEXITCODE
+        }
+        $trxPath = Join-Path $reportPath $trxName
+        if (Test-Path -LiteralPath $trxPath -PathType Leaf) {
+            Write-Phase10DiscoveredDotnetResults -SuiteId Integration -DiscoveredNames $discovery.names `
+                -AssemblyPath $assemblyPath -AssemblyHashBefore $discovery.assemblyHash -TrxPath $trxPath `
+                -RunnerExitCode $exitCode -StartedUtc $discovery.startedUtc -FinishedUtc ([DateTime]::UtcNow.ToString('o')) `
+                -OutputPath (Join-Path $reportPath ("integration-{0}.json" -f $index))
+        }
+        if ($exitCode -ne 0) { break }
     }
     if ($Runtime -eq 'docker-phase10') {
         $afterDedicatedApplicationBuilder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($connectionString)

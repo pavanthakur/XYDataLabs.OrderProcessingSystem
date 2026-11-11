@@ -138,6 +138,14 @@ pwsh -NoProfile -File scripts/tests/test-ai-customization.ps1
 
 Optional `-RepositoryRoot` selects the source repository; `-ArtifactDirectory` must stay under its TestResults directory. The runner preserves per-case logs and `summary.json` under `TestResults/AIGovernance/`; fixtures are synthetic/disposable but are not automatically deleted. A permission-dependent NOT TESTED case yields a partial packet/nonzero exit, not PASS. The existing governance CI runs this on Windows/Linux and publishes sanitized logs, never fixture copies.
 
+Test the runner's process-level exit contract separately:
+
+```powershell
+pwsh -NoProfile -File scripts/tests/test-ai-customization-exit.ps1
+```
+
+This executes the real aggregation/terminal code in fresh PowerShell processes with GitHub's appended exit-code check. Fourteen synthetic cases cover inherited native exit codes 0/1, complete success, failed/skipped cases, missing/extra results and recorded/raised errors. These are exit-status unit tests, not additional governance or model-behavior acceptance. Complete success exits 0 explicitly; failures and incomplete coverage stay nonzero. Use a fresh artifact directory; the helper refuses to overwrite prior evidence. CI preserves both this summary and the full regression summary independently.
+
 **When to Use**:
 - After changing `.github/copilot-instructions.md`
 - After adding or editing files under `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/`
@@ -900,11 +908,14 @@ What it does:
 2. Starts the Docker Dev HTTP stack if needed, unless you explicitly opt out with `-SkipStartIfNeeded`.
 3. Runs the shared NFR proof engine with a Docker proof label.
 4. Writes Docker parity artifacts under `TestResults\Phase10\docker-preazure\phase10-docker-nfr-<timestamp>\nfr`.
+5. Runs two measured operational drills: approved replay visibility (limit 60 s, via `test-local-messaging.ps1`) and a consumer-outage backlog recovery drill (consumers stopped, 25-message backlog published, consumers started; requires 0 lost, 0 duplicate effects, recovery within 30 minutes). Results: `replay-proof/functions-proof.json` and `consumer-outage-drill.json`.
+6. After the NFR proof and the Docker E2E hook (`run-phase10-docker-dev-e2e-hook.ps1 -PaymentSuite both -VerifyPersistence`) both ran on the same clean commit, `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` produces one PASS / INCOMPLETE / FAIL verdict (exit 0 only on PASS).
 
 Useful switches:
 
 - `-UseCleanReset` resets the service-bus path before the performance canary.
-- `-SkipOperationalChecks` skips the rollback/diagnostics section when you only need functional and performance proof.
+- `-SkipOperationalChecks` skips the operational and recovery categories for a partial functional/performance run. The result is `incomplete` with a nonzero exit; it is not acceptance evidence.
+- A missing retained previous inventory image no longer stops the run: operational checks continue and `recovery` is recorded as `blocked`, so the aggregate is `incomplete`, never `passed`.
 - `-SkipStartIfNeeded` fails fast if the Docker Dev HTTP stack is not already up.
 
 ### Phase 10 Pre-Azure Milestones

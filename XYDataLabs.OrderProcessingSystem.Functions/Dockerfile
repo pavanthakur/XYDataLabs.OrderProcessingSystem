@@ -3,6 +3,8 @@ WORKDIR /src
 
 COPY ["Directory.Build.props", "."]
 COPY ["Directory.Packages.props", "."]
+COPY ["NuGet.Config", "."]
+COPY ["global.json", "."]
 COPY ["XYDataLabs.OrderProcessingSystem.Eventing.Abstractions/XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.csproj", "XYDataLabs.OrderProcessingSystem.Eventing.Abstractions/"]
 COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "XYDataLabs.OrderProcessingSystem.SharedKernel/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "XYDataLabs.OrderProcessingSystem.Domain/"]

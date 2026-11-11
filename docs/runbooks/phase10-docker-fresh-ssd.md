@@ -1,5 +1,13 @@
 # Phase 10 fresh Docker storage on G:
 
+## Current non-Azure acceptance evidence (12 November 2026)
+
+**L6 gate C is PASS under DW-028 Option A for `494ab4fd`, not an outstanding Docker/hosted-parity blocker.** The separately named combined `l6-ci-parity-and-azure` report gate remains NOT-RUN for Azure acceptance; do not interpret it as reopening non-Azure L6 C. See the 12 November checkpoint in the [canonical Phase 10 checklist](../internal/phase10-implementation-checklist.md) for same-candidate hosted run links. Planned no-PR CI improvements are separate prospective work, not a reason to repeat accepted payment runs.
+
+Non-Azure local acceptance **PASSED** on clean committed candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`. The cold-build Docker E2E run is `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-230915653/`; the same-candidate NFR run is `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261111-234505649/`. The reconciled verdict is `phase10-acceptance-reconciliation.json` in the E2E run, and its sanitized tracked projection is `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`. All 13 local service image IDs matched across E2E/NFR. E2E passed foundations, integration, deterministic and sandbox payments (three tenants × both providers), messaging/Functions, persistence after Docker Desktop restart, and settings restoration. NFR passed all seven categories; the 100-message burst had 100/100 messages and effects at 2.273 s P95, replay visibility was 1.080 s, outage recovery was 26.201 s with zero lost/duplicate effects, and the Inventory rollback/restore drill passed. This is bounded **non-Azure local acceptance**, not full Phase 10 or Azure acceptance. Under DW-028 Option A, workflow `99` remains a manual local check; its safety guard is unchanged and hosted parity is excluded. DW-023/DW-024, visible OpenPay 3DS challenge, Razorpay S2S, Azure deployment, and ACA revision rollback remain uncertified. Preserve raw reports; do not reset volumes or retry charges.
+
+The cold build completed without build errors but retained analyzer/package warnings (CA1062, CA1825, CA2000, MA0005, MA0047, MA0074, NU1701); they were not suppressed and remain for separate review, so this run is not warning-free.
+
 This procedure replaces disposable local Docker state, not Azure resources. Keep the old disk offline until acceptance passes. Do not migrate a 642 GB disk onto a drive with 471 GB free.
 
 ## Safety and prerequisites
@@ -161,9 +169,69 @@ pwsh -NoProfile -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -ColdBuild -Pa
 
 This preserves SQL/Azurite volumes, cold-builds current images, runs foundations and isolated integration, verifies integration did not alter application metadata, applies only the snapshotted local OpenPay 3DS-off baseline, and read-validates every active tenant and both providers. It then runs identity and the complete deterministic UI/payment matrix before permitting real sandbox journeys. Messaging/Functions and the explicitly selected Desktop restart run in the same orchestration. The selected baseline requires every active tenant × Razorpay hosted and OpenPay with 3DS off; optional extended capabilities remain separately BLOCKED/NOT-RUN, never PASS. Final storage/restoration reports are written even after failure. No reset, global prune or VHDX compaction is implied. Azure deployment and directory changes are excluded.
 
+### Image-bound acceptance sequence — pending on a clean candidate
+
+The command above is the E2E stage. Record its exact new run directory from the output; do not use a mutable `latest` pointer. After E2E completes and restoration is verified, pass that run's `docker-image-identities-before.json` to NFR so the NFR wrapper refuses to start a different stack or accept a dirty/different candidate:
+
+```powershell
+$e2eRun = 'TestResults/Playwright/phase10-docker-http/<exact-e2e-run-id>'
+$expectedImages = Join-Path $e2eRun 'docker-image-identities-before.json'
+pwsh -NoProfile -File scripts/run-phase10-docker-nfr-proof.ps1 `
+  -SkipStartIfNeeded `
+  -ExpectedImageManifest $expectedImages `
+  -BurstMessageCount 100 `
+  -MaximumP95Seconds 30
+```
+
+Record the exact NFR wrapper run directory printed by the command, then verify and reconcile only those two run directories against the full candidate SHA:
+
+```powershell
+$nfrRun = 'TestResults/Phase10/docker-preazure/<exact-nfr-run-id>'
+npm --prefix automation run verify:phase10-completion -- $e2eRun
+npm --prefix automation run reconcile:phase10-acceptance -- `
+  --e2e $e2eRun `
+  --nfr $nfrRun `
+  --expected-commit '<full-clean-candidate-sha>'
+```
+
+The v4 image-bound sequence **passed** for candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`: both manifests cover the 13 expected project-owned services and reconcile within and across runs; the sealed report, coverage, restoration, NFR categories, and rollback evidence all passed. Re-run the checks above for a new candidate; do not reuse or overwrite sealed run artifacts to make a report pass. The prior `f2bd3587` and `58c361a9` evidence remains historical and does not satisfy this current gate.
+
 `Resources/Configuration/tenant-bootstrap.local.json` is the versioned, non-secret local bootstrap contract for required seed tenants, provider defaults, and key references. Shared `dbo.Tenants` remains authoritative for tenant identity, active status, tier, and provider route; provider settings come from the tenant's resolved business database. Dedicated stores resolve through explicit Compose configuration references, not tenant-name rules. TenantC remains a regression case: its route lives in the shared registry and provider rows in its dedicated business DB. Do not add duplicate shared provider rows to make a join succeed.
 
 Normal bootstrap inserts missing seed data only; it does not rewrite credentials, routes, existing tenant statuses or deactivate additional tenants. A metadata mismatch fails validation instead of being hidden by reseeding.
+
+### Offline Phase 10 report
+
+The Docker hook writes `index.html` alongside its acceptance artifacts. Open it with:
+
+```powershell
+$run = 'TestResults/Playwright/phase10-docker-http/<run-id>'
+Invoke-Item (Join-Path $run 'index.html')
+```
+
+To render an existing, unrendered run without starting tests or accessing Docker, SQL, or providers (the output files are create-once; use a fresh copy/run directory if outputs already exist):
+
+```powershell
+npm --prefix automation run report:phase10-preview -- TestResults/Playwright/phase10-docker-http/<run-id>
+npm --prefix automation run verify:phase10-completion -- TestResults/Playwright/phase10-docker-http/<run-id>
+```
+
+For reviewed sharing, first verify the completion record and inspect the exact allowlisted report files. Do not ZIP the entire run folder: raw logs, screenshots and provider artifacts may need separate sanitization. From the repository root, create a ZIP containing only the sanitized summary set:
+
+```powershell
+$run = 'TestResults/Playwright/phase10-docker-http/<run-id>'
+$zip = "TestResults/Phase10-report-$((Split-Path $run -Leaf)).zip"
+Compress-Archive -LiteralPath @(
+    (Join-Path $run 'index.html'),
+    (Join-Path $run 'phase10-preview.html'),
+    (Join-Path $run 'phase10-coverage-summary.json'),
+    (Join-Path $run 'phase10-completion.json'),
+    (Join-Path $run 'acceptance-packet.json'),
+    (Join-Path $run 'run-summary.json')
+) -DestinationPath $zip -NoClobber
+```
+
+This is a provisional reporting view, not a PASS certificate or Phase 10 closure. The report's completeness, individual outcomes and acceptance status are distinct; retain raw failure evidence separately and do not package it unless reviewed.
 
 ### Manual browser handoff: simulation versus sandbox
 
@@ -291,7 +359,9 @@ Record cold-build, seed, smoke/integration/payment results, messaging/Functions 
 
 Deleting the retained folder requires **separate user approval**. Resolve the exact retained folder against the manifest, verify it is not Docker's active location, reject reparse points, and delete only that folder. Never remove `F:\DockerStorage`, `F:\DockerRetained`, a drive root, or unrelated backups recursively. No automatic F: deletion command is provided.
 
-### Current acceptance checkpoint — 9 November 2026
+### Historical acceptance checkpoint — 9 November 2026
+
+Superseded for current status by the 12 November acceptance checkpoint at the top of this runbook. The dated results and remaining steps below are historical, not instructions to repeat accepted Docker/payment testing.
 
 The user confirmed they independently deleted `F:\DockerRetained\DockerDesktopWSL-before-G`. It is no longer a recovery option; do not assume unrelated F: backups contain this Docker disk. Ask for immediate confirmation before testing the destructive project reset on G:.
 

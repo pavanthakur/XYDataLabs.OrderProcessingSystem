@@ -1,11 +1,11 @@
 ---
 agent: agent
-description: "Mandatory 13-step end-to-end workflow for a new feature — gathers requirements, creates Domain entity (TenantId enforced), CQRS command/query handlers, controller endpoint, EF Core migration, unit + integration tests, architecture test guard, ADR-010 runtime gate, and a commit-ready completion check"
+description: "Profile-scoped new-feature workflow for backend, frontend or full-stack work: approve requirements, select applicable architecture and tenant safeguards, implement affected surfaces, validate and prepare a reviewed handoff without automatic Git writes"
 ---
 
 # New Feature — End-to-End Development Workflow
 
-The user wants to add a new feature. Follow this mandatory workflow in order. Do NOT skip steps. Do NOT proceed to the next step until the current step is verified.
+The user wants to add a new feature. Follow the applicable workflow in order after classifying its surfaces. Do not skip applicable gates; identify inapplicable steps with a scope-based reason rather than executing unrelated work or reporting it as PASS.
 
 ## Scope, Approval And Evidence
 
@@ -14,17 +14,40 @@ The user wants to add a new feature. Follow this mandatory workflow in order. Do
 - Before tests or commands, inspect their side effects. Database queries/mutations, Docker lifecycle/reset, provider transactions/refunds and Azure/directory operations require explicit scoped approval. Generating/reviewing a migration under the approved feature plan does not authorize applying it to a database. Destructive resets need immediate per-operation approval.
 - Git staging, commit, push, merge, tag/branch creation and other Git writes require explicit authorization. Prepare the reviewed diff/file list and proposed commands; passing tests does not grant Git authorization. Preserve unrelated changes and stop to reconcile overlapping work.
 - If a required check cannot run safely or lacks approval/evidence, report BLOCKED/NOT TESTED and retain the acceptance requirement. Do not silently waive it, start another phase or treat the feature as complete.
+- If the approved task changes shared AI instructions, prompts, agents, skills, or governance documentation, apply the four gates from `docs/AI-OPERATING-MODEL.md`: complete discovery and the knowledge-preservation matrix first, present the design and exact file list for approval, then implement and perform acceptance. Do not treat this feature prompt as implementation authorization for AI governance changes.
 
 ## Step 1: Gather Requirements
 
 Ask the user:
 1. "What is the feature? (e.g., Shipment tracking, Invoice management)"
-2. "What properties does the main entity need?"
-3. "Is this entity tenant-owned? (default: yes — all business entities require TenantId)"
-4. "Does it relate to any existing entity? (e.g., FK to Order, Customer)"
+2. "Does this require a new or changed backend entity? If so, what properties are needed?"
+3. "For a backend entity change, is it tenant-owned? (default: yes — all business entities require TenantId)"
+4. "For a backend entity change, does it relate to an existing entity? (e.g., FK to Order, Customer)"
 5. "Does this feature add or rename any deployed runtime dependency or automation-visible Azure service? (e.g., Container App, Function App, queue/topic/subscription, Key Vault secret family, App Insights dependency, gateway/UI endpoint)"
+6. "Does this feature change the React frontend, shared frontend packages, API SDK contracts, tenant-session behavior, payment UI, or browser navigation? (default: no)"
 
 Once answered, confirm the plan before proceeding.
+
+## Step 1B: Classify Feature Surfaces
+
+Before creating backend files, classify the approved scope as backend-only, frontend-only, or full-stack:
+
+- Backend work follows Steps 2–10 through the **CQRS Backend** skill and this prompt.
+- Frontend work follows the **Frontend Feature Development** skill and `.github/instructions/frontend.instructions.md`.
+- Payment-provider or payment-flow work also follows the **Payment Provider Development** skill.
+- Full-stack work must keep backend DTO/API changes, the frontend API SDK, tenant-session behavior, UI tests, and runtime validation synchronized.
+- Do not force a frontend-only task through the backend entity/migration sequence. Do not treat a frontend mock or page test as proof of backend or provider acceptance.
+- If a new reusable workflow is proposed, prefer orchestrating an existing specialist skill over creating a duplicate feature-development skill; justify any new skill against the skill quality contract.
+
+Apply these validation profiles:
+
+| Profile | Applicable workflow |
+|---|---|
+| Backend-only | Steps 2–8 for affected backend surfaces, Step 8B when runtime/deployment impact exists, backend validation in Step 9, and applicable review/handoff gates |
+| Frontend-only | Frontend skill and checks in Step 9; omit Steps 2–8 and backend-only review items unless their surfaces are affected. Do not create an entity/migration or require the .NET solution suite for an isolated UI change |
+| Full-stack | Both affected frontend and backend lanes, coordinated contracts, and applicable runtime/payment checks |
+
+Requirements, plan approval, applicable Step 10 review, commit preparation and context refresh apply to every profile. Step 8B applies to any profile with runtime/deployment impact; it does not authorize deployment. Step 13 remains required when payment behavior is affected. If an apparent frontend-only task changes backend contracts or behavior, reclassify it before implementation; profile selection cannot waive an applicable security, isolation or payment gate.
 
 ## Step 2: Domain Entity
 
@@ -174,19 +197,29 @@ Rules:
 
 ## Step 9: Build + Test
 
-After targeted checks, the approved feature must satisfy the full build/test requirement below. Inspect the test lane's configuration and side effects first; do not run database/provider/cloud operations without the scoped approval above. Report a missing required run as BLOCKED/NOT TESTED, not a waived or passed gate.
+After targeted checks, satisfy the validation lanes for the approved profile below. Inspect their configuration and side effects first; do not run database/provider/cloud operations without scoped approval. Report a missing required run as BLOCKED/NOT TESTED, not a waived or passed gate.
 
-Build/test commands for the approved scope:
+**Frontend lane — frontend-only and full-stack:** run the affected frontend checks from `frontend/`:
+
+```powershell
+npm run typecheck
+npm run test:web
+npm run build
+```
+
+Run browser verification when navigation, callbacks, or visible payment behavior changes. Report unavailable browser or runtime evidence as BLOCKED/NOT TESTED.
+
+**Backend lane — backend-only and full-stack:** retain the solution build/test gate after targeted backend checks:
 ```powershell
 dotnet build XYDataLabs.OrderProcessingSystem.sln
 dotnet test XYDataLabs.OrderProcessingSystem.sln --no-build
 ```
 
-ALL tests must pass before proceeding.
+All applicable tests must pass before proceeding, or retain an explicitly permitted, recorded deferral under the completion rubric. An unrelated lane is not applicable, not PASS; an unavailable required lane is BLOCKED/NOT TESTED.
 
 ## Step 10: Review
 
-Before committing, perform a self-review against this checklist:
+Before committing, perform a self-review against this checklist. Apply backend entity/schema/handler items only when those surfaces changed; a frontend-only task does not need a migration, query filter or handler. Security, scope and relevant contract/test checks remain required for every profile.
 
 | Check | Rule |
 |-------|------|
@@ -202,7 +235,8 @@ Before committing, perform a self-review against this checklist:
 | ConfigureTenantOwnership called? | Entity registered in `ConfigureTenantOwnership<T>()` — not manual FK/filter/delete config |
 | IAppDbContext updated? | `DbSet<T>` added to both concrete DbContext and `IAppDbContext` interface |
 | No tenant params in controller? | No `TenantId`/`TenantCode`/`TenantExternalId` in action params or request DTOs |
-| All tests pass? | `dotnet test` exits with 0 failures |
+| Applicable tests pass? | Required profile lanes pass; retain explicit unavailable/blocked outcomes and only permitted recorded deferrals |
+| Frontend contract and tests? | SDK/types, component tests, typecheck, build, and required browser checks are aligned for frontend scope |
 | Azure runtime target impact handled? | New automation-visible Azure dependencies update `runtime-targets.json`, TypeScript contract, owning workflow/script, and Phase 10 environment contract validator together |
 
 ## Step 11: Prepare Commit — Explicit Approval Required

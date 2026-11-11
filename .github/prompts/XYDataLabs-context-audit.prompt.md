@@ -71,6 +71,16 @@ Perform the task-relevant read-only audit against actual code/configuration and 
 - Flag: any mismatch in completed phase count, active phase, next phase, or freeze/closeout wording that would mislead humans or Copilot.
 - Verify the relevant approved plan/checkpoint and evidence rather than hardcoding a historical next slice. A paused Phase 10 or planned Phase 11 task must not be treated as authorization to resume or as completed work.
 
+### 11. Knowledge Preservation
+
+When a shared AI asset was shortened, removed, or materially reorganized:
+
+- Compare the current file with its relevant committed predecessor using the repository revision, not memory or an external copy.
+- Build a preservation matrix for architecture/bounded contexts, CQRS/Clean Architecture, EF Core/tenant isolation, payment providers, React/frontend/API integration, Docker/local development, Azure deployment, testing, security/approval boundaries, and completion workflows.
+- For each material section record: original source, current canonical owner, discovery path, preservation status (`preserved`, `relocated`, `superseded`, or `missing`), and required fix.
+- Treat a missing replacement owner for valuable guidance as a MEDIUM or HIGH finding that blocks knowledge restructuring until an approved destination is identified.
+- Do not require large inventories in short entry files when the live solution, workflow directory, or canonical reference document owns that inventory.
+
 ## Output Format
 
 Present findings as a table:
@@ -84,3 +94,5 @@ Severity levels:
 - **LOW** — Minor drift, cosmetic (e.g. description wording slightly outdated)
 
 After the table, list specific edits needed to fix each HIGH and MEDIUM issue.
+
+For a knowledge-preservation audit, include the preservation matrix after the findings table and distinguish structural preservation from observed Copilot/Codex behavior. Do not claim that a link or index proves a skill was selected or applied.

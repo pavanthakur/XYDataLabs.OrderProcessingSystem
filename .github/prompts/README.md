@@ -140,8 +140,9 @@ Use when:
 
 Purpose:
 - Orchestrates end-to-end feature development with multitenant support.
-- Enforces the mandatory 13-step workflow: requirements → entity → DTO → CQRS → DbContext → migration → controller → tests → build → review → commit preparation → context refresh → payment verification (conditional).
-- References all relevant instruction files at each step.
+- Selects backend-only, frontend-only or full-stack profiles after requirements and plan approval. Entity/DTO/CQRS/DbContext/migration/controller steps apply only to affected backend surfaces; applicable tests, review, commit preparation and context refresh remain required, with payment verification conditional on impact.
+- Routes frontend work to `frontend-feature-development` and payment-provider work to `payment-provider-development` without duplicating those skills in the prompt.
+- References the relevant instruction files and validation commands for the approved backend, frontend, and full-stack scope.
 
 Use when:
 - Adding a new entity with full CQRS, controller, EF migration, and tests.
@@ -149,7 +150,7 @@ Use when:
 
 Workflow:
 1. Run `/XYDataLabs-new-feature` — it gathers requirements and confirms the plan before implementing only approved scope.
-2. Steps 2-9 are handled by the **CQRS Backend** agent (entity through build+test).
+2. Backend scope follows the CQRS backend guidance and backend validation lane; frontend scope follows the Frontend Feature Development skill and frontend lane. Full-stack scope runs both; isolated UI work does not trigger the .NET solution gate. Follow the shared delegation approval boundary rather than launching an agent automatically.
 3. Step 10: switch to **Code Reviewer** agent for architecture/security review.
 4. Steps 11-12: present the reviewed diff/file list and proposed commit message; refresh relevant context. No staging/commit/push without explicit authorization.
 5. Step 13 (conditional): payment-related changes require `/XYDataLabs-verify-db-logs` evidence before closeout/commit; obtain scoped approval for consequential access and report unavailable/unapproved checks as BLOCKED/NOT TESTED, not PASS.
