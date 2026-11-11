@@ -131,8 +131,8 @@ function Test-Phase10DockerImageManifestsMatch {
         $Before.runId -cne $After.runId -or $Before.candidate.commit -cne $After.candidate.commit -or
         $Before.candidate.worktree -cne $After.candidate.worktree -or
         $Before.candidate.dirtyStatusSha256 -cne $After.candidate.dirtyStatusSha256) { return $false }
-    $left = @($Before.images | Sort-Object service)
-    $right = @($After.images | Sort-Object service)
+    $left = @($Before.images | Sort-Object { $_.service })
+    $right = @($After.images | Sort-Object { $_.service })
     if ($left.Count -ne 13 -or $right.Count -ne 13 -or $left.Count -ne $right.Count) { return $false }
     for ($index = 0; $index -lt $left.Count; $index++) {
         if ($left[$index].project -cne 'xy-phase10' -or $right[$index].project -cne 'xy-phase10' -or
@@ -150,8 +150,8 @@ function Assert-Phase10DockerImageManifestMatches {
         -not (Test-Phase10DockerImageManifestShape -Manifest $Actual) -or
         $Expected.candidate.worktree -ne 'clean' -or $Actual.candidate.worktree -ne 'clean' -or
         $Expected.candidate.commit -cne $Actual.candidate.commit) { throw 'Expected and actual image manifests are not bound to the same clean candidate.' }
-    $expectedImages = @($Expected.images | Sort-Object service)
-    $actualImages = @($Actual.images | Sort-Object service)
+    $expectedImages = @($Expected.images | Sort-Object { $_.service })
+    $actualImages = @($Actual.images | Sort-Object { $_.service })
     if ($expectedImages.Count -ne 13 -or $actualImages.Count -ne 13 -or $expectedImages.Count -ne $actualImages.Count) {
         throw 'Expected and actual image manifests do not cover the same complete Phase 10 service set.'
     }

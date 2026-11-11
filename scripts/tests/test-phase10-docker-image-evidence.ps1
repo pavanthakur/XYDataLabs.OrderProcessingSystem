@@ -95,6 +95,12 @@ try {
     $after = Get-Phase10DockerImageManifest @afterArguments -CapturePoint after
     $readBack = Get-Content -LiteralPath $beforePath -Raw | ConvertFrom-Json
     if ($readBack.images.Count -ne 13 -or $readBack.capturePoint -ne 'before') { throw 'Captured manifest is incomplete.' }
+    $readBack.candidate.worktree = 'clean'
+    $readBack.candidate.dirtyStatusSha256 = $null
+    $before.candidate.worktree = 'clean'
+    $before.candidate.dirtyStatusSha256 = $null
+    Assert-Phase10DockerImageManifestMatches -Expected $readBack -Actual $before
+    Write-Host 'PASS live-ordered-manifest-matches-json-manifest'
     $beforeComparable = $readBack
     $afterComparable = Get-Content -LiteralPath $afterPath -Raw | ConvertFrom-Json
     $beforeComparable.candidate.worktree = 'clean'
