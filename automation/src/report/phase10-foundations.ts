@@ -2,7 +2,8 @@ import type { EvidenceStatus } from "./phase10-report.js";
 
 // Keep in sync with run-phase10-foundation-tests.ps1.
 export const FOUNDATION_CHECKS = [
-  "docker-safety", "fixture-regression", "dotnet-inventory-regression", "Domain-tests", "Application-tests",
+  "docker-safety", "docker-image-evidence", "fixture-regression", "dotnet-inventory-regression",
+  "Domain-tests", "Application-tests",
   "API-tests", "Gateway-tests", "Architecture-tests", "frontend-tests",
   "frontend-typecheck", "automation-typecheck", "test-payment-evidence",
   "test-acceptance-coverage", "test-verification-polling", "test-callbacks",

@@ -548,6 +548,7 @@ test("TRX counters, results, timestamps and runner outcome must reconcile", () =
 test("foundation summary reconciles missing, duplicate, stale and contradictory results", () => {
   const runStart = summary.startedUtc;
   const runEnd = summary.finishedUtc;
+  assert.ok(FOUNDATION_CHECKS.includes("docker-image-evidence"));
   assert.equal(normalizeFoundationSummary(foundations, runStart, runEnd).issues.length, 0);
   const missing = normalizeFoundationSummary({ status: "passed", results: [] }, runStart, runEnd);
   assert.equal(missing.checks[0].status, "NOT-RUN");
@@ -619,12 +620,12 @@ test("inventory reconciliation counts statuses and selection independently witho
   assert.ok(result.issues.includes("Packet reports PASS with an incomplete or unsuccessful selected payment suite."));
   assert.match(html, /Docker packet steps: 14; PASS: 11; FAIL: 0; PARTIAL: 0; BLOCKED: 1; SKIPPED: 0; NOT-RUN: 2; DEFERRED: 0/);
   assert.match(html, /Packet selection: SELECTED: 1; NOT-SELECTED: 2; UNKNOWN: 11/);
-  assert.match(html, /Foundation runner checks: 18; PASS: 18; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 0; DEFERRED: 0/);
+  assert.match(html, /Foundation runner checks: 19; PASS: 19; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 0; DEFERRED: 0/);
   assert.match(html, /not individual test totals or acceptance gates/);
   assert.match(html, /Duplicates are BLOCKED; failures in conflicting entries still affect the overall result/);
   const empty = renderPhase10Report(normalizePhase10Packet(null, null));
   assert.match(empty, /Docker packet steps: 14; PASS: 0; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 14; DEFERRED: 0/);
-  assert.match(empty, /Foundation runner checks: 18; PASS: 0; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 18; DEFERRED: 0/);
+  assert.match(empty, /Foundation runner checks: 19; PASS: 0; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 19; DEFERRED: 0/);
   const deferred = normalizePhase10Packet({ ...packet, steps: packet.steps.map(step =>
     step.name === "order-continuation" ? { ...step, status: "deferred" } : step) }, summary, foundations, trxInputs, additional);
   assert.equal(deferred.steps.find(step => step.name === "order-continuation")?.status, "DEFERRED");
