@@ -1,4 +1,6 @@
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
+import { phase10ImageSetsMatch, validatePhase10ImageManifest } from "./phase10-images.js";
+import type { Phase10ImageManifest } from "./phase10-images.js";
 
 export const NFR_REQUIRED_CATEGORIES = ["functional", "performance", "tenant", "payments", "operational", "recovery", "security"] as const;
 export const P95_LIMIT_SECONDS = 30;
@@ -12,8 +14,9 @@ export interface Gate { name: string; status: GateStatus; detail: string }
 export interface AcceptanceInput {
   expectedCommit: string;
   e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown;
-    coverage: unknown; reportIssuesClean: boolean };
-  nfr: { summary: unknown; outageDrill: unknown; replayProof: unknown; performanceProbe: unknown };
+    coverage: unknown; reportIssuesClean: boolean; imageBefore: unknown; imageAfter: unknown };
+  nfr: { summary: unknown; outageDrill: unknown; replayProof: unknown; performanceProbe: unknown;
+    imageBefore: unknown; imageAfter: unknown; imageRunId?: string };
 }
 export interface AcceptanceResult {
   schema: "phase10-local-acceptance-v1";
@@ -44,11 +47,29 @@ function cleanCommit(snapshot: unknown, expected: string): boolean {
   return value?.commit === expected && value?.worktree === "clean";
 }
 
+function imagePair(valueBefore: unknown, valueAfter: unknown, runId: string | undefined, expectedCommit: string):
+  { status: "PASS" | "FAIL" | "BLOCKED"; before?: Phase10ImageManifest; after?: Phase10ImageManifest; detail: string } {
+  const before = validatePhase10ImageManifest(valueBefore, runId, "before");
+  const after = validatePhase10ImageManifest(valueAfter, runId, "after");
+  if (before.status !== "PASS" || after.status !== "PASS") return { status: "BLOCKED", detail: "One or both bound image manifests are missing or invalid." };
+  if (before.manifest.candidate.commit !== expectedCommit || after.manifest.candidate.commit !== expectedCommit ||
+      before.manifest.candidate.worktree !== "clean" || after.manifest.candidate.worktree !== "clean") {
+    return { status: "BLOCKED", before: before.manifest, after: after.manifest, detail: "Image provenance is not the expected clean candidate." };
+  }
+  if (!phase10ImageSetsMatch(before.manifest, after.manifest)) {
+    return { status: "FAIL", before: before.manifest, after: after.manifest, detail: "Service image identity changed during the run." };
+  }
+    return { status: "PASS", before: before.manifest, after: after.manifest, detail: "All 13 service image identities remained unchanged." };
+}
+
 export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceResult {
   const gates: Gate[] = [];
   const { e2e, nfr } = input;
   const packet = rec(e2e.packet);
   const summary = rec(e2e.summary);
+  const e2eRunId = typeof summary?.runId === "string" ? summary.runId : undefined;
+  const e2eImages = imagePair(e2e.imageBefore, e2e.imageAfter, e2eRunId, input.expectedCommit);
+  gates.push({ name: "e2e-image-identities", status: e2eImages.status, detail: e2eImages.detail });
 
   gates.push(gate("e2e-sealed-completion", e2e.completion === "COMPLETE" && e2e.completionStatus === "passed",
     `completion=${e2e.completion}; status=${e2e.completionStatus ?? "UNKNOWN"}`, e2e.completionStatus === "failed"));
@@ -86,6 +107,15 @@ export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceRe
     "Sealed report lists no reconciliation issues and measured backend, frontend and integration coverage."));
 
   const nfrSummary = rec(nfr.summary);
+  const nfrRunDirectory = typeof nfrSummary?.runDir === "string" ? nfrSummary.runDir.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) : undefined;
+  const nfrImages = imagePair(nfr.imageBefore, nfr.imageAfter, nfr.imageRunId ?? nfrRunDirectory, input.expectedCommit);
+  gates.push({ name: "nfr-image-identities", status: nfrImages.status, detail: nfrImages.detail });
+  const crossImageMatch = e2eImages.status === "PASS" && nfrImages.status === "PASS" &&
+    !!e2eImages.before && !!nfrImages.before && phase10ImageSetsMatch(e2eImages.before, nfrImages.before);
+  const crossMismatch = e2eImages.status === "PASS" && nfrImages.status === "PASS" && !crossImageMatch;
+  gates.push({ name: "e2e-nfr-image-consistency", status: crossImageMatch ? "PASS" : crossMismatch ? "FAIL" : "BLOCKED",
+    detail: crossImageMatch ? "E2E and NFR used the same 13 local service image IDs." : crossMismatch
+      ? "E2E and NFR used different service image identities despite matching source revision." : "Cannot compare E2E and NFR image identities." });
   const categories = rec(nfrSummary?.categories);
   const categoryStatuses = NFR_REQUIRED_CATEGORIES.map(name => `${name}=${String(rec(categories?.[name])?.status ?? "missing")}`);
   gates.push(gate("nfr-single-clean-candidate",

@@ -69,8 +69,18 @@ termination can prevent finalization. If the hook warns that it could not
 persist a failure, treat any existing packet and summary as untrusted.
 After artifact generation and lock/environment cleanup, the hook publishes
 `phase10-completion.json` with the run ID, recorded status and SHA-256 hashes of
-the packet, JSON summary, preview, sanitized coverage summary, and offline index. New records
-use `phase10-completion-v3`; the verifier accepts valid v1/v2 records for their original artifact sets.
+the packet, JSON summary, preview, sanitized coverage summary, offline index, and
+the before/after Docker image identity manifests. New records use
+`phase10-completion-v4`; the verifier continues to accept valid v1-v3 records
+for their original artifact sets. Historical v1-v3 records do not satisfy the
+new image-identity gate.
+The manifests require the complete 13-service `xy-phase10` inventory, validate
+project/service ownership, and bind image references, local image IDs, available
+repository digests, candidate revision, capture stage, and build-log hashes.
+Before/after evidence must retain the same service image identities. Repository
+digests are local observations when available; they do not prove registry
+publication. The preview displays validated identities but remains provisional
+and never becomes an acceptance verdict.
 Verify the completion record using the command above before
 using those artifacts. Missing, malformed or mismatched records and interrupted
 finalization are INCOMPLETE. The verifier exits 0 only for a matching record
@@ -85,6 +95,18 @@ evidence is not bound by this record. The linked summary contains only
 aggregate normalized counts and scope labels; it is not raw coverage or an
 independent proof of revision identity. Verification does not prevent later
 changes to files.
+For a separately approved candidate run, pass the E2E start manifest to NFR so
+it validates the exact same local images before and after its drills:
+
+```powershell
+pwsh -NoProfile -File scripts/run-phase10-docker-nfr-proof.ps1 `
+  -SkipStartIfNeeded `
+  -ExpectedImageManifest '<e2e-run-directory>\docker-image-identities-before.json'
+```
+
+The wrapper rejects a missing, malformed, dirty-candidate, foreign-project, or
+image-mismatched manifest before starting its NFR proof. The acceptance
+reconciler independently compares the E2E and NFR image inventories.
 Validate the isolated hook finalization (no Docker, database, or payment calls)
 with `pwsh -NoProfile -File scripts\tests\test-phase10-report-finalization.ps1`.
 Validate hashed .NET discovery/TRX reconciliation and failure preservation with

@@ -1,0 +1,87 @@
+{
+  "schema": "phase10-preazure-image-evidence-v1",
+  "candidate": {
+    "revision": "58c361a9d0c594da604c0a274204c8dbb72090ea",
+    "worktreeDuringRuns": "CLEAN",
+    "currentWorktree": "DIRTY"
+  },
+  "historicalContractResult": {
+    "verdict": "PASS",
+    "reconcilerSchema": "phase10-local-acceptance-v1",
+    "strictImageIdentityGate": "BLOCKED",
+    "note": "The historical reconciler did not compare E2E and NFR image identities. This PASS is retained as historical evidence and is not v4 acceptance."
+  },
+  "runs": {
+    "e2e": {
+      "runId": "phase10-docker-http-20261111-103838867",
+      "status": "passed",
+      "completionSchema": "phase10-completion-v3",
+      "deterministicPositiveJourneys": 6,
+      "sandboxPositiveJourneys": 6,
+      "tenants": ["TenantA", "TenantB", "TenantC"],
+      "providers": ["Razorpay", "OpenPay"]
+    },
+    "nfr": {
+      "runId": "phase10-docker-nfr-20261111-102444152",
+      "status": "passed",
+      "messageCount": 100,
+      "effects": 100,
+      "p95Seconds": 2.16305,
+      "p95LimitSeconds": 30,
+      "replayVisibilitySeconds": 1.085,
+      "replayLimitSeconds": 60,
+      "backlogRecoverySeconds": 28.027,
+      "recoveryLimitSeconds": 1800,
+      "lostMessages": 0,
+      "duplicateEffects": 0,
+      "rollback": "single-service local image rollback and restoration"
+    }
+  },
+  "imageObservations": {
+    "e2eRollbackInventoryImageId": "sha256:d619aefc09d8eb54cb987542aab62d81be27d0b676bcac3189fc149305de8cc6",
+    "nfrRetainedInventoryImageId": "sha256:d619aefc09d8eb54cb987542aab62d81be27d0b676bcac3189fc149305de8cc6",
+    "supplementalE2eInventoryImageId": "sha256:926ef9508b313210fd8e04b6b8d3d00833c3895bcc9928bb3cdaf36daaf0e132",
+    "supplementalCapture": "after E2E completion; candidate revision absent; not bound by completion-v3",
+    "conclusion": "The available records do not provide a sealed 13-service before/after pair for both runs. Runtime image identity and cross-run consistency remain unproven."
+  },
+  "sourceArtifacts": {
+    "e2eReconciliationSha256": "9406ff795fd072899a5fe368bc0b715f9a9d3c8557673a048d6c507f908f11b9",
+    "e2eSupplementalImageInventorySha256": "e0f3214422193be26e0cbba54087386c2cc7b27a62ee6ebeb7959167444f719d",
+    "e2eRollbackImageInventorySha256": "4ec17652c3d3db70cc5cd971ecf24e20da1e819502789c32e8fa0a1df267939f",
+    "nfrRetainedImageLogSha256": "3797c8569c225ef6fee35602e846cecb581291648dcc07b95cff240c4bcda025",
+    "dockerBuildLogSha256": "2566cbe7e75b10bf7886631b592c37805f6abd8f2af7d7fd9e7d7b3f33e2a02c"
+  },
+  "implementation": {
+    "status": "implemented; focused Phase 10 PowerShell and TypeScript checks and AI customization regressions passed",
+    "gatewayLocalPublish": {
+      "status": "PASS",
+      "scope": "forced local .NET publish after restore; not a Docker image inspection",
+      "dependencyManifestSha256": "3c698aa52325e574c8ae604e74634c36a1792e9391edcd5eb91427fc910aefd2",
+      "resolvedCentralPackages": [
+        "Azure.Identity/1.13.2",
+        "OpenTelemetry.Instrumentation.AspNetCore/1.10.1",
+        "OpenTelemetry.Instrumentation.Http/1.10.0",
+        "Serilog/4.2.0",
+        "Yarp.ReverseProxy/2.2.0"
+      ],
+      "nugetVulnerabilityAudit": "No vulnerable packages reported by current nuget.org source on 2026-11-11",
+      "unresolvedAnalyzerWarnings": [
+        "S1694: XYDataLabs.OrderProcessingSystem.SharedKernel/Specifications/Specification.cs",
+        "CA1062: XYDataLabs.OrderProcessingSystem.SharedKernel/Observability/CorrelationMiddleware.cs",
+        "CA1062: XYDataLabs.OrderProcessingSystem.SharedKernel/Multitenancy/EntraIdentityExtensions.cs",
+        "MA0074: XYDataLabs.OrderProcessingSystem.SharedKernel/Multitenancy/TenantClaimConsistencyMiddleware.cs"
+      ],
+      "warningDisposition": "Unrelated to Docker restore ordering; recorded for separate scoped code review; not changed or suppressed",
+      "dockerImageDependencyManifest": "UNKNOWN; requires separately approved Docker build"
+    },
+    "dockerBuildOrRuntimeAcceptance": "NOT RUN",
+    "azure": "NOT RUN",
+    "gitWrites": "NOT PERFORMED"
+  },
+  "limitations": [
+    "Final published dependency manifests were not retained; preliminary Gateway restore warnings cannot establish the final image package set.",
+    "DW-023 and DW-024 remain Phase 11 deferrals.",
+    "DW-027 remains parked; DW-028 Option A remains accepted and workflow 99 hosted parity remains excluded.",
+    "Phase 10 is not complete; Azure validation remains pending."
+  ]
+}

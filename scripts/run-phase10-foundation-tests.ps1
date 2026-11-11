@@ -204,6 +204,7 @@ function Write-BackendCoverageHtml {
 Push-Location $root
 try{
     Run-Test 'docker-safety' 'pwsh' @('-NoProfile','-File','scripts/test-phase10-docker-safety.ps1')
+    Run-Test 'docker-image-evidence' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-docker-image-evidence.ps1')
     Run-Test 'fixture-regression' 'pwsh' @('-NoProfile','-File','scripts/test-phase10-payment-fixture.ps1')
     Run-Test 'dotnet-inventory-regression' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-dotnet-inventory.ps1')
     foreach($name in @('Domain','Application','API','Gateway','Architecture')){

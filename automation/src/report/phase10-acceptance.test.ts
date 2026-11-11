@@ -6,11 +6,19 @@ import type { AcceptanceInput } from "./phase10-acceptance.js";
 
 const commit = "a".repeat(40);
 const snapshot = { commit, worktree: "clean" };
+const imageServices = ["sql-server", "redis", "azurite", "servicebus-sql", "servicebus-emulator", "keycloak-local", "orders", "payments", "inventory", "notifications", "gateway", "ui", "functions"];
+const imageManifest = (runId: string, capturePoint: "before" | "after") => ({
+  schema: "phase10-docker-image-identities-v1", runId, capturePoint,
+  candidate: { commit, worktree: "clean", dirtyStatusSha256: null }, buildLogsSha256: {},
+  images: imageServices.map((service, index) => ({ project: "xy-phase10", service,
+    containerId: (index + 1).toString(16).padStart(12, "0"), imageReference: `local/${service}:dev`,
+    imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`, repositoryDigests: [] }))
+});
 const passing = (): AcceptanceInput => ({
   expectedCommit: commit,
   e2e: {
     completion: "COMPLETE", completionStatus: "passed", reportIssuesClean: true,
-    summary: { gitProvenance: { start: snapshot, finish: snapshot }, storageExitCode: 0 },
+    summary: { runId: "phase10-docker-http-20261111-000000001", gitProvenance: { start: snapshot, finish: snapshot }, storageExitCode: 0 },
     packet: {
       storageExitCode: 0, deferrals: ["DW-023", "DW-024"],
       restoration: { allRestored: true, fixtureLockPresent: false },
@@ -19,11 +27,14 @@ const passing = (): AcceptanceInput => ({
     coverage: {
       backend: Array.from({ length: 5 }, () => ({ state: "MEASURED" })),
       frontend: { state: "MEASURED" }, integration: { state: "MEASURED" }
-    }
+    },
+    imageBefore: imageManifest("phase10-docker-http-20261111-000000001", "before"),
+    imageAfter: imageManifest("phase10-docker-http-20261111-000000001", "after")
   },
   nfr: {
     summary: {
       status: "passed", commitSha: commit, commitShaAtFinish: commit, worktreeAtStart: "clean", worktreeAtFinish: "clean",
+      runDir: "C:/results/phase10-docker-nfr-20261111-000000002",
       categories: Object.fromEntries(NFR_REQUIRED_CATEGORIES.map(name => [name, {
         status: "passed",
         checks: name === "recovery" ? [{ name: "Rollback inventory to previous image", status: "passed" },
@@ -33,7 +44,10 @@ const passing = (): AcceptanceInput => ({
     performanceProbe: { Status: "passed", ExpectedMessages: 100, InventoryInboxCount: 100, NotificationsInboxCount: 100,
       InventoryEffectCount: 100, NotificationEffectCount: 100, P95Seconds: 1.9 },
     replayProof: { status: "passed", replayVisibilitySeconds: 4.2 },
-    outageDrill: { status: "passed", lostMessages: 0, duplicateEffects: 0, backlogRecoverySeconds: 35 }
+    outageDrill: { status: "passed", lostMessages: 0, duplicateEffects: 0, backlogRecoverySeconds: 35 },
+    imageBefore: imageManifest("phase10-docker-nfr-20261111-000000002", "before"),
+    imageAfter: imageManifest("phase10-docker-nfr-20261111-000000002", "after"),
+    imageRunId: "phase10-docker-nfr-20261111-000000002"
   }
 });
 
@@ -82,6 +96,30 @@ test("different commit or dirty worktree on either run is rejected", () => {
   const absent = passing();
   delete (absent.nfr.summary as { worktreeAtStart?: string }).worktreeAtStart;
   assert.equal(reconcilePhase10Acceptance(absent).verdict, "INCOMPLETE");
+});
+
+test("same source SHA with different service image IDs fails cross-run reconciliation", () => {
+  const input = passing();
+  const changed = input.nfr.imageBefore as ReturnType<typeof imageManifest>;
+  changed.images.find(image => image.service === "inventory")!.imageId = `sha256:${"f".repeat(64)}`;
+  const changedAfter = input.nfr.imageAfter as ReturnType<typeof imageManifest>;
+  changedAfter.images.find(image => image.service === "inventory")!.imageId = `sha256:${"f".repeat(64)}`;
+  const result = reconcilePhase10Acceptance(input);
+  assert.equal(result.gates.find(item => item.name === "e2e-nfr-image-consistency")?.status, "FAIL");
+  assert.equal(result.verdict, "FAIL");
+});
+
+test("missing, duplicate, malformed, or dirty image evidence blocks the candidate", () => {
+  for (const mutate of [
+    (input: AcceptanceInput) => { input.e2e.imageBefore = undefined; },
+    (input: AcceptanceInput) => { (input.e2e.imageAfter as ReturnType<typeof imageManifest>).images[1].service = "orders"; },
+    (input: AcceptanceInput) => { (input.nfr.imageBefore as ReturnType<typeof imageManifest>).images[0].imageId = "not-an-image-id"; },
+    (input: AcceptanceInput) => { (input.e2e.imageAfter as ReturnType<typeof imageManifest>).candidate.worktree = "dirty"; }
+  ]) {
+    const input = passing();
+    mutate(input);
+    assert.notEqual(reconcilePhase10Acceptance(input).verdict, "PASS");
+  }
 });
 
 test("drill thresholds are enforced: replay 60s, recovery 30 minutes, no loss, no duplicates, P95 30s", () => {

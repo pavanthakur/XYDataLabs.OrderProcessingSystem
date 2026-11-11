@@ -130,8 +130,14 @@ try {
         param($f)
         $outside = Join-Path (Split-Path $f -Parent) 'owned-outside-reference'
         [void][IO.Directory]::CreateDirectory($outside)
-        try { [void](New-Item -ItemType SymbolicLink -Path (Join-Path $f '.github/prompts/outside-link') -Target $outside -ErrorAction Stop) }
-        catch { throw 'SYMLINK_UNAVAILABLE' }
+        $link = Join-Path $f '.github/prompts/outside-link'
+        try { [void](New-Item -ItemType SymbolicLink -Path $link -Target $outside -ErrorAction Stop) }
+        catch {
+            # Directory junctions are reparse points too and can be created on Windows
+            # without the symlink privilege. Use one for the same boundary assertion.
+            try { [void](New-Item -ItemType Junction -Path $link -Target $outside -ErrorAction Stop) }
+            catch { throw 'SYMLINK_UNAVAILABLE' }
+        }
     } 'AI103'
 } catch {
     $runError = 'Regression runner aborted; inspect safe case logs and command exit status.'

@@ -190,7 +190,8 @@ function Invoke-Phase10Preview {
 
 function Write-Phase10Completion {
     param([Parameter(Mandatory = $true)][string]$Directory, [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Summary)
-    $paths = @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html')
+    $paths = @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html',
+        'docker-image-identities-before.json', 'docker-image-identities-after.json')
     foreach ($name in $paths) {
         $item = Get-Item -LiteralPath (Join-Path $Directory $name) -Force
         if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Length -gt 2MB) {
@@ -212,7 +213,7 @@ function Write-Phase10Completion {
         $hashes[$name] = (Get-FileHash -LiteralPath (Join-Path $Directory $name) -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     $record = [ordered]@{
-        schema = 'phase10-completion-v3'
+        schema = 'phase10-completion-v4'
         runId = $Summary.runId
         status = $Summary.status
         sha256 = $hashes

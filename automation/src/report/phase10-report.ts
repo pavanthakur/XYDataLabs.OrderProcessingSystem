@@ -8,8 +8,10 @@ import { parseBackendCoverage, parseFrontendCoverage } from "./phase10-coverage.
 import type { BackendCoverage, FrontendCoverage } from "./phase10-coverage.js";
 import { normalizeAutomationSuites, normalizeDiscoveredDotnetSuite } from "./phase10-automation.js";
 import type { AutomationSuiteReport } from "./phase10-automation.js";
+import { phase10ImageSetsMatch, validatePhase10ImageManifest } from "./phase10-images.js";
+import type { Phase10ImageRecord } from "./phase10-images.js";
 
-export const PHASE10_REPORT_VERSION = 13 as const;
+export const PHASE10_REPORT_VERSION = 14 as const;
 
 // This inventory mirrors the Docker hook's final packet, not the complete L5-R suite inventory.
 export const DOCKER_PACKET_STEPS = [
@@ -42,6 +44,7 @@ export interface Phase10Report {
   automation: AutomationSuiteReport[];
   dotnetTests: AutomationSuiteReport[];
   git: { start: GitSnapshot; finish: GitSnapshot };
+  imageIdentities: { status: "PASS" | "FAIL" | "BLOCKED"; detail: string; services: Phase10ImageRecord[] };
   steps: PacketStep[];
   issues: string[];
   overall: "FAIL" | "BLOCKED";
@@ -85,7 +88,8 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
     frontendCoverage?: unknown; frontendCoverageModifiedUtc?: number; integrationCoverage?: { xml: string; modifiedUtc: number };
     backendCoverage?: Partial<Record<TrxProject, { xml: string; modifiedUtc: number }>>;
     automation?: Partial<Record<string, unknown>>; automationInventorySha256?: string;
-    dotnetTests?: Partial<Record<TrxSuite, unknown>>; reportInputIssues?: string[] }): Phase10Report {
+    dotnetTests?: Partial<Record<TrxSuite, unknown>>; reportInputIssues?: string[];
+    dockerImageBefore?: unknown; dockerImageAfter?: unknown }): Phase10Report {
   const issues: string[] = [];
   if (additional?.reportInputIssues?.length) issues.push(...additional.reportInputIssues);
   const packet = record(packetInput);
@@ -114,6 +118,23 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
   const runId = typeof summary?.runId === "string" && /^phase10-docker-http-\d{8}-\d{9}$/.test(summary.runId)
     ? summary.runId : null;
   if (!runId) issues.push("Run ID missing or invalid.");
+  const imageBefore = validatePhase10ImageManifest(additional?.dockerImageBefore, runId ?? undefined, "before");
+  const imageAfter = validatePhase10ImageManifest(additional?.dockerImageAfter, runId ?? undefined, "after");
+  let imageIdentities: Phase10Report["imageIdentities"] = { status: "BLOCKED", detail: "Image identity is missing or invalid.", services: [] };
+  if (imageBefore.status === "PASS" && imageAfter.status === "PASS") {
+    if (imageBefore.manifest.candidate.worktree !== "clean" || imageAfter.manifest.candidate.worktree !== "clean" ||
+        imageBefore.manifest.candidate.commit !== imageAfter.manifest.candidate.commit ||
+        (git.start.commit !== null && git.start.commit !== imageBefore.manifest.candidate.commit) ||
+        (git.finish.commit !== null && git.finish.commit !== imageAfter.manifest.candidate.commit)) {
+      imageIdentities = { status: "BLOCKED", detail: "Images match, but source revision/worktree provenance is not clean and aligned.", services: imageAfter.manifest.images };
+    } else if (!phase10ImageSetsMatch(imageBefore.manifest, imageAfter.manifest)) {
+      imageIdentities = { status: "FAIL", detail: "Service image identity changed during the run.", services: imageAfter.manifest.images };
+    } else {
+      imageIdentities = { status: "PASS", detail: "All 13 service image IDs match between start and finish for the recorded clean candidate.", services: imageAfter.manifest.images };
+    }
+  } else {
+    issues.push("Docker image identity manifests are missing, malformed, or not bound to this run.");
+  }
 
   const inputSteps: unknown[] = Array.isArray(packet?.steps) ? packet.steps : [];
   const steps = DOCKER_PACKET_STEPS.map((name): PacketStep => {
@@ -219,7 +240,7 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
     ? "FAIL" : "BLOCKED";
   return { version: PHASE10_REPORT_VERSION, runId, packetStatus: packetStatus ?? "BLOCKED", profile, paymentSuite,
     startedUtc, finishedUtc, restoration, storage, foundations, trx, integration, integrationCoverage, frontend, frontendCoverage,
-    backendCoverage, automation, dotnetTests, git, steps, issues, overall };
+    backendCoverage, automation, dotnetTests, git, imageIdentities, steps, issues, overall };
 }
 
 function escapeHtml(value: string): string {
@@ -296,7 +317,11 @@ export function renderPhase10Report(report: Phase10Report, coverageSummaryAvaila
 <p>Contract version: ${report.version}; Run ID: ${escapeHtml(report.runId ?? "UNKNOWN")}</p>
 <p>Overall: ${report.overall}. This preview is incomplete and cannot certify L5-R, L5/L6 or a current revision.</p>
 <p>Finalization: INCOMPLETE / UNVERIFIED in this static preview. All displayed statuses are provisional; verify the completion record separately before using run evidence.</p>
-<p>Packet-reported status: ${report.packetStatus}. Image identity: UNKNOWN.</p>
+<p>Packet-reported status: ${report.packetStatus}. Image identity: ${report.imageIdentities.status} — ${escapeHtml(report.imageIdentities.detail)}</p>
+<h2>Docker image identities</h2><p>Local image IDs identify the images observed by Docker; repository digests, when present, do not by themselves prove a registry publication. This preview is provisional and cannot certify acceptance.</p>
+<table><thead><tr><th>Project / service</th><th>Image reference</th><th>Local image ID</th><th>Repository digests</th></tr></thead><tbody>${report.imageIdentities.services.map(image =>
+    `<tr><td>${escapeHtml(image.project)}/${escapeHtml(image.service)}</td><td>${escapeHtml(image.imageReference)}</td><td>${escapeHtml(image.imageId)}</td><td>${escapeHtml(image.repositoryDigests.join(", ") || "Not available")}</td></tr>`
+  ).join("\n") || '<tr><td colspan="4">UNKNOWN — no valid bound image manifests.</td></tr>'}</tbody></table>
 <h2>Recorded Git provenance</h2>
 <p>At start: ${report.git.start.commit ?? "UNKNOWN"}; worktree: ${report.git.start.worktree}.</p>
 <p>At finish: ${report.git.finish.commit ?? "UNKNOWN"}; worktree: ${report.git.finish.worktree}.</p>

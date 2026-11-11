@@ -19,7 +19,7 @@ $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('phase10-finalization-' + [gui
 
 function pwsh { $global:LASTEXITCODE = 0; '{}' }
 function Protect-Phase10Log { process { $_ } }
-function Get-Phase10GitSnapshot { return @{ commit=$null; worktree='unknown' } }
+function Get-Phase10GitSnapshot { return @{ commit=('a' * 40); worktree='clean' } }
 function Remove-Item {
     param([string]$LiteralPath, [switch]$Recurse, [switch]$Force)
     if ($script:failLockRemoval -and $LiteralPath -eq $acceptanceLockPath) { throw 'synthetic lock cleanup failure' }
@@ -41,6 +41,18 @@ function Invoke-Phase10Preview {
     Set-Content -LiteralPath (Join-Path $Directory 'index.html') -Value 'offline report'
     if (-not $script:missingCoverageSummary) {
         Set-Content -LiteralPath (Join-Path $Directory 'phase10-coverage-summary.json') -Value '{}'
+    }
+    $services = @('sql-server','redis','azurite','servicebus-sql','servicebus-emulator','keycloak-local','orders','payments','inventory','notifications','gateway','ui','functions')
+    foreach ($point in @('before','after')) {
+        if ($script:missingImageManifest -and $point -eq 'after') { continue }
+        $images = @()
+        for ($index = 0; $index -lt $services.Count; $index++) {
+            $images += @{ project='xy-phase10'; service=$services[$index]; containerId=$index.ToString('x').PadLeft(12,'0');
+                imageReference="$($services[$index]):dev"; imageId=('sha256:' + ($index + 1).ToString('x').PadLeft(64,'0')); repositoryDigests=@() }
+        }
+        @{ schema='phase10-docker-image-identities-v1'; runId=(Split-Path -Leaf $Directory); capturePoint=$point;
+            candidate=@{ commit=('a' * 40); worktree='clean'; dirtyStatusSha256=$null }; buildLogsSha256=@{}; images=$images } |
+            ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $Directory "docker-image-identities-$point.json")
     }
 }
 
@@ -70,7 +82,8 @@ try {
         @{ name='completion-failed'; input='passed'; previewFailure=$false; expected='failed'; existingMarker=$true },
         @{ name='cleanup-failed'; input='passed'; previewFailure=$false; expected='failed'; failLock=$true },
         @{ name='oversized-preview'; input='passed'; previewFailure=$false; expected='failed'; oversized=$true },
-        @{ name='missing-coverage-summary'; input='passed'; previewFailure=$false; expected='failed'; missingCoverage=$true }
+        @{ name='missing-coverage-summary'; input='passed'; previewFailure=$false; expected='failed'; missingCoverage=$true },
+        @{ name='missing-image-manifest'; input='passed'; previewFailure=$false; expected='failed'; missingImage=$true }
     )) {
         $workspaceRoot = Join-Path $tempRoot $case.name
         $runRoot = Join-Path $workspaceRoot 'TestResults\run'
@@ -86,11 +99,12 @@ try {
         $script:previewFailure = $case.previewFailure
         $script:oversizedPreview = [bool]$case.oversized
         $script:missingCoverageSummary = [bool]$case.missingCoverage
+        $script:missingImageManifest = [bool]$case.missingImage
         $script:failLockRemoval = [bool]$case.failLock
         $script:summaryFailures = if ($case.summaryFailures) { $case.summaryFailures } else { 0 }
         $runSummary = [ordered]@{
             runId='run'; runRoot=$runRoot; status=$case.input; startedUtc=[DateTime]::UtcNow.ToString('o')
-            reusedExistingStack=$true; gitProvenance=@{ start=$null; finish=$null }
+            reusedExistingStack=$true; gitProvenance=@{ start=@{commit=('a' * 40);worktree='clean'}; finish=$null }
             error=$(if ($case.input -eq 'failed') {'original failure'} else {$null})
         }
         $completionPath = Join-Path $runRoot 'phase10-completion.json'
@@ -112,7 +126,7 @@ try {
         $packetPath = Join-Path $runRoot 'acceptance-packet.json'
         $packet = if (Test-Path -LiteralPath $packetPath) { Get-Content -LiteralPath $packetPath -Raw | ConvertFrom-Json } else { $null }
         $saved = Get-Content -LiteralPath $runSummaryJsonPath -Raw | ConvertFrom-Json
-        $persistedExpected = if ($case.existingMarker -or $case.oversized -or $case.missingCoverage) { 'passed' } else { $case.expected }
+        $persistedExpected = if ($case.existingMarker -or $case.oversized -or $case.missingCoverage -or $case.missingImage) { 'passed' } else { $case.expected }
         if (($null -ne $packet -and $packet.status -ne $persistedExpected) -or $saved.status -ne $persistedExpected) { throw "$($case.name): status was not preserved." }
         if (((Test-Path -LiteralPath $acceptanceLockPath) -ne [bool]$case.failLock) -or $env:PHASE10_RUN_ID -ne 'prior-id' -or $env:PHASE10_RUN_ROOT -ne 'prior-root') {
             throw "$($case.name): cleanup did not complete."
@@ -128,10 +142,11 @@ try {
         }
         if ($case.name -in @('success', 'partial', 'execution-failed')) {
             $completion = Get-Content -LiteralPath $completionPath -Raw | ConvertFrom-Json
-            if ($completion.schema -ne 'phase10-completion-v3' -or $completion.runId -ne 'run' -or $completion.status -ne $case.expected) {
+            if ($completion.schema -ne 'phase10-completion-v4' -or $completion.runId -ne 'run' -or $completion.status -ne $case.expected) {
                 throw "$($case.name): completion record is invalid."
             }
-            foreach ($name in @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html')) {
+            foreach ($name in @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html',
+                'docker-image-identities-before.json', 'docker-image-identities-after.json')) {
                 if ($completion.sha256.$name -ne (Get-FileHash -LiteralPath (Join-Path $runRoot $name) -Algorithm SHA256).Hash.ToLowerInvariant()) {
                     throw "$($case.name): completion hash mismatch."
                 }
@@ -147,6 +162,7 @@ try {
         } elseif (Test-Path -LiteralPath $completionPath) { throw "$($case.name): incomplete finalization published a record." }
         Write-Host "PASS $($case.name)"
     }
+    $script:missingImageManifest = $false
     $workspaceRoot = $root
     $actualRoot = Join-Path $tempRoot 'actual-preview'
     [void][IO.Directory]::CreateDirectory($actualRoot)

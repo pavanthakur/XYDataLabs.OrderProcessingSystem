@@ -177,7 +177,9 @@ async function main(): Promise<void> {
   }
   const report = normalizePhase10Packet(packet, summary, foundations, trx,
     { integrationTrx, integrationDuplicate, integrationCoverage, frontend, frontendCoverage, frontendCoverageModifiedUtc,
-      backendCoverage, automation, automationInventorySha256, dotnetTests, reportInputIssues });
+      backendCoverage, automation, automationInventorySha256, dotnetTests, reportInputIssues,
+      dockerImageBefore: await readEvidence(root, "docker-image-identities-before.json"),
+      dockerImageAfter: await readEvidence(root, "docker-image-identities-after.json") });
   const output = join(root, "phase10-preview.html");
   const indexOutput = join(root, "index.html");
   const coverageOutput = join(root, "phase10-coverage-summary.json");

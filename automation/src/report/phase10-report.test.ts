@@ -177,7 +177,8 @@ test("completion verification rejects absent, altered, contradictory and copied 
   const runRoot = join(parent, "owned-run");
   const files = {
     "acceptance-packet.json": JSON.stringify({ status: "passed", runRoot }),
-    "run-summary.json": JSON.stringify({ runId: "owned-run", status: "passed", runRoot }),
+    "run-summary.json": JSON.stringify({ runId: "owned-run", status: "passed", runRoot,
+      gitProvenance: { start: { commit: "a".repeat(40), worktree: "clean" }, finish: { commit: "a".repeat(40), worktree: "clean" } } }),
     "phase10-preview.html": "provisional",
     "index.html": "offline report"
   };
@@ -203,6 +204,44 @@ test("completion verification rejects absent, altered, contradictory and copied 
     } };
     await writeMarker(v3);
     assert.deepEqual(await verifyPhase10Completion(root), { state: "COMPLETE", status: "passed" });
+    const services = ["sql-server", "redis", "azurite", "servicebus-sql", "servicebus-emulator", "keycloak-local", "orders", "payments", "inventory", "notifications", "gateway", "ui", "functions"];
+    const manifest = (capturePoint: "before" | "after") => JSON.stringify({
+      schema: "phase10-docker-image-identities-v1", runId: "owned-run", capturePoint,
+      candidate: { commit: "a".repeat(40), worktree: "clean", dirtyStatusSha256: null }, buildLogsSha256: {},
+      images: services.map((service, index) => ({ project: "xy-phase10", service, containerId: index.toString(16).padStart(12, "0"),
+        imageReference: `${service}:dev`, imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`, repositoryDigests: [] }))
+    });
+    const before = manifest("before");
+    const after = manifest("after");
+    await writeFile(join(root, "docker-image-identities-before.json"), before);
+    await writeFile(join(root, "docker-image-identities-after.json"), after);
+    const v4 = { ...v3, schema: "phase10-completion-v4", sha256: {
+      ...v3.sha256,
+      "docker-image-identities-before.json": createHash("sha256").update(before).digest("hex"),
+      "docker-image-identities-after.json": createHash("sha256").update(after).digest("hex")
+    } };
+    await writeMarker(v4);
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "COMPLETE", status: "passed" });
+    await rm(join(root, "docker-image-identities-before.json"));
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
+    await writeFile(join(root, "docker-image-identities-before.json"), before);
+    await writeMarker(v4);
+    const malformedImages = JSON.stringify({ schema: "phase10-docker-image-identities-v1", runId: "owned-run", capturePoint: "before" });
+    await writeFile(join(root, "docker-image-identities-before.json"), malformedImages);
+    await writeMarker({ ...v4, sha256: { ...v4.sha256,
+      "docker-image-identities-before.json": createHash("sha256").update(malformedImages).digest("hex") } });
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
+    await writeFile(join(root, "docker-image-identities-before.json"), before);
+    await writeMarker(v4);
+    const changedImages = JSON.parse(after) as { images: { service: string; imageId: string }[] };
+    changedImages.images.find(image => image.service === "inventory")!.imageId = `sha256:${"f".repeat(64)}`;
+    const changedAfter = JSON.stringify(changedImages);
+    await writeFile(join(root, "docker-image-identities-after.json"), changedAfter);
+    await writeMarker({ ...v4, sha256: { ...v4.sha256,
+      "docker-image-identities-after.json": createHash("sha256").update(changedAfter).digest("hex") } });
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
+    await writeFile(join(root, "docker-image-identities-after.json"), after);
+    await writeMarker(v4);
     await writeFile(join(root, "phase10-coverage-summary.json"), "modified");
     assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
     await rm(join(root, "phase10-coverage-summary.json"));
@@ -241,7 +280,7 @@ test("complete packet remains blocked until independent L5-R gates are implement
   assert.equal(result.steps.length, DOCKER_PACKET_STEPS.length);
   assert.equal(result.restoration, "PASS");
   assert.equal(result.storage, "PASS");
-  assert.equal(result.issues.length, 13);
+  assert.equal(result.issues.length, 14);
   assert.match(renderPhase10Report(result), /cannot certify/);
 });
 
@@ -267,6 +306,29 @@ test("Git provenance is allowlisted, provisional, and never inferred from histor
   assert.deepEqual(normalizePhase10Packet(packet, summary).git.start, { commit: null, worktree: "UNKNOWN" });
 });
 
+test("Docker image identities are validated, rendered escaped, and never inferred when absent", () => {
+  const services = ["sql-server", "redis", "azurite", "servicebus-sql", "servicebus-emulator", "keycloak-local", "orders", "payments", "inventory", "notifications", "gateway", "ui", "functions"];
+  const manifest = (capturePoint: "before" | "after") => ({ schema: "phase10-docker-image-identities-v1",
+    runId: summary.runId, capturePoint, candidate: { commit: "a".repeat(40), worktree: "clean", dirtyStatusSha256: null },
+    buildLogsSha256: {}, images: services.map((service, index) => ({ project: "xy-phase10", service,
+      containerId: index.toString(16).padStart(12, "0"), imageReference: `${service}:dev`,
+      imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`, repositoryDigests: [] })) });
+  const before = manifest("before");
+  const after = manifest("after");
+  before.images[0].imageReference = '<img src=x onerror="alert(1)">';
+  after.images[0].imageReference = '<img src=x onerror="alert(1)">';
+  const valid = normalizePhase10Packet(packet, { ...summary, gitProvenance: {
+    start: { commit: "a".repeat(40), worktree: "clean" }, finish: { commit: "a".repeat(40), worktree: "clean" }
+  } }, foundations, trxInputs, { ...additional, dockerImageBefore: before, dockerImageAfter: after });
+  assert.equal(valid.imageIdentities.status, "PASS");
+  const html = renderPhase10Report(valid);
+  assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+  assert.doesNotMatch(html, /<img src=x/);
+  const missing = normalizePhase10Packet(packet, summary, foundations, trxInputs, additional);
+  assert.equal(missing.imageIdentities.status, "BLOCKED");
+  assert.match(renderPhase10Report(missing), /Image identity: BLOCKED/);
+});
+
 test("suite selection is separate from step outcome and unknown selection is explicit", () => {
   const steps = DOCKER_PACKET_STEPS.map(name => ({
     name, status: name === "sandbox-payments" || name === "order-continuation" ? "not-run" : "passed"
@@ -275,7 +337,7 @@ test("suite selection is separate from step outcome and unknown selection is exp
   assert.equal(deterministic.steps.find(step => step.name === "sandbox-payments")?.selection, "NOT-SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "payments-deterministic")?.selection, "SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "persistence")?.selection, "UNKNOWN");
-  assert.equal(deterministic.issues.length, 13);
+  assert.equal(deterministic.issues.length, 14);
   const unknown = normalizePhase10Packet(packet, { ...summary, paymentSuite: "unexpected" });
   assert.equal(unknown.paymentSuite, "UNKNOWN");
   assert.equal(unknown.steps.find(step => step.name === "sandbox-payments")?.selection, "UNKNOWN");

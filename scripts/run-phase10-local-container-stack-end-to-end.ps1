@@ -26,6 +26,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-acceptance-report.ps1')
+. (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
 Assert-Phase10ComposeProject
 if ($RemoveImages) { throw '-RemoveImages is retired. Review image cleanup separately; shared tags must not be force-deleted.' }
 if ($RemoveVolumes -and -not $CleanupOnExit) { throw '-RemoveVolumes requires -CleanupOnExit.' }
@@ -173,6 +174,14 @@ try {
     $dockerAvailable = $true
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec 300
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec 300
+    $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+    $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
+    $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+    $imageRunId = Split-Path -Leaf $runDir
+    Get-Phase10DockerImageManifest -RunId $imageRunId -CapturePoint before `
+        -OutputPath (Join-Path $runDir 'docker-image-identities-before.json') -ComposeFile $composeFile `
+        -EnvExampleFile $envExampleFile -EnvFile $envFile -WorkspaceRoot $workspaceRoot -ArtifactRoot $runDir | Out-Null
+    $summary.imageIdentityEvidence = 'captured-before'
     $summary.steps += [ordered]@{
         name = 'readiness'
         status = 'passed'
@@ -343,6 +352,26 @@ catch {
 }
 finally {
     try {
+        if ($dockerAvailable -and -not (Test-Path -LiteralPath (Join-Path $runDir 'docker-image-identities-after.json'))) {
+            try {
+                $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+                $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
+                $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+                Get-Phase10DockerImageManifest -RunId (Split-Path -Leaf $runDir) -CapturePoint after `
+                    -OutputPath (Join-Path $runDir 'docker-image-identities-after.json') -ComposeFile $composeFile `
+                    -EnvExampleFile $envExampleFile -EnvFile $envFile -WorkspaceRoot $workspaceRoot -ArtifactRoot $runDir | Out-Null
+                $beforeImages = Get-Content -LiteralPath (Join-Path $runDir 'docker-image-identities-before.json') -Raw | ConvertFrom-Json
+                $afterImages = Get-Content -LiteralPath (Join-Path $runDir 'docker-image-identities-after.json') -Raw | ConvertFrom-Json
+                if (-not (Test-Phase10DockerImageManifestsMatch -Before $beforeImages -After $afterImages)) {
+                    throw 'Final Docker image inventory does not match the captured candidate inventory.'
+                }
+                $summary.imageIdentityEvidence = 'captured-and-matched'
+            } catch {
+                $runFailed = $true
+                $summary.imageIdentityEvidence = 'incomplete'
+                Add-Content -Path $progressLogPath -Value "Image identity finalization failed: $($_.Exception.Message)"
+            }
+        }
         if ($dockerAvailable -and $CleanupOnExit) {
             Write-ProgressLine 'Running cleanup for Phase 10 local container stack...'
             $downArguments = @(

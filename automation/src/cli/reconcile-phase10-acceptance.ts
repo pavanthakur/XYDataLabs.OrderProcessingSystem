@@ -7,6 +7,11 @@ import { reconcilePhase10Acceptance } from "../report/phase10-acceptance.js";
 
 const run = promisify(execFile);
 
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value)) : undefined;
+}
+
 async function json(path: string): Promise<unknown> {
   try {
     const info = await lstat(path);
@@ -40,18 +45,26 @@ async function main(): Promise<void> {
   const index = await readFile(join(e2eRoot, "index.html"), "utf8").catch(() => "");
   const issues = index.match(/<h2>Issues<\/h2><ul>(.*?)<\/ul>/s)?.[1] ?? "";
   const nfrDirectory = join(nfrRoot, "nfr");
+  const nfrWrapper = record(await json(join(nfrRoot, "wrapper-summary.json")));
+  const nfrRunId = typeof nfrWrapper?.runDir === "string" ? nfrWrapper.runDir.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) : undefined;
   const result = reconcilePhase10Acceptance({
     expectedCommit,
     e2e: {
       completion: completion.state, completionStatus: completion.state === "COMPLETE" ? completion.status : undefined,
       packet: await json(join(e2eRoot, "acceptance-packet.json")), summary: await json(join(e2eRoot, "run-summary.json")),
       coverage: await json(join(e2eRoot, "phase10-coverage-summary.json")),
-      reportIssuesClean: issues.trim() === "<li>None detected by this limited preview.</li>"
+      reportIssuesClean: issues.trim() === "<li>None detected by this limited preview.</li>",
+      imageBefore: await json(join(e2eRoot, "docker-image-identities-before.json")),
+      imageAfter: await json(join(e2eRoot, "docker-image-identities-after.json"))
     },
     nfr: {
       summary: await json(join(nfrDirectory, "summary.json")), outageDrill: await json(join(nfrDirectory, "consumer-outage-drill.json")),
       replayProof: await json(join(nfrDirectory, "replay-proof", "functions-proof.json")),
-      performanceProbe: await json(join(nfrDirectory, "performance-probe.json"))
+      performanceProbe: await json(join(nfrDirectory, "performance-probe.json")),
+      imageBefore: await json(join(nfrRoot, "docker-image-identities-before.json")),
+      imageAfter: await json(join(nfrRoot, "docker-image-identities-after.json")),
+      imageRunId: nfrWrapper?.dockerImageIdentitiesBefore === "docker-image-identities-before.json" &&
+        nfrWrapper?.dockerImageIdentitiesAfter === "docker-image-identities-after.json" ? nfrRunId : undefined
     }
   });
   const output = join(e2eRoot, "phase10-acceptance-reconciliation.json");

@@ -2,7 +2,7 @@
 
 ## Current non-Azure acceptance evidence (11 November 2026)
 
-Non-Azure local acceptance **PASSED** on one clean committed candidate `f2bd3587`: Docker E2E run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-024241244/` and NFR run `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261111-023057463/`, reconciled by `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` (the verdict file is `phase10-acceptance-reconciliation.json` in the E2E run). The tracked sanitized summary is `TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json`; raw reports remain ignored local evidence. Run order for repeatability: the NFR proof first (`scripts/run-phase10-docker-nfr-proof.ps1`, no charges: functional, performance, tenant, payments, replay timing, consumer-outage drill, rollback, security), then `scripts/run-phase10-docker-dev-e2e-hook.ps1 -PaymentSuite both -VerifyPersistence`, then the reconciler, all on the same clean commit. The NFR rollback needs a retained previous inventory image tagged `phase10-prev-*`; build it from a clean export of a committed earlier revision, never by retagging the current image. The local rollback proof is a single-service image swap, not an ACA revision rollback. Under DW-028 Option A, run the local Docker hook manually; hosted workflow `99` is excluded from acceptance and its safety guard remains unchanged. This local acceptance does not cover other hosted checks or Azure. DW-023 and DW-024 remain deferred to Phase 11. Do not reset volumes or retry charges.
+Non-Azure local acceptance **PASSED** on one clean committed candidate `f2bd3587`: Docker E2E run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261111-024241244/` and NFR run `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261111-023057463/`, reconciled by `npm --prefix automation run reconcile:phase10-acceptance -- --e2e <docker-run> --nfr <nfr-run>` (the verdict file is `phase10-acceptance-reconciliation.json` in the E2E run). The tracked sanitized summary is `TestResults/Phase10/accepted/phase10-local-acceptance-f2bd3587.json`; raw reports remain ignored local evidence. **Historical run order only:** that prior contract ran NFR first (`scripts/run-phase10-docker-nfr-proof.ps1`), then `scripts/run-phase10-docker-dev-e2e-hook.ps1 -PaymentSuite both -VerifyPersistence`, then reconciliation. Do not reuse that ordering for the new image-bound completion-v4 acceptance below. The NFR rollback needs a retained previous inventory image tagged `phase10-prev-*`; build it from a clean export of a committed earlier revision, never by retagging the current image. The local rollback proof is a single-service image swap, not an ACA revision rollback. Under DW-028 Option A, run the local Docker hook manually; hosted workflow `99` is excluded from acceptance and its safety guard remains unchanged. This local acceptance does not cover other hosted checks or Azure. DW-023 and DW-024 remain deferred to Phase 11. Do not reset volumes or retry charges.
 
 This procedure replaces disposable local Docker state, not Azure resources. Keep the old disk offline until acceptance passes. Do not migrate a 642 GB disk onto a drive with 471 GB free.
 
@@ -164,6 +164,33 @@ pwsh -NoProfile -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -ColdBuild -Pa
 ```
 
 This preserves SQL/Azurite volumes, cold-builds current images, runs foundations and isolated integration, verifies integration did not alter application metadata, applies only the snapshotted local OpenPay 3DS-off baseline, and read-validates every active tenant and both providers. It then runs identity and the complete deterministic UI/payment matrix before permitting real sandbox journeys. Messaging/Functions and the explicitly selected Desktop restart run in the same orchestration. The selected baseline requires every active tenant × Razorpay hosted and OpenPay with 3DS off; optional extended capabilities remain separately BLOCKED/NOT-RUN, never PASS. Final storage/restoration reports are written even after failure. No reset, global prune or VHDX compaction is implied. Azure deployment and directory changes are excluded.
+
+### Image-bound acceptance sequence — pending on a clean candidate
+
+The command above is the E2E stage. Record its exact new run directory from the output; do not use a mutable `latest` pointer. After E2E completes and restoration is verified, pass that run's `docker-image-identities-before.json` to NFR so the NFR wrapper refuses to start a different stack or accept a dirty/different candidate:
+
+```powershell
+$e2eRun = 'TestResults/Playwright/phase10-docker-http/<exact-e2e-run-id>'
+$expectedImages = Join-Path $e2eRun 'docker-image-identities-before.json'
+pwsh -NoProfile -File scripts/run-phase10-docker-nfr-proof.ps1 `
+  -SkipStartIfNeeded `
+  -ExpectedImageManifest $expectedImages `
+  -BurstMessageCount 100 `
+  -MaximumP95Seconds 30
+```
+
+Record the exact NFR wrapper run directory printed by the command, then verify and reconcile only those two run directories against the full candidate SHA:
+
+```powershell
+$nfrRun = 'TestResults/Phase10/docker-preazure/<exact-nfr-run-id>'
+npm --prefix automation run verify:phase10-completion -- $e2eRun
+npm --prefix automation run reconcile:phase10-acceptance -- `
+  --e2e $e2eRun `
+  --nfr $nfrRun `
+  --expected-commit '<full-clean-candidate-sha>'
+```
+
+This v4 sequence is **not yet runtime-accepted**. The E2E and NFR image manifests must each cover the 13 expected project-owned services, match within their run, and match across runs. A missing/malformed manifest, source mismatch, image mismatch, incomplete required suite, or failed restoration blocks the verdict. Do not rebuild between these commands; do not regenerate or overwrite sealed run artifacts to make a report pass. The prior `f2bd3587` and `58c361a9` evidence remains historical and does not satisfy this gate.
 
 `Resources/Configuration/tenant-bootstrap.local.json` is the versioned, non-secret local bootstrap contract for required seed tenants, provider defaults, and key references. Shared `dbo.Tenants` remains authoritative for tenant identity, active status, tier, and provider route; provider settings come from the tenant's resolved business database. Dedicated stores resolve through explicit Compose configuration references, not tenant-name rules. TenantC remains a regression case: its route lives in the shared registry and provider rows in its dedicated business DB. Do not add duplicate shared provider rows to make a join succeed.
 
