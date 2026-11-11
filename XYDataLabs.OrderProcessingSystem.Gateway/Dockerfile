@@ -6,7 +6,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY ["Directory.Build.props", "."]
 COPY ["Directory.Packages.props", "."]
-COPY ["NuGet.config", "."]
+COPY ["NuGet.Config", "."]
 COPY ["global.json", "."]
 COPY ["XYDataLabs.OrderProcessingSystem.Gateway/XYDataLabs.OrderProcessingSystem.Gateway.csproj", "XYDataLabs.OrderProcessingSystem.Gateway/"]
 COPY ["XYDataLabs.OrderProcessingSystem.ServiceDefaults/XYDataLabs.OrderProcessingSystem.ServiceDefaults.csproj", "XYDataLabs.OrderProcessingSystem.ServiceDefaults/"]

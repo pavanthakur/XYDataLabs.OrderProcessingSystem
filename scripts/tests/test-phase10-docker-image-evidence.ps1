@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$requiredConfig = @('Directory.Build.props','Directory.Packages.props','NuGet.config','global.json')
+$requiredConfig = @('Directory.Build.props','Directory.Packages.props','NuGet.Config','global.json')
 foreach ($dockerfilePath in @('XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile','XYDataLabs.OrderProcessingSystem.Functions/Dockerfile')) {
     $dockerfile = Get-Content -LiteralPath (Join-Path $root $dockerfilePath)
     $restoreLine = -1
@@ -10,7 +10,7 @@ foreach ($dockerfilePath in @('XYDataLabs.OrderProcessingSystem.Gateway/Dockerfi
     foreach ($file in $requiredConfig) {
         $copyLine = -1
         for ($lineIndex = 0; $lineIndex -lt $dockerfile.Count; $lineIndex++) {
-            if ($dockerfile[$lineIndex] -match ('^COPY \["' + [regex]::Escape($file) + '"')) { $copyLine = $lineIndex; break }
+            if ($dockerfile[$lineIndex] -cmatch ('^COPY \["' + [regex]::Escape($file) + '"')) { $copyLine = $lineIndex; break }
         }
         if ($copyLine -lt 0 -or $copyLine -ge $restoreLine) { throw "$dockerfilePath restore does not receive central configuration '$file' first." }
     }
