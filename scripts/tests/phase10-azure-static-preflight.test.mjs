@@ -141,3 +141,23 @@ test('the internal Azure deploy workflow stays caller-owned so it cannot bypass 
   assert.ok(!internalWorkflow.on?.workflow_dispatch, 'infra-deploy must not expose an independent manual route');
   assert.match(orchestrator, /uses:\s*\.\/\.github\/workflows\/infra-deploy\.yml/);
 });
+
+test('dry-run routes to validation and what-if only, never deployment token creation or image publication', async () => {
+  const [internal, orchestrator] = await Promise.all([
+    readFile('.github/workflows/infra-deploy.yml', 'utf8'),
+    readFile('.github/workflows/phase10-deploy-orchestrator.yml', 'utf8'),
+  ]);
+  const workflow = yaml.load(internal, { schema: yaml.JSON_SCHEMA, maxAliasCount: 0 });
+  const routeScript = workflow.jobs.route.steps.find((step) => step.id === 'route').run;
+  const dryRunBranch = routeScript.match(/elif \[ "\$\{\{ inputs\.dryRun \}\}" = "true" \]; then([\s\S]*?)else/);
+  assert.ok(dryRunBranch, 'dry-run branch must remain explicit in the route job');
+  assert.match(dryRunBranch[1], /RUN_VALIDATE="true"/);
+  assert.match(dryRunBranch[1], /RUN_VALIDATE_ONLY="true"/);
+  assert.doesNotMatch(dryRunBranch[1], /RUN_DEPLOY="true"|RUN_CLEANUP="true"/);
+  assert.match(workflow.jobs.validate.if, /run_validate == 'true'/);
+  assert.match(workflow.jobs.deploy.if, /run_deploy == 'true'/);
+  const deploySteps = workflow.jobs.deploy.steps;
+  assert.ok(deploySteps.some((step) => step.id === 'acr_pull_token'), 'ACR scoped-token mutation must be isolated to the deploy job');
+  assert.match(orchestrator, /dry-run what-if path using prebuilt immutable release/);
+  assert.doesNotMatch(orchestrator, /build-phase10-images\.yml/, 'orchestration must not build or publish images during validation');
+});
