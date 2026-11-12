@@ -49,11 +49,11 @@ async function getJson(url, token) {
   return response.json();
 }
 
-export function applicableHostedWorkflows(paths) {
+export function applicableHostedWorkflows(paths, { adrValidationEnabled = false } = {}) {
   const changed = paths ?? [];
   const any = (regex) => changed.some((file) => regex.test(file));
   const required = new Set(['ci.yml', 'drift-check.yml']);
-  if (any(/^(\.github\/workflows\/|scripts\/|Resources\/Azure-Deployment\/|infra\/|docs\/architecture\/decisions\/|XYDataLabs\.OrderProcessingSystem\.sln)/i)) required.add('validate-adrs.yml');
+  if (adrValidationEnabled && any(/^(\.github\/workflows\/|scripts\/|Resources\/Azure-Deployment\/|infra\/|docs\/architecture\/decisions\/|XYDataLabs\.OrderProcessingSystem\.sln|\.markdownlint\.json$)/i)) required.add('validate-adrs.yml');
   if (any(/^(docs\/|scripts\/validate-doc-links\.js$|\.github\/workflows\/validate-doc-links\.yml$)/i)) required.add('validate-doc-links.yml');
   if (any(/^(AGENTS\.md$|memories\/repo\/|scripts\/tests\/test-ai-customization(?:-exit)?\.ps1$|\.github\/(copilot-instructions\.md|completion-check-rubric\.md|instructions\/|prompts\/|agents\/|skills\/|workflows\/validate-ai-customization\.yml|workflows\/README\.md)|docs\/(AI-OPERATING-MODEL\.md|DEVELOPER-OPERATING-MODEL\.md|README\.md|internal\/DEFERRED-WORK-LOG\.md|internal\/README\.md)|scripts\/(validate-ai-customization\.ps1|README\.md))/i)) required.add('validate-ai-customization.yml');
   if (any(/^((\.github\/prompts\/)|ai-runtime\/|scripts\/)/i)) required.add('validate-prompts.yml');
@@ -84,7 +84,7 @@ export async function verifyReleaseEvidence({ repository, sourceSha, runId, arti
 
   const workflowIndex = await getJson(`${root}/actions/workflows?per_page=100`, token);
   const files = await getCommitChangedPaths(repository, sourceSha, token);
-  const requiredPaths = applicableHostedWorkflows(files);
+  const requiredPaths = applicableHostedWorkflows(files, { adrValidationEnabled: process.env.ADR_VALIDATION_ENABLED === 'true' });
   let hostedCiEvidence;
   for (const workflowPath of requiredPaths) {
     const workflow = workflowIndex.workflows?.find((candidate) => candidate.path === `.github/workflows/${workflowPath}`);

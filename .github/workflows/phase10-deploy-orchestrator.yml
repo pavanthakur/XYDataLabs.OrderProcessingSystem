@@ -119,6 +119,7 @@ jobs:
           RELEASE_RUN_ID: ${{ inputs.releaseRunId }}
           RELEASE_ARTIFACT_NAME: ${{ inputs.releaseArtifactName }}
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          ADR_VALIDATION_ENABLED: ${{ vars.ADR_VALIDATION_ENABLED }}
         run: node scripts/phase10-release-run.mjs verify
 
       - name: Download exact-run hosted CI evidence

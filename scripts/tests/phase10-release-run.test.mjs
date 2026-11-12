@@ -61,10 +61,17 @@ test('selects the exact target-branch hosted run and requires its named evidence
 
 test('hosted workflow applicability requires unconditional and affected specialist checks', () => {
   assert.deepEqual(applicableHostedWorkflows(['docs/internal/phase10.md', '.github/workflows/ci.yml', 'scripts/release-check.mjs']), [
-    'ci.yml', 'drift-check.yml', 'validate-adrs.yml', 'validate-doc-links.yml', 'validate-prompts.yml',
+    'ci.yml', 'drift-check.yml', 'validate-doc-links.yml', 'validate-prompts.yml',
   ]);
   assert.deepEqual(applicableHostedWorkflows(['Resources/Azure-Deployment/example.ps1']), [
+    'ci.yml', 'drift-check.yml',
+  ]);
+  assert.deepEqual(applicableHostedWorkflows(['Resources/Azure-Deployment/example.ps1'], { adrValidationEnabled: true }), [
     'ci.yml', 'drift-check.yml', 'validate-adrs.yml',
   ]);
+  assert.deepEqual(applicableHostedWorkflows(['docs/architecture/decisions/ADR-999-example.md']), [
+    'ci.yml', 'drift-check.yml', 'validate-doc-links.yml',
+  ]);
+  assert.ok(applicableHostedWorkflows(['docs/architecture/decisions/ADR-999-example.md'], { adrValidationEnabled: true }).includes('validate-adrs.yml'));
   assert.ok(applicableHostedWorkflows(['memories/repo/active-work.md']).includes('validate-ai-customization.yml'));
 });
