@@ -186,6 +186,23 @@ function Get-Phase10ComposeDedicatedTenantDatabaseMap {
     return $map
 }
 
+function Resolve-Phase10LocalTenantDatabaseFromRegistry {
+    param(
+        [Parameter(Mandatory)][string]$TenantCode,
+        [Parameter(Mandatory)][string]$TenantTier,
+        [Parameter(Mandatory)][string]$Status,
+        [Parameter(Mandatory)][hashtable]$DedicatedDatabaseMap
+    )
+    if ($TenantCode -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw 'Tenant code is malformed.' }
+    if ($Status -ne 'Active') { throw "Tenant '$TenantCode' is not active." }
+    if ($TenantTier -eq 'SharedPool') { return 'OrderProcessingSystem_Dev' }
+    if ($TenantTier -ne 'Dedicated') { throw "Tenant '$TenantCode' has unsupported tier '$TenantTier'." }
+    if (-not $DedicatedDatabaseMap.ContainsKey($TenantCode)) { throw "Active dedicated tenant '$TenantCode' has no project-local database mapping." }
+    $database = [string]$DedicatedDatabaseMap[$TenantCode]
+    if ($database -notmatch '^OrderProcessingSystem_[A-Za-z0-9_]+$') { throw "Dedicated tenant '$TenantCode' has an invalid project-local database mapping." }
+    return $database
+}
+
 function Resolve-Phase10LocalTenantDatabase {
     param([Parameter(Mandatory)][string]$TenantCode, [Parameter(Mandatory)][hashtable]$Settings)
     if ($TenantCode -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw 'Tenant code is malformed.' }
@@ -199,12 +216,8 @@ function Resolve-Phase10LocalTenantDatabase {
         $reader = $command.ExecuteReader()
         if (-not $reader.Read()) { throw "Tenant '$TenantCode' was not found in the shared registry." }
         $tier = $reader.GetString(0); $status = $reader.GetString(1); $reader.Dispose()
-        if ($status -ne 'Active') { throw "Tenant '$TenantCode' is not active." }
-        if ($tier -eq 'SharedPool') { return 'OrderProcessingSystem_Dev' }
-        if ($tier -ne 'Dedicated') { throw "Tenant '$TenantCode' has unsupported tier '$tier'." }
         $map = Get-Phase10ComposeDedicatedTenantDatabaseMap
-        if (-not $map.ContainsKey($TenantCode)) { throw "Active dedicated tenant '$TenantCode' has no project-local database mapping." }
-        return [string]$map[$TenantCode]
+        return Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode $TenantCode -TenantTier $tier -Status $status -DedicatedDatabaseMap $map
     } finally { $connection.Dispose() }
 }
 

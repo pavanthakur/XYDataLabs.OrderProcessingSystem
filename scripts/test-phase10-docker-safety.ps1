@@ -158,6 +158,21 @@ try {
         Assert-True ($source -notmatch 'Write-Host.*\$connectionString')
         Assert-True ($source -notmatch 'Server=localhost,1433')
     }
+    Test-Case 'Tenant database resolution is registry-driven and supports arbitrary shared and dedicated tenants' {
+        $map = @{ 'Tenant-Delta' = 'OrderProcessingSystem_Delta_Dev' }
+        Assert-True ((Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant-Alpha' -TenantTier 'SharedPool' -Status 'Active' -DedicatedDatabaseMap $map) -eq 'OrderProcessingSystem_Dev')
+        Assert-True ((Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant-Delta' -TenantTier 'Dedicated' -Status 'Active' -DedicatedDatabaseMap $map) -eq 'OrderProcessingSystem_Delta_Dev')
+        $resolver = (Get-Command Resolve-Phase10LocalTenantDatabaseFromRegistry).ScriptBlock.ToString()
+        Assert-True ($resolver -notmatch '(?<![A-Za-z0-9_-])Tenant[ABC](?![A-Za-z0-9_-])') 'Runtime resolver contains fixed acceptance tenant codes.'
+    }
+    Test-Case 'Tenant database resolution fails closed for inactive, malformed, unknown-tier and unmapped tenants' {
+        $map = @{ 'Tenant-Delta' = 'OrderProcessingSystem_Delta_Dev' }
+        Assert-Throws { Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant-Delta' -TenantTier 'Dedicated' -Status 'Inactive' -DedicatedDatabaseMap $map } 'not active'
+        Assert-Throws { Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant;DROP' -TenantTier 'SharedPool' -Status 'Active' -DedicatedDatabaseMap $map } 'malformed'
+        Assert-Throws { Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant-Delta' -TenantTier 'Unknown' -Status 'Active' -DedicatedDatabaseMap $map } 'unsupported tier'
+        Assert-Throws { Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant-Epsilon' -TenantTier 'Dedicated' -Status 'Active' -DedicatedDatabaseMap $map } 'no project-local database mapping'
+        Assert-Throws { Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode 'Tenant-Delta' -TenantTier 'Dedicated' -Status 'Active' -DedicatedDatabaseMap @{ 'Tenant-Delta' = 'master' } } 'invalid project-local database mapping'
+    }
     $driveState = [pscustomobject]@{ Root = 'G:\'; FileSystem = 'NTFS'; FreeBytes = 471GB; TotalBytes = 476GB }
     Test-Case 'Sufficient NTFS space permits full build' { Assert-Phase10StorageCapacity -Path 'G:\DockerStorage' -ForBuild | Out-Null }
     Test-Case 'Low free space blocks build' {
