@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { auditAzureDeployContract, validateAzureRuntimeTargets } from '../phase10-azure-static-preflight.mjs';
+
+const requireAutomation = createRequire(new URL('../../automation/package.json', import.meta.url));
+const yaml = requireAutomation('js-yaml');
 
 const runtimeTarget = (key, environment) => ({
   key, runtime: 'azure', verificationMode: 'azure', browserMode: 'azure', allowGeneratedAzureUrlFallback: false,
@@ -107,4 +111,33 @@ test('current repository preflight verifies dedicated Functions host storage wir
   const result = auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   assert.equal(result.status, 'PASS');
   assert.deepEqual(result.blocked, []);
+});
+
+test('deploy and Azure acceptance workflows share a per-environment non-cancelling lease', async () => {
+  const workflowPaths = [
+    '.github/workflows/phase10-deploy-orchestrator.yml',
+    '.github/workflows/phase10-azure-runtime-smoke.yml',
+    '.github/workflows/phase10-azure-transport-smoke.yml',
+    '.github/workflows/phase10-azure-payment-matrix.yml',
+  ];
+  for (const workflowPath of workflowPaths) {
+    const workflow = yaml.load(await readFile(workflowPath, 'utf8'), { schema: yaml.JSON_SCHEMA, maxAliasCount: 0 });
+    assert.deepEqual(workflow.concurrency, {
+      group: 'phase10-azure-${{ inputs.environment }}',
+      queue: 'max',
+      'cancel-in-progress': false,
+    }, `${workflowPath} must use the shared lease and never cancel the active run`);
+    assert.ok(workflow.on?.workflow_dispatch?.inputs?.environment, `${workflowPath} must key the lease by selected environment`);
+  }
+});
+
+test('the internal Azure deploy workflow stays caller-owned so it cannot bypass the orchestrator lease', async () => {
+  const [internal, orchestrator] = await Promise.all([
+    readFile('.github/workflows/infra-deploy.yml', 'utf8'),
+    readFile('.github/workflows/phase10-deploy-orchestrator.yml', 'utf8'),
+  ]);
+  const internalWorkflow = yaml.load(internal, { schema: yaml.JSON_SCHEMA, maxAliasCount: 0 });
+  assert.ok(internalWorkflow.on?.workflow_call, 'infra-deploy must remain reusable-only');
+  assert.ok(!internalWorkflow.on?.workflow_dispatch, 'infra-deploy must not expose an independent manual route');
+  assert.match(orchestrator, /uses:\s*\.\/\.github\/workflows\/infra-deploy\.yml/);
 });
