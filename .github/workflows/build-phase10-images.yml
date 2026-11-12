@@ -1,36 +1,59 @@
-name: Build Phase 10 Service Images (Internal)
+name: Build Phase 10 Immutable Release (Internal)
 
 on:
   workflow_call:
     inputs:
-      imageTag:
-        description: 'Image tag to publish'
-        required: false
-        default: 'phase10'
+      candidateSha:
+        description: 'Full source commit to build'
+        required: true
         type: string
       registryLoginServer:
-        description: 'ACR login server for the persistent Phase 10 platform registry.'
+        description: 'ACR login server for the persistent Phase 10 platform registry'
         required: true
-        default: ''
         type: string
       registryName:
-        description: 'ACR name used for Azure login.'
+        description: 'ACR name used for Azure login'
         required: true
-        default: ''
         type: string
       environment:
-        description: 'Target GitHub environment for Azure-backed registry login.'
-        required: false
-        default: 'dev'
+        description: 'Target GitHub environment for registry authentication'
+        required: true
         type: string
+    outputs:
+      releaseArtifactName:
+        description: 'Artifact containing the immutable release manifest and Functions package'
+        value: ${{ jobs.publish-release.outputs.artifact_name }}
+      sourceSha:
+        description: 'Source SHA bound to the release artifact'
+        value: ${{ jobs.publish-release.outputs.source_sha }}
+  workflow_dispatch:
+    inputs:
+      candidateSha:
+        description: 'Full source commit SHA to build'
+        required: true
+        type: string
+      registryLoginServer:
+        description: 'ACR login server for the persistent Phase 10 platform registry'
+        required: true
+        type: string
+      registryName:
+        description: 'ACR name used for Azure login'
+        required: true
+        type: string
+      environment:
+        description: 'Target GitHub environment for registry authentication'
+        required: true
+        type: choice
+        options: [dev, staging, prod]
 permissions:
   contents: read
   id-token: write
 
 jobs:
   build-and-push:
+    name: Build ${{ matrix.name }} image
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_call' && inputs.environment || 'dev' }}
+    environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:
@@ -38,50 +61,54 @@ jobs:
           - name: gateway
             repository: orderprocessing-gateway
             dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
-            context: .
           - name: orders
             repository: orderprocessing-orders
             dockerfile: XYDataLabs.OrderProcessingSystem.Orders.Host/Dockerfile
-            context: .
           - name: payments
             repository: orderprocessing-payments
             dockerfile: XYDataLabs.OrderProcessingSystem.Payments.Host/Dockerfile
-            context: .
           - name: inventory
             repository: orderprocessing-inventory
             dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.Host/Dockerfile
-            context: .
           - name: notifications
             repository: orderprocessing-notifications
             dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.Host/Dockerfile
-            context: .
           - name: ui
             repository: orderprocessing-ui
             dockerfile: frontend/apps/web/Dockerfile
-            context: .
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out the selected candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidateSha }}
+          fetch-depth: 0
 
-      - name: Resolve image tag
-        id: tag
+      - name: Validate candidate and environment mapping
         shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          SELECTED_BRANCH: ${{ github.ref_name }}
+          EVENT_SHA: ${{ github.sha }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REGISTRY_LOGIN_SERVER: ${{ inputs.registryLoginServer }}
+          REGISTRY_NAME: ${{ inputs.registryName }}
         run: |
-          if [ -z "${{ inputs.registryLoginServer }}" ] || [ -z "${{ inputs.registryName }}" ]; then
-            echo "Phase 10 image builds require the persistent platform ACR inputs." >&2
-            exit 1
-          fi
-
-          TAG="${{ inputs.imageTag }}"
-          if [ -z "$TAG" ]; then
-            TAG="${{ github.sha }}"
-          fi
-          echo "imageTag=$TAG" >> $GITHUB_OUTPUT
-          echo "image=${{ inputs.registryLoginServer }}/${{ matrix.repository }}" >> $GITHUB_OUTPUT
-          echo "registry=acr" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "candidateSha must be a full lowercase SHA." >&2; exit 1; }
+          [[ "$CANDIDATE_SHA" == "$EVENT_SHA" ]] || { echo "Release build must target the exact checked workflow-dispatch/caller SHA." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$CANDIDATE_SHA" ]] || { echo "Checked-out commit does not equal candidateSha." >&2; exit 1; }
+          [[ "$REGISTRY_LOGIN_SERVER" =~ ^[a-z0-9-]+\.azurecr\.io$ ]] || { echo "ACR login server is invalid." >&2; exit 1; }
+          [[ "$REGISTRY_NAME" =~ ^[a-z0-9]{5,50}$ ]] || { echo "ACR name is invalid." >&2; exit 1; }
+          EXPECTED_ACR_NAME="$(printf 'xyops%sorderprocessingplatform' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+          [[ "$REGISTRY_NAME" == "$EXPECTED_ACR_NAME" && "$REGISTRY_LOGIN_SERVER" == "${REGISTRY_NAME}.azurecr.io" ]] || { echo "Release registry must be the repository's Phase 10 platform ACR." >&2; exit 1; }
+          case "$TARGET_ENVIRONMENT:$SELECTED_BRANCH" in
+            dev:dev|staging:staging|prod:main) ;;
+            *) echo "Environment and selected source branch do not match the approved branch policy." >&2; exit 1 ;;
+          esac
+          echo "Candidate $CANDIDATE_SHA is checked out for $TARGET_ENVIRONMENT from $SELECTED_BRANCH."
 
       - name: Azure CLI Login for ACR
-        if: ${{ steps.tag.outputs.registry == 'acr' }}
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -89,30 +116,163 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       - name: Log in to Azure Container Registry
-        if: ${{ steps.tag.outputs.registry == 'acr' }}
         shell: bash
-        run: |
-          az acr login --name "${{ inputs.registryName }}"
+        env:
+          REGISTRY_NAME: ${{ inputs.registryName }}
+        run: az acr login --name "$REGISTRY_NAME"
 
-      - name: Build and push image
+      - name: Build and push immutable source-SHA image
+        id: build
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
+          context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: |
-            ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.imageTag }}
-            ${{ steps.tag.outputs.image }}:latest
+          tags: ${{ inputs.registryLoginServer }}/${{ matrix.repository }}:${{ inputs.candidateSha }}
+
+      - name: Write image evidence fragment
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_REPOSITORY: ${{ matrix.repository }}
+          IMAGE_PREFIX: ${{ inputs.registryLoginServer }}/${{ matrix.repository }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          SOURCE_SHA: ${{ inputs.candidateSha }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Build action did not return a valid image digest." >&2; exit 1; }
+          node -e 'const fs=require("node:fs"); const x={name:process.env.IMAGE_NAME,repository:process.env.IMAGE_REPOSITORY,image:process.env.IMAGE_PREFIX,digest:process.env.IMAGE_DIGEST,sourceSha:process.env.SOURCE_SHA}; fs.writeFileSync(`image-${x.name}.json`, JSON.stringify(x,null,2)+"\n", {flag:"wx"});'
+
+      - name: Upload per-service release evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase10-image-fragment-${{ matrix.name }}-${{ inputs.candidateSha }}
+          path: image-${{ matrix.name }}.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Image summary
         shell: bash
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_REFERENCE: ${{ inputs.registryLoginServer }}/${{ matrix.repository }}@${{ steps.build.outputs.digest }}
         run: |
           {
-            echo "## Image published: ${{ matrix.name }}"
+            echo "## Immutable image built: ${IMAGE_NAME}"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
-            echo "| Registry | ${{ steps.tag.outputs.registry }} |"
-            echo "| Repository | ${{ steps.tag.outputs.image }} |"
-            echo "| Tag | ${{ steps.tag.outputs.imageTag }} |"
+            echo "| Source SHA | ${{ inputs.candidateSha }} |"
+            echo "| Image | ${IMAGE_REFERENCE} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  package-functions:
+    name: Package .NET isolated Functions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the selected candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidateSha }}
+          fetch-depth: 0
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore and publish Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj
+          dotnet publish XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj --configuration Release --no-restore --output "$RUNNER_TEMP/phase10-functions-publish"
+
+      - name: Validate publish output and create package
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+        run: |
+          set -euo pipefail
+          node scripts/phase10-function-package.mjs directory "$RUNNER_TEMP/phase10-functions-publish"
+          mkdir -p release-package
+          (cd "$RUNNER_TEMP/phase10-functions-publish" && zip -q -r "$GITHUB_WORKSPACE/release-package/functions.zip" .)
+          unzip -Z1 release-package/functions.zip > "$RUNNER_TEMP/functions-zip-entries.txt"
+          node scripts/phase10-function-package.mjs entries "$RUNNER_TEMP/functions-zip-entries.txt"
+          sha256sum release-package/functions.zip > release-package/functions.zip.sha256
+          printf '%s\n' "$CANDIDATE_SHA" > release-package/source-sha.txt
+
+      - name: Upload Functions package
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase10-functions-${{ inputs.candidateSha }}
+          path: release-package/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    name: Publish immutable release manifest artifact
+    runs-on: ubuntu-latest
+    needs: [build-and-push, package-functions]
+    outputs:
+      artifact_name: ${{ steps.publish.outputs.artifact_name }}
+      source_sha: ${{ inputs.candidateSha }}
+    steps:
+      - name: Check out the selected candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidateSha }}
+      - name: Download service fragments
+        uses: actions/download-artifact@v6
+        with:
+          pattern: phase10-image-fragment-*-*${{ inputs.candidateSha }}
+          path: release-fragments
+          merge-multiple: true
+      - name: Download Functions package
+        uses: actions/download-artifact@v6
+        with:
+          name: phase10-functions-${{ inputs.candidateSha }}
+          path: release-functions
+      - name: Build and verify release manifest
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.candidateSha }}
+          REPOSITORY: ${{ github.repository }}
+          PRODUCER_RUN_ID: ${{ github.run_id }}
+          PRODUCER_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp release-functions/functions.zip release/functions.zip
+          node scripts/phase10-release-manifest.mjs create \
+            --repository "$REPOSITORY" \
+            --sourceSha "$SOURCE_SHA" \
+            --runId "$PRODUCER_RUN_ID" \
+            --runAttempt "$PRODUCER_RUN_ATTEMPT" \
+            --fragmentsDir release-fragments \
+            --functionsZip release/functions.zip \
+            --repoRoot . \
+            --output release/release-manifest.json
+          node scripts/phase10-release-manifest.mjs validate \
+            --repository "$REPOSITORY" \
+            --sourceSha "$SOURCE_SHA" \
+            --runId "$PRODUCER_RUN_ID" \
+            --runAttempt "$PRODUCER_RUN_ATTEMPT" \
+            --functionsZip release/functions.zip \
+            --manifest release/release-manifest.json
+          (cd release && sha256sum release-manifest.json functions.zip > SHA256SUMS)
+      - name: Upload complete immutable release
+        id: publish
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase10-release-${{ inputs.candidateSha }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Set release output and summary
+        shell: bash
+        run: |
+          echo "artifact_name=phase10-release-${{ inputs.candidateSha }}" >> "$GITHUB_OUTPUT"
+          echo "## Immutable Phase 10 release manifest published" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source SHA: `${{ inputs.candidateSha }}`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact: `phase10-release-${{ inputs.candidateSha }}`" >> "$GITHUB_STEP_SUMMARY"

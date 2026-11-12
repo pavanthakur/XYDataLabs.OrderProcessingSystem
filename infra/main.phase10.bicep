@@ -82,6 +82,9 @@ param redisClusteringPolicy string = 'EnterpriseCluster'
 @description('Azure Managed Redis high availability mode')
 param redisHighAvailability string = 'Disabled'
 
+@description('Storage redundancy SKU for the dedicated Functions host-storage account')
+param functionsHostStorageSkuName string = 'Standard_LRS'
+
 @description('Platform ACR registry name used for the Phase 10 runtime image path')
 param platformAcrName string = ''
 
@@ -253,6 +256,7 @@ module functions 'modules/functions.bicep' = {
     resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     sku: 'B1'
+    hostStorageSkuName: functionsHostStorageSkuName
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     keyVaultUri: keyVaultUri
@@ -298,6 +302,8 @@ output uiContainerAppName string = containerApps.outputs.uiContainerAppName
 output gatewayContainerAppFqdn string = containerApps.outputs.gatewayContainerAppFqdn
 output uiContainerAppFqdn string = containerApps.outputs.uiContainerAppFqdn
 output functionAppName string = functions.outputs.functionAppName
+output functionHostStorageAccountName string = functions.outputs.hostStorageAccountName
+output functionHostStorageIdentityName string = functions.outputs.hostStorageIdentityName
 output keyVaultName string = keyVault.outputs.keyVaultName
 output appInsightsName string = insights.outputs.appInsightsName
 output acrName string = platformAcrName
