@@ -22,7 +22,7 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 
 ## Next action
 
-Checkpoint A implementation is locally validated and ready for review. Workflow contract tests (9), synthetic TRX sanitizer test, AI-customization validation, documentation-link validation, environment contract (178/178), `git diff --check`, existing .NET suites and frontend checks passed. Hosted acceptance remains pending separately authorized commit/push, then exact-SHA run and artifact review. No Azure, Docker runtime or payment tests were performed for Checkpoint A; it does not reopen L6 C. Do not begin Azure work or Phase 11 automatically.
+Checkpoint A implementation and hosted acceptance passed. Commit `1665030e64450475c48c97cf424c2b5cbdf71fa1` is pushed to `dev`; CI run `43134179936` passed with a SHA-bound PASS evidence artifact and all five TRX suites passing. Documentation Links, AI Prompts, Drift Scanner and AI Customization also passed on that SHA; ADR validation was skipped as not applicable. Manual dispatch was not separately exercised. Local workflow contract tests (9), synthetic TRX sanitizer test, AI-customization validation, documentation-link validation, environment contract (178/178), `git diff --check`, .NET suites and frontend checks passed. GitHub reported a Node 20 deprecation annotation for `actions/setup-node@v4` and existing .NET analyzer warnings; none failed the run. No Azure, Docker runtime or payment tests were performed for Checkpoint A; it does not reopen L6 C. Do not begin Azure work or Phase 11 automatically.
 
 ## Safety / navigation
 
