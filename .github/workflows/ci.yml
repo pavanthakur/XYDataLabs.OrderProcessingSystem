@@ -1,74 +1,75 @@
-name: CI — PR Validation Only (No Deployment)
+name: CI — Build and Contract Validation (No Deployment)
 
 on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
   pull_request:
     branches:
       - dev
       - staging
       - main
-    paths:
-      - '.github/workflows/**'
-      - '.github/workflows/ci.yml'
-      - '.gitignore'
-      - '.dockerignore'
-      - 'infra/**'
-      - 'Resources/Azure-Deployment/**'
-      - 'XYDataLabs.OrderProcessingSystem.API/**'
-      - 'XYDataLabs.OrderProcessingSystem.Application/**'
-      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
-      - 'XYDataLabs.OrderProcessingSystem.Gateway/**'
-      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
-      - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
-      - 'XYDataLabs.OpenPayAdapter/**'
-      - 'frontend/**'
-      - 'automation/**'
-      - 'frontend/.gitignore'
-      - 'scripts/**'
-      - 'compose/docker-compose.phase10.yml'
-      - 'scripts/validate-tracked-generated-artifacts.ps1'
-      - 'tests/**'
-      - 'Resources/Configuration/**'
-      - 'Resources/Identity/**'
-      - 'Resources/Keycloak/**'
-      - 'Resources/Docker/.env.local.example'
-      - 'Directory.Build.props'
-      - 'Directory.Packages.props'
-      - '*.sln'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  DOTNET_VERSION: '8.x'
+  # Keep setup-dotnet in the feature band permitted by global.json (8.0.400 + latestPatch).
+  DOTNET_VERSION: '8.0.4xx'
   NODE_VERSION: '20.x'
 
 jobs:
   build-and-test:
     name: Build and Test
     runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CI_EVIDENCE_DIRECTORY: TestResults/HostedCI/${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@v6
 
+      - name: Resolve checked-out revision
+        id: provenance
+        shell: pwsh
+        run: |
+          $checkoutSha = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $checkoutSha -notmatch '^[0-9a-f]{40}$') {
+            throw 'Unable to resolve the checked-out commit SHA.'
+          }
+          "checkout_sha=$checkoutSha" >> $env:GITHUB_OUTPUT
+
       - name: Validate tracked generated artifacts
+        id: generated-artifacts
         shell: pwsh
         run: scripts/validate-tracked-generated-artifacts.ps1
 
       - name: Test local Docker safety guardrails (no daemon required)
+        id: docker-safety
         shell: pwsh
         run: scripts/test-phase10-docker-safety.ps1
 
       - name: Validate Phase 10 environment contract
+        id: environment-contract
         shell: pwsh
         run: Resources/Azure-Deployment/validate-phase10-environment-contract.ps1
 
       - name: Set up .NET
+        id: setup-dotnet
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Set up Node.js
+        id: setup-node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -76,74 +77,104 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
+        id: frontend-deps
         working-directory: frontend
         run: npm ci
 
       - name: Install payment automation dependencies
+        id: automation-deps
         working-directory: automation
         run: npm ci
 
+      - name: Test hosted CI workflow contract and evidence aggregation
+        id: ci-contract-tests
+        working-directory: automation
+        run: npm run test:hosted-ci-contract
+
+      - name: Test TRX artifact sanitization with synthetic fixture
+        id: trx-sanitizer-tests
+        shell: pwsh
+        run: scripts/tests/test-sanitize-hosted-trx.ps1
+
       - name: Test payment callback outcome guardrails
+        id: callback-tests
         working-directory: automation
         run: npm run test:callbacks
 
       - name: Validate frontend type safety
+        id: frontend-typecheck
         working-directory: frontend
         run: npm run typecheck
 
       - name: Test frontend workspace
+        id: frontend-tests
         working-directory: frontend
         run: npm run test:web
 
       - name: Validate public identity and Entra deployment contracts
+        id: identity-tests
         run: node --test scripts/identity-config.test.mjs
 
       - name: Build frontend workspace
+        id: frontend-build
         working-directory: frontend
         run: npm run build
 
       - name: Restore dependencies
+        id: dotnet-restore
         run: dotnet restore XYDataLabs.OrderProcessingSystem.sln
 
       - name: Build solution
+        id: dotnet-build
         run: dotnet build XYDataLabs.OrderProcessingSystem.sln --configuration Release --no-restore
 
       - name: Test — Domain
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests/XYDataLabs.OrderProcessingSystem.Domain.Tests.csproj --configuration Release --no-build --verbosity normal
+        id: domain-tests
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests/XYDataLabs.OrderProcessingSystem.Domain.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=domain.trx" --results-directory "$env:CI_EVIDENCE_DIRECTORY/trx/domain"
 
       - name: Test — Application
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests/XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --configuration Release --no-build --verbosity normal
+        id: application-tests
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests/XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=application.trx" --results-directory "$env:CI_EVIDENCE_DIRECTORY/trx/application"
 
       - name: Test — API
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --no-build --verbosity normal
+        id: api-tests
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=api.trx" --results-directory "$env:CI_EVIDENCE_DIRECTORY/trx/api"
 
       - name: Test — Gateway
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj --configuration Release --no-build --verbosity normal
+        id: gateway-tests
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=gateway.trx" --results-directory "$env:CI_EVIDENCE_DIRECTORY/trx/gateway"
 
       - name: Test — Architecture
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --no-build --verbosity normal
+        id: architecture-tests
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=architecture.trx" --results-directory "$env:CI_EVIDENCE_DIRECTORY/trx/architecture"
 
         # Integration tests require Testcontainers + Docker daemon (Linux containers).
         # windows-latest runner does not support Linux containers.
         # Run locally or promote to a dedicated linux runner when Testcontainers CI is needed.
 
-      - name: PR Validation Summary
+      - name: Sanitize known TRX artifacts
+        id: sanitize-trx
         if: always()
         shell: pwsh
-        run: |
-          "## ✅ PR Validation Complete" >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
-          "> **This workflow validates pull requests only. It does not deploy to Azure.**" >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
-          "### Phase 10 Deployment Information" >> $env:GITHUB_STEP_SUMMARY
-          "- This CI workflow runs on pull requests to ``dev``, ``staging``, or ``main`` when relevant validation paths change." >> $env:GITHUB_STEP_SUMMARY
-          "- It does **not** run on direct pushes or merges." >> $env:GITHUB_STEP_SUMMARY
-          "- Azure deployment is handled manually through [01 Phase 10 Azure Deploy Orchestrator](https://github.com/${{ github.repository }}/actions/workflows/phase10-deploy-orchestrator.yml)." >> $env:GITHUB_STEP_SUMMARY
-          "- After deployment, run [02 Phase 10 Azure Runtime Smoke](https://github.com/${{ github.repository }}/actions/workflows/phase10-azure-runtime-smoke.yml), then [03 Phase 10 Azure Transport Smoke](https://github.com/${{ github.repository }}/actions/workflows/phase10-azure-transport-smoke.yml)." >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
-          "### Branch → Environment Mapping" >> $env:GITHUB_STEP_SUMMARY
-          "| Branch | Environment |" >> $env:GITHUB_STEP_SUMMARY
-          "|--------|-------------|" >> $env:GITHUB_STEP_SUMMARY
-          "| ``dev`` | dev |" >> $env:GITHUB_STEP_SUMMARY
-          "| ``staging`` | staging |" >> $env:GITHUB_STEP_SUMMARY
-          "| ``main`` | prod |" >> $env:GITHUB_STEP_SUMMARY
+        run: scripts/sanitize-hosted-trx.ps1 -ResultsRoot "$env:CI_EVIDENCE_DIRECTORY/trx"
+
+      - name: Write hosted CI evidence and truthful summary
+        id: hosted-evidence
+        if: always()
+        shell: pwsh
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_OUTCOMES_JSON: >-
+            {"checkout":"${{ steps.checkout.outcome }}","provenance":"${{ steps.provenance.outcome }}","generated-artifacts":"${{ steps.generated-artifacts.outcome }}","docker-safety":"${{ steps.docker-safety.outcome }}","environment-contract":"${{ steps.environment-contract.outcome }}","setup-dotnet":"${{ steps.setup-dotnet.outcome }}","setup-node":"${{ steps.setup-node.outcome }}","frontend-deps":"${{ steps.frontend-deps.outcome }}","automation-deps":"${{ steps.automation-deps.outcome }}","ci-contract-tests":"${{ steps.ci-contract-tests.outcome }}","trx-sanitizer-tests":"${{ steps.trx-sanitizer-tests.outcome }}","callback-tests":"${{ steps.callback-tests.outcome }}","frontend-typecheck":"${{ steps.frontend-typecheck.outcome }}","frontend-tests":"${{ steps.frontend-tests.outcome }}","identity-tests":"${{ steps.identity-tests.outcome }}","frontend-build":"${{ steps.frontend-build.outcome }}","dotnet-restore":"${{ steps.dotnet-restore.outcome }}","dotnet-build":"${{ steps.dotnet-build.outcome }}","domain-tests":"${{ steps.domain-tests.outcome }}","application-tests":"${{ steps.application-tests.outcome }}","api-tests":"${{ steps.api-tests.outcome }}","gateway-tests":"${{ steps.gateway-tests.outcome }}","architecture-tests":"${{ steps.architecture-tests.outcome }}","sanitize-trx":"${{ steps.sanitize-trx.outcome }}"}
+          CI_CHECKOUT_SHA: ${{ steps.provenance.outputs.checkout_sha }}
+          CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/hosted-ci-evidence.mjs
+
+      - name: Upload sanitized hosted CI evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: hosted-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CI_EVIDENCE_DIRECTORY }}/
+          if-no-files-found: error
+          retention-days: 14
