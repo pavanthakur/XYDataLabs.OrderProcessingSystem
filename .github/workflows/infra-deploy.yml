@@ -1263,6 +1263,8 @@ jobs:
       - name: Resolve Friendly Aliases
         id: aliases
         shell: bash
+        env:
+          EXPECTED_UI_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
         run: |
           case "${{ steps.params.outputs.env }}" in
             dev)
@@ -1290,9 +1292,22 @@ jobs:
 
           API_PUBLIC_URL="$(read_target_field publicApiBaseUrl | sed 's#/*$##')"
           UI_PUBLIC_URL="$(read_target_field publicUiBaseUrl | sed 's#/*$##')"
+          URL_MODE="$(read_target_field publicUrlMode)"
           ALLOW_GENERATED_FALLBACK="$(read_target_field allowGeneratedAzureUrlFallback)"
           API_ALIAS="$(url_host "$API_PUBLIC_URL")"
           UI_ALIAS="$(url_host "$UI_PUBLIC_URL")"
+
+          if [ "$URL_MODE" = "generated" ]; then
+            [ "$TARGET_KEY" = "azure-dev" ] && [ "${{ inputs.bindAliases }}" != "true" ] || { echo 'Generated URL mode is dev-only and cannot bind aliases.' >&2; exit 1; }
+            RG_NAME="$(read_target_field azureResourceGroupName)"
+            ENV_NAME="$(read_target_field azureManagedEnvironmentName)"
+            DOMAIN="$(az containerapp env show --resource-group "$RG_NAME" --name "$ENV_NAME" --query properties.defaultDomain -o tsv --only-show-errors)"
+            RESOLVED="$(node scripts/resolve-phase10-azure-generated-urls.mjs --target "$TARGET_KEY" --default-domain "$DOMAIN" --gateway-fqdn '${{ steps.outputs.outputs.gatewayFqdn }}' --ui-fqdn '${{ steps.outputs.outputs.uiFqdn }}' --expected-ui-origin "$EXPECTED_UI_ORIGIN" --require-live-apps)"
+            API_PUBLIC_URL="$(RESOLVED_JSON="$RESOLVED" node -e 'process.stdout.write(JSON.parse(process.env.RESOLVED_JSON).apiOrigin)')"
+            UI_PUBLIC_URL="$(RESOLVED_JSON="$RESOLVED" node -e 'process.stdout.write(JSON.parse(process.env.RESOLVED_JSON).uiOrigin)')"
+            API_ALIAS="$(url_host "$API_PUBLIC_URL")"
+            UI_ALIAS="$(url_host "$UI_PUBLIC_URL")"
+          fi
 
           if [ -z "$API_ALIAS" ] || [ -z "$UI_ALIAS" ]; then
             DOMAIN_SUFFIX="${{ inputs.publicDomain }}"
@@ -1583,9 +1598,9 @@ jobs:
             echo "| Gateway Health | ${GATEWAY_HEALTH} | healthy |"
             echo "| Orders API Smoke | ${ORDERS_SMOKE} | activeTenantCode |"
             echo "| UI Reachability | ${UI_URL} | <!doctype html |"
-            echo "| Azure Generated Gateway Diagnostic | ${AZURE_GENERATED_GATEWAY_URL} | diagnostic only |"
-            echo "| Azure Generated UI Diagnostic | ${AZURE_GENERATED_UI_URL} | diagnostic only |"
-            echo "| Generated URL Fallback Used | ${FALLBACK_USED} | expected false |"
+            echo "| Azure Generated Gateway | ${AZURE_GENERATED_GATEWAY_URL} | exact live FQDN |"
+            echo "| Azure Generated UI | ${AZURE_GENERATED_UI_URL} | exact live FQDN |"
+            echo "| Generated URL Used | ${FALLBACK_USED} | policy-controlled |"
           } >> $GITHUB_STEP_SUMMARY
 
           smoke_url "Gateway Health" "$GATEWAY_HEALTH" "healthy"

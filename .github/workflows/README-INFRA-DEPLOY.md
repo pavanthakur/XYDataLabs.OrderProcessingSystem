@@ -41,6 +41,7 @@ The workflow summary surfaces the resources that matter for runtime and cleanup:
 | workflow | click target | owns RG creation | builds images | deploys app | cleanup | current or legacy |
 |---|---|---:|---:|---:|---:|---|
 | `phase10-platform-foundation.yml` | yes | yes, platform RG only | no | no | no | current |
+| `phase10-dev-hostname-bootstrap.yml` | yes, dev only | yes, dev RG only | no | no | no | current generated-URL prerequisite |
 | `phase10-deploy-orchestrator.yml` | yes | yes, through the internal infra path | no | yes, through the internal infra path | yes | current |
 | `build-phase10-images.yml` | yes, separately approval-gated release publication | no | yes | no | no | current |
 | `infra-deploy.yml` | no, internal only | yes, through Bicep | no | yes | yes | current |
@@ -103,8 +104,9 @@ Recommended order:
 
 1. Run `Azure Initial Setup` if repository auth is not ready.
 2. Run `00 Azure Platform Foundation` only when the shared ACR, pull identity, or provider registrations are missing. Keep `Assign AcrPull=false` for the normal path.
-3. After separate approval, produce an immutable release for the exact reviewed candidate SHA. This publishes to ACR.
-4. Review the release manifest and parameter identity, then run `01 Phase 10 Azure Deploy Orchestrator` with that release. Deployment, dry-run preflight, and cleanup are distinct choices; cleanup is destructive.
+3. For dev generated URLs only, separately review `00a Azure Dev Hostname Bootstrap` with `dryRun=true`, then approve `dryRun=false` to create the dev RG, Log Analytics and ACA environment. Register the reported exact Entra callback/logout origins and set the matching GitHub environment variables. No generated hostname belongs in Git.
+4. After separate approval, produce an immutable release for the exact reviewed candidate SHA. This publishes to ACR.
+5. Review the release manifest and parameter identity, then run `01 Phase 10 Azure Deploy Orchestrator` with that release. Deployment, dry-run preflight, and cleanup are distinct choices; cleanup is destructive.
 
 Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless you deliberately want a single high-privilege bootstrap path. Keeping them separate preserves cleaner ownership and a smaller blast radius.
 
@@ -165,7 +167,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
    - Gateway, Orders, Inventory, Notifications, and UI are deployed as separate Container Apps with separate images, matching the split-service Docker validation lane
    - The workflow summary shows transport-stack outputs and any wrapper-owned shared foundation outputs we choose to keep in scope
-   - If `Bind Aliases` is enabled, the workflow binds the stable public names from `automation/config/runtime-targets.json`, such as `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com`; `Public Domain` is only a compatibility fallback for newly cataloged environments
+   - Azure dev generated mode requires `Bind Aliases=false` and exact live ACA/Entra origin agreement. Staging/prod use stable owned public names from `automation/config/runtime-targets.json`; `Public Domain` is only a compatibility fallback for newly cataloged environments.
    - Release publication is a separate run; the deployment wrapper verifies and consumes the selected exact-run artifact rather than building replacement images
    - The wrapper summary is only the top-level checkpoint; detailed deployment logs and outputs live in the internal infrastructure job
    - SQL Server and Redis are part of the automatic baseline now, so the wrapper no longer asks for parity toggles in the normal operator form

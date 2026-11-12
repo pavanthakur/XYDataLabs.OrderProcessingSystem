@@ -10,6 +10,17 @@ export function validateAzureRuntimeTargets(document) {
   if (azureTargets.length === 0) return ['Runtime target catalog must define at least one Azure target.'];
   for (const target of azureTargets) {
     if (target.verificationMode !== 'azure' || target.browserMode !== 'azure') issues.push(`${target.key}: Azure target must use Azure verification and browser modes.`);
+    if (target.publicUrlMode && !['catalog', 'generated'].includes(target.publicUrlMode)) issues.push(`${target.key}: publicUrlMode is unsupported.`);
+    if (target.publicUrlMode === 'generated') {
+      if (target.key !== 'azure-dev' || target.allowGeneratedAzureUrlFallback !== true) issues.push(`${target.key}: generated URL mode is permitted only for explicitly enabled Azure dev.`);
+      for (const field of ['azureResourceGroupName', 'azureManagedEnvironmentName', 'azureGatewayContainerAppName', 'azureUiContainerAppName']) {
+        if (!target[field]) issues.push(`${target.key}: ${field} is required for live generated URL resolution.`);
+      }
+      for (const field of ['baseUrl', 'apiBaseUrl', 'publicUiBaseUrl', 'publicApiBaseUrl']) {
+        if (target[field] !== '') issues.push(`${target.key}: ${field} must be empty in generated URL mode; resolve it from Azure control plane.`);
+      }
+      continue;
+    }
     for (const field of ['baseUrl', 'apiBaseUrl', 'publicUiBaseUrl', 'publicApiBaseUrl']) {
       const value = target[field];
       let url;
@@ -20,6 +31,9 @@ export function validateAzureRuntimeTargets(document) {
       }
       if (/(?:azurecontainerapps\.io|azurewebsites\.net)$/i.test(url.hostname) && target.allowGeneratedAzureUrlFallback !== true) {
         issues.push(`${target.key}: generated Azure hostname in ${field} requires explicit diagnostic fallback policy.`);
+      }
+      if (/(?:azurecontainerapps\.io|azurewebsites\.net)$/i.test(url.hostname) && target.key !== 'azure-dev') {
+        issues.push(`${target.key}: staging and production require owned custom-domain URLs.`);
       }
     }
   }

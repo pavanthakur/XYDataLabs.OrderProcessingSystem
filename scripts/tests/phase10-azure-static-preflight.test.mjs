@@ -92,7 +92,46 @@ test('Azure runtime targets require stable HTTPS cloud origins and reject local,
   diagnostic.targets[0].allowGeneratedAzureUrlFallback = true;
   diagnostic.targets[0].publicApiBaseUrl = 'https://app.example.azurecontainerapps.io';
   assert.deepEqual(validateAzureRuntimeTargets(diagnostic), []);
+  diagnostic.targets[1].allowGeneratedAzureUrlFallback = true;
+  diagnostic.targets[1].publicApiBaseUrl = 'https://app.example.azurecontainerapps.io';
+  assert.match(validateAzureRuntimeTargets(diagnostic).join(' '), /staging and production/);
   assert.match(validateAzureRuntimeTargets({})[0] ?? '', /targets array/);
+});
+
+test('Azure dev alone may resolve generated origins at runtime without committing their suffix', () => {
+  const generated = structuredClone(valid.runtimeTargets);
+  Object.assign(generated.targets[0], { publicUrlMode: 'generated', allowGeneratedAzureUrlFallback: true,
+    baseUrl: '', apiBaseUrl: '', publicUiBaseUrl: '', publicApiBaseUrl: '',
+    azureResourceGroupName: 'rg-orderprocessing-dev', azureManagedEnvironmentName: 'aca-orderprocessing-dev',
+    azureGatewayContainerAppName: 'orderprocessing-gate-dev', azureUiContainerAppName: 'orderprocessing-ui-dev' });
+  assert.deepEqual(validateAzureRuntimeTargets(generated), []);
+  generated.targets[0].publicUiBaseUrl = 'https://random.azurecontainerapps.io';
+  assert.match(validateAzureRuntimeTargets(generated).join(' '), /must be empty/);
+  generated.targets[0].publicUiBaseUrl = '';
+  generated.targets[1].publicUrlMode = 'generated';
+  assert.match(validateAzureRuntimeTargets(generated).join(' '), /only for explicitly enabled Azure dev/);
+});
+
+test('dev hostname bootstrap is manual, dry-run by default, and shares the full-deploy ACA definition', async () => {
+  const [workflowText, bootstrap, main, containerApps, environmentModule, catalogText] = await Promise.all([
+    readFile('.github/workflows/phase10-dev-hostname-bootstrap.yml', 'utf8'),
+    readFile('infra/main.phase10.dev-hostname-bootstrap.bicep', 'utf8'),
+    readFile('infra/main.phase10.bicep', 'utf8'),
+    readFile('infra/modules/containerapps.bicep', 'utf8'),
+    readFile('infra/modules/aca-environment.phase10.bicep', 'utf8'),
+    readFile('automation/config/runtime-targets.json', 'utf8'),
+  ]);
+  const workflow = yaml.load(workflowText);
+  assert.equal(workflow.on.workflow_dispatch.inputs.dryRun.default, true);
+  assert.equal(workflow.jobs.hostname_bootstrap.if, "github.ref == 'refs/heads/dev'");
+  const create = workflow.jobs.hostname_bootstrap.steps.find((step) => step.name === 'Create dev hostname foundation');
+  assert.equal(create.if, '${{ !inputs.dryRun }}');
+  assert.match(bootstrap, /modules\/aca-environment\.phase10\.bicep/);
+  assert.match(main, /modules\/aca-environment\.phase10\.bicep/);
+  assert.doesNotMatch(containerApps, /resource acaEnvironment/);
+  assert.match(environmentModule, /output defaultDomain string/);
+  assert.doesNotMatch(bootstrap, /gatewayImage|sqlAdminPassword|modules\/servicebus|modules\/functions/i);
+  assert.doesNotMatch(catalogText, /azurecontainerapps\.io/);
 });
 
 test('environment catalog keeps the branch, environment, and resource suffix contract aligned', async () => {

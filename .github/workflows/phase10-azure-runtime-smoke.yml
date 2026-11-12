@@ -43,6 +43,8 @@ jobs:
       - name: Resolve Phase 10 runtime topology
         id: topology
         shell: bash
+        env:
+          EXPECTED_UI_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
         run: |
           if [ "${{ inputs.environment }}" = "staging" ]; then
             ENV_SUFFIX="stg"
@@ -68,10 +70,22 @@ jobs:
           NOTIFICATIONS_APP="$(read_target_field azureNotificationsContainerAppName)"
           UI_APP="$(read_target_field azureUiContainerAppName)"
           FUNCTION_APP="$(read_target_field azureFunctionAppName)"
+          URL_MODE="$(read_target_field publicUrlMode)"
           GATEWAY_BASE_URL="$(read_target_field publicApiBaseUrl | sed 's#/*$##')"
           UI_BASE_URL="$(read_target_field publicUiBaseUrl | sed 's#/*$##')"
           ALLOW_GENERATED_FALLBACK="$(read_target_field allowGeneratedAzureUrlFallback)"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+          if [ "$URL_MODE" = "generated" ]; then
+            [ "$TARGET_KEY" = "azure-dev" ] || { echo 'Generated URL mode is dev-only.' >&2; exit 1; }
+            ENV_NAME="$(read_target_field azureManagedEnvironmentName)"
+            DOMAIN="$(az containerapp env show --resource-group "$RG_NAME" --name "$ENV_NAME" --query properties.defaultDomain -o tsv --only-show-errors)"
+            GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)"
+            UI_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$UI_APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)"
+            RESOLVED="$(node scripts/resolve-phase10-azure-generated-urls.mjs --target "$TARGET_KEY" --default-domain "$DOMAIN" --gateway-fqdn "$GATEWAY_FQDN" --ui-fqdn "$UI_FQDN" --expected-ui-origin "$EXPECTED_UI_ORIGIN" --require-live-apps)"
+            GATEWAY_BASE_URL="$(RESOLVED_JSON="$RESOLVED" node -e 'process.stdout.write(JSON.parse(process.env.RESOLVED_JSON).apiOrigin)')"
+            UI_BASE_URL="$(RESOLVED_JSON="$RESOLVED" node -e 'process.stdout.write(JSON.parse(process.env.RESOLVED_JSON).uiOrigin)')"
+          fi
 
           if [ -z "$RG_NAME" ] || [ -z "$GATEWAY_APP" ] || [ -z "$ORDERS_APP" ] || [ -z "$PAYMENTS_APP" ] || [ -z "$INVENTORY_APP" ] || [ -z "$NOTIFICATIONS_APP" ] || [ -z "$UI_APP" ] || [ -z "$FUNCTION_APP" ]; then
             echo "Selected runtime target ${TARGET_KEY} is missing Azure runtime host metadata in automation/config/runtime-targets.json." >&2
@@ -138,7 +152,7 @@ jobs:
             echo "| Function App | ${FUNCTION_APP} |"
             echo "| Public Gateway Base URL | ${GATEWAY_BASE_URL} |"
             echo "| Public UI Base URL | ${UI_BASE_URL} |"
-            echo "| Generated URL Fallback Allowed | ${ALLOW_GENERATED_FALLBACK:-false} |"
+            echo "| Generated URL Policy Enabled | ${ALLOW_GENERATED_FALLBACK:-false} |"
             echo ""
             echo "### Azure Links"
             echo ""
@@ -208,6 +222,7 @@ jobs:
             -GatewayBaseUrl '${{ steps.topology.outputs.gatewayBaseUrl }}' `
             -UiBaseUrl '${{ steps.topology.outputs.uiBaseUrl }}' `
             -AllowGeneratedAzureUrlFallback $${{ steps.topology.outputs.allowGeneratedAzureUrlFallback }} `
+            -GeneratedUrlIsExpected $${{ inputs.environment == 'dev' && 'true' || 'false' }} `
             -SummaryPath $summaryPath
 
           $smokeExitCode = $LASTEXITCODE

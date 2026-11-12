@@ -188,6 +188,18 @@ module logAnalytics 'modules/loganalytics.phase10.bicep' = {
   }
 }
 
+module acaEnvironment 'modules/aca-environment.phase10.bicep' = {
+  name: 'aca-environment-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    resourceSuffix: effectiveResourceSuffix
+    baseName: baseName
+    logAnalyticsWorkspaceId: logAnalytics.outputs.logAnalyticsWorkspaceId
+  }
+}
+
 module insights 'modules/insights.phase10.bicep' = {
   name: 'insights-phase10-${environment}'
   scope: appRg
@@ -220,7 +232,7 @@ module containerApps 'modules/containerapps.bicep' = {
     baseName: baseName
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
-    logAnalyticsWorkspaceId: logAnalytics.outputs.logAnalyticsWorkspaceId
+    managedEnvironmentId: acaEnvironment.outputs.managedEnvironmentId
     keyVaultUri: keyVaultUri
     gatewayImage: gatewayImage
     ordersImage: ordersImage

@@ -165,6 +165,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `ci.yml` | Pushes to dev/staging/main, manual dispatch, and pull requests | Validation only | Hosted contract/build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `phase10-platform-foundation.yml` | Manual | Platform foundation | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Persistent ACR and pull identity bootstrap for the active Phase 10 path |
+| `phase10-dev-hostname-bootstrap.yml` | Manual, dev branch only | Dev ACA hostname foundation | Creates only dev RG, Log Analytics and ACA environment after a separately approved what-if; reports generated origins for Entra setup |
 | `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Verifies a separately produced immutable release and hosted evidence before infrastructure preflight/deploy/cleanup |
@@ -277,11 +278,11 @@ When the wrapper calls `infra-deploy.yml`, the key inputs are:
 | `environment` | Selects `dev`, `staging`, or `prod` |
 | `location` | Azure region for the deployment |
 | `dryRun` | Runs what-if only when enabled |
-| `publicDomain` | Compatibility DNS suffix fallback. Preferred public names come from `automation/config/runtime-targets.json`, e.g. `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com` |
+| `publicDomain` | Compatibility DNS suffix fallback for custom-domain targets. Azure dev instead resolves its generated ACA origins from live resources after the hostname bootstrap. |
 | `bindAliases` | Enables alias planning and direct binding checks |
 | `aliasMode` | Chooses either `direct` ACA custom-domain binding or `frontdoor` alias planning |
 
-If `bindAliases=true`, the workflow binds the stable public hostnames resolved from `automation/config/runtime-targets.json`. Supply `publicDomain` only as a fallback when adding a new environment before the catalog has explicit public URLs. Generated `*.azurecontainerapps.io` hostnames are diagnostic fallback values only.
+Azure dev uses `00a Azure Dev Hostname Bootstrap` to discover its generated ACA suffix before Entra URL registration; the checked-in runtime target stores no generated hostname. Staging/prod retain stable custom-domain targets. `bindAliases=true` is for approved custom-domain binding and is incompatible with dev generated mode.
 
 Workflow YAML still enforces this policy explicitly.
 Azure deployment scripts consume the same defaults from `Resources/Azure-Deployment/branch-policy.json`; if governance changes, update the workflow guards and the shared policy file together.

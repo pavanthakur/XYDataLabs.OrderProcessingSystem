@@ -4,7 +4,7 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 
 ## Checkpoint — 12 November 2026
 
-- Historical acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at E2E/NFR start and finish. Current `dev` is `0b9e97c56905f04e8234703a89d375a220af847d`; the worktree is clean. This later commit does not inherit the historical Docker acceptance.
+- Historical acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at E2E/NFR start and finish. Current work is on a later `dev` candidate and does not inherit the historical Docker acceptance; verify Git state.
 - Review revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
 - Worktree state: `UNKNOWN`
 - Verify Git state before continuing.
@@ -22,14 +22,14 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 
 ## Current implementation checkpoint — 12 November 2026
 
-- Docker acceptance/L6 evidence remains historical and bound only to `494ab4fd`; it does not certify the current candidate. Azure identity/RBAC/quotas/cost, ACR publication, live `what-if`, deployment, runtime, payments, Functions invocation and rollback remain NOT-RUN. Staging deployment acceptance is not machine-enforced before production promotion.
-- The prior synced status-only checkpoint was `dev` `e8433081`, `staging` `a3916ac2`, and `main` `becdaab4`. A later scoped documentation correction was committed and synced; verify current branch tips and remote equality from Git rather than relying on these historical checkpoint IDs. Its exact-SHA CI, AI Customization, and Drift Scanner passed; ADR checks were skipped by applicability.
-- Repository-only B2 contract implementation and its offline validation are complete on the feature candidate `0b9e97c56905f04e8234703a89d375a220af847d`; the handoff-only `e8433081` update does not change runtime code. Checks included release/identity/static-preflight (38), tenant catalog (4), Application.Tests (80), Docker safety (45), environment contract (185), hosted-CI contract (9), payment/evidence/report (43), Bicep compilation, AI customization/doc links, and `git diff --check`. Release build succeeded with 174 warnings and no errors; existing warnings were not remediated here.
-- Azure remains unverified: identity/RBAC/quotas/cost, ACR publication, live `what-if`, deployment, runtime, payments, Functions invocation and rollback are NOT-RUN. The chosen dedicated Functions StorageV2 + user-assigned managed-identity design is in IaC only; no resource has been provisioned. Staging acceptance is a required operator gate before production, but is not machine-enforced by the release verifier. Historical Docker/L6 evidence remains bound only to `494ab4fd` and does not certify the current candidate.
+- At start of the repository-only work, `dev` was clean at `3520c6d960604677c9f4c538ce87bcb4712f8f03`. The Azure-dev generated-URL bootstrap and associated workflow/catalog/validation edits passed local checks. Verify the resulting Git revision and remote state before claiming hosted acceptance or an image identity.
+- Read-only Azure-dev preflight selected the Pay-As-You-Go subscription ending `980c`, confirmed by the owner. No resource groups were visible in that subscription; required providers were registered and Central India ACA quota reported 0/20 managed environments, 0/300 sandbox cores. GitHub OIDC dev federation exists, but secret values/effective role-assignment permission are unverified. Entra variables are absent. `xydatalabs.com` did not resolve and Verisign RDAP returned 404 at inspection time. No live Azure what-if, resource write, provider transaction or deployment was performed.
+- Owner chose generated ACA URLs for dev only. The code adds a dev-only, dry-run-default hostname bootstrap for RG/Log Analytics/ACA environment; extracts the ACA environment Bicep module for reuse; leaves generated hostnames out of `runtime-targets.json`; checks live Gateway/UI FQDN and exact Entra UI origin in dev workflows. Staging/prod retain custom-domain policy. Final local checks passed: both Bicep builds, six workflow YAML parses, 16 static/resolver tests, 2 catalog tests, 9 hosted-CI contract tests, TypeScript check, 187 environment-contract checks, AI customization, doc links and `git diff --check`. These are static/local results, not Azure execution.
+- This is repository-only work. ACR publication, Entra/RBAC changes, Azure what-if and deployment, runtime/payment/Functions acceptance and rollback are still NOT-RUN and each requires scoped approval. Historical Docker/L6 evidence remains bound only to `494ab4fd`. Staging acceptance is a required operator gate before production but is not machine-enforced.
 
 ## Next action
 
-Next: complete repository-only review of whether to machine-enforce staging-acceptance evidence before production promotion. Checkpoint C/D live Azure preflight and acceptance remain NOT-RUN and require separate scoped approval; do not infer that the selected storage design authorizes provisioning or deployment. Keep `dev` as the working branch.
+Next: verify the committed candidate and obtain separate push approval before checking its hosted CI. The first cloud action would be a separately approved `00` platform foundation/`00a` hostname what-if, followed by a separately approved billable bootstrap; no cloud action is implied by repository approval.
 
 ## Safety / navigation
 

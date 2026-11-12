@@ -10,6 +10,7 @@ param(
     [string]$GatewayBaseUrl,
     [string]$UiBaseUrl,
     [bool]$AllowGeneratedAzureUrlFallback = $false,
+    [bool]$GeneratedUrlIsExpected = $false,
     [string]$SummaryPath,
     [int]$Attempts = 18,
     [int]$DelaySeconds = 10
@@ -235,6 +236,10 @@ if ((($GatewayBaseUrl -like '*.azurecontainerapps.io*') -or ($UiBaseUrl -like '*
 }
 
 $fallbackUsed = ($GatewayBaseUrl -eq $azureGeneratedGatewayUrl) -or ($UiBaseUrl -eq $azureGeneratedUiUrl)
+if ($GeneratedUrlIsExpected -and ($Environment -ne 'dev' -or -not $AllowGeneratedAzureUrlFallback -or
+    $GatewayBaseUrl -ne $azureGeneratedGatewayUrl -or $UiBaseUrl -ne $azureGeneratedUiUrl)) {
+    throw 'Expected generated URL mode requires Azure dev and exact live Gateway/UI FQDN agreement.'
+}
 
 $gatewayHealthUrl = "$GatewayBaseUrl/"
 $gatewayApiUrl = "$GatewayBaseUrl/api/v1/Info/runtime-configuration"
@@ -288,7 +293,7 @@ $checks += Invoke-SmokeHttp -Name 'UI API proxy runtime configuration' -Url $uiP
 $completedUtc = [DateTimeOffset]::UtcNow
 $failed = @($checks | Where-Object { -not $_.Passed })
 $status = if ($failed.Count -eq 0) { 'PASS' } else { 'FAIL' }
-$deploymentVerdict = if ($failed.Count -gt 0) { 'FAIL' } elseif ($fallbackUsed) { 'PARTIAL' } else { 'PASS' }
+$deploymentVerdict = if ($failed.Count -gt 0) { 'FAIL' } elseif ($fallbackUsed -and -not $GeneratedUrlIsExpected) { 'PARTIAL' } else { 'PASS' }
 
 $summary = @()
 $summary += '## Phase 10 Azure Runtime Smoke'
@@ -308,9 +313,10 @@ $summary += "| Public Gateway Health | $gatewayHealthUrl |"
 $summary += "| Public Gateway Routed API | $gatewayApiUrl |"
 $summary += "| Public UI Static Route | $uiUrl |"
 $summary += "| Public UI API Proxy | $uiProxyApiUrl |"
-$summary += "| Azure Generated Gateway Diagnostic | $azureGeneratedGatewayUrl |"
-$summary += "| Azure Generated UI Diagnostic | $azureGeneratedUiUrl |"
-$summary += "| Generated URL Fallback Used | $fallbackUsed |"
+$summary += "| Live Azure Generated Gateway | $azureGeneratedGatewayUrl |"
+$summary += "| Live Azure Generated UI | $azureGeneratedUiUrl |"
+$summary += "| Generated URL Mode Expected | $GeneratedUrlIsExpected |"
+$summary += "| Generated URL Used | $fallbackUsed |"
 $summary += "| Deployment Verdict | $deploymentVerdict |"
 $summary += ''
 $summary += '### Checks'

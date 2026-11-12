@@ -53,6 +53,8 @@ jobs:
       - name: Resolve Phase 10 Azure E2E topology
         id: topology
         shell: bash
+        env:
+          EXPECTED_UI_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
         run: |
           if [ "${{ inputs.environment }}" = "staging" ]; then
             ENV_SUFFIX="stg"
@@ -73,6 +75,7 @@ jobs:
           RG_NAME="$(read_target_field azureResourceGroupName)"
           GATEWAY_APP="$(read_target_field azureGatewayContainerAppName)"
           UI_APP="$(read_target_field azureUiContainerAppName)"
+          URL_MODE="$(read_target_field publicUrlMode)"
           SQL_SERVER="$(read_target_field azureSqlServerName)"
           REDIS_NAME="$(read_target_field azureRedisName)"
           APP_INSIGHTS_NAME="$(read_target_field azureApplicationInsightsName)"
@@ -97,6 +100,14 @@ jobs:
 
           GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)"
           UI_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$UI_APP" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)"
+          if [ "$URL_MODE" = "generated" ]; then
+            [ "$TARGET_KEY" = "azure-dev" ] || { echo 'Generated URL mode is dev-only.' >&2; exit 1; }
+            ENV_NAME="$(read_target_field azureManagedEnvironmentName)"
+            DOMAIN="$(az containerapp env show --resource-group "$RG_NAME" --name "$ENV_NAME" --query properties.defaultDomain -o tsv --only-show-errors)"
+            RESOLVED="$(node scripts/resolve-phase10-azure-generated-urls.mjs --target "$TARGET_KEY" --default-domain "$DOMAIN" --gateway-fqdn "$GATEWAY_FQDN" --ui-fqdn "$UI_FQDN" --expected-ui-origin "$EXPECTED_UI_ORIGIN" --require-live-apps)"
+            GATEWAY_BASE_URL="$(RESOLVED_JSON="$RESOLVED" node -e 'process.stdout.write(JSON.parse(process.env.RESOLVED_JSON).apiOrigin)')"
+            UI_BASE_URL="$(RESOLVED_JSON="$RESOLVED" node -e 'process.stdout.write(JSON.parse(process.env.RESOLVED_JSON).uiOrigin)')"
+          fi
           AZURE_GENERATED_GATEWAY_URL=""
           AZURE_GENERATED_UI_URL=""
 
@@ -151,7 +162,7 @@ jobs:
             echo "| Public UI Base URL | ${UI_BASE_URL} |"
             echo "| Azure Generated Gateway URL | ${AZURE_GENERATED_GATEWAY_URL:-n/a} |"
             echo "| Azure Generated UI URL | ${AZURE_GENERATED_UI_URL:-n/a} |"
-            echo "| Generated URL Fallback Allowed | ${ALLOW_GENERATED_FALLBACK:-false} |"
+            echo "| Generated URL Policy Enabled | ${ALLOW_GENERATED_FALLBACK:-false} |"
             echo "| SQL Server | ${SQL_SERVER} |"
             echo "| Redis | ${REDIS_NAME} |"
             echo ""

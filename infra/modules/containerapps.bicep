@@ -15,8 +15,8 @@ param resourceSuffix string = ''
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
-@description('Log Analytics workspace resource id for the ACA environment')
-param logAnalyticsWorkspaceId string = ''
+@description('Pre-created ACA environment resource id')
+param managedEnvironmentId string
 
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
@@ -100,7 +100,6 @@ var aspNetCoreEnvironment = environment == 'prod'
   : environment == 'staging'
     ? 'Staging'
     : 'Development'
-var environmentName = 'aca-${baseName}-${effectiveResourceSuffix}'
 var gatewayName = '${baseName}-gate-${effectiveResourceSuffix}'
 var ordersName = '${baseName}-ord-${effectiveResourceSuffix}'
 var paymentsName = '${baseName}-pay-${effectiveResourceSuffix}'
@@ -257,26 +256,12 @@ var appIdentity = !empty(acrPullIdentityId) ? {
   type: 'SystemAssigned'
 }
 
-resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: environmentName
-  location: location
-  properties: {
-    appLogsConfiguration: !empty(logAnalyticsWorkspaceId) ? {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: reference(logAnalyticsWorkspaceId, '2021-06-01').customerId
-        sharedKey: listKeys(logAnalyticsWorkspaceId, '2021-06-01').primarySharedKey
-      }
-    } : null
-  }
-}
-
 resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: ordersName
   location: location
   identity: appIdentity
   properties: {
-    managedEnvironmentId: acaEnvironment.id
+    managedEnvironmentId: managedEnvironmentId
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
@@ -310,7 +295,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
   location: location
   identity: appIdentity
   properties: {
-    managedEnvironmentId: acaEnvironment.id
+    managedEnvironmentId: managedEnvironmentId
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
@@ -344,7 +329,7 @@ resource paymentsApp 'Microsoft.App/containerApps@2024-03-01' = {
   location: location
   identity: appIdentity
   properties: {
-    managedEnvironmentId: acaEnvironment.id
+    managedEnvironmentId: managedEnvironmentId
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
@@ -378,7 +363,7 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
   location: location
   identity: appIdentity
   properties: {
-    managedEnvironmentId: acaEnvironment.id
+    managedEnvironmentId: managedEnvironmentId
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
@@ -412,7 +397,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
   location: location
   identity: appIdentity
   properties: {
-    managedEnvironmentId: acaEnvironment.id
+    managedEnvironmentId: managedEnvironmentId
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
@@ -452,7 +437,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
   location: location
   identity: appIdentity
   properties: {
-    managedEnvironmentId: acaEnvironment.id
+    managedEnvironmentId: managedEnvironmentId
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
@@ -506,7 +491,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-output managedEnvironmentId string = acaEnvironment.id
+output managedEnvironmentId string = managedEnvironmentId
 output gatewayContainerAppName string = gatewayApp.name
 output ordersContainerAppName string = ordersApp.name
 output paymentsContainerAppName string = paymentsApp.name

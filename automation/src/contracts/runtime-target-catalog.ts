@@ -11,6 +11,7 @@ export interface RuntimeTargetDefinition {
   apiBaseUrl?: string;
   publicUiBaseUrl?: string;
   publicApiBaseUrl?: string;
+  publicUrlMode?: "catalog" | "generated";
   allowGeneratedAzureUrlFallback?: boolean;
   verificationMode: VerificationMode;
   browserMode: BrowserMode;
@@ -22,6 +23,7 @@ export interface RuntimeTargetDefinition {
   profile: RuntimeProfile;
   paymentPagePath: string;
   azureResourceGroupName?: string;
+  azureManagedEnvironmentName?: string;
   azureGatewayContainerAppName?: string;
   azureOrdersContainerAppName?: string;
   azurePaymentsContainerAppName?: string;

@@ -262,6 +262,19 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Verify generated Azure-dev origin matches Entra registration
+        if: inputs.environment == 'dev'
+        shell: bash
+        env:
+          EXPECTED_UI_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
+        run: |
+          set -euo pipefail
+          RG_NAME="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); process.stdout.write(t.azureResourceGroupName)')"
+          ENV_NAME="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); process.stdout.write(t.azureManagedEnvironmentName)')"
+          DOMAIN="$(az containerapp env show --resource-group "$RG_NAME" --name "$ENV_NAME" --query properties.defaultDomain -o tsv --only-show-errors)"
+          node scripts/resolve-phase10-azure-generated-urls.mjs \
+            --target azure-dev --default-domain "$DOMAIN" --expected-ui-origin "$EXPECTED_UI_ORIGIN" 1>/dev/null
+
       - name: Check subscription, directory, RBAC and provider registrations
         shell: bash
         env:

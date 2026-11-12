@@ -12,7 +12,7 @@ This runbook covers the first live check for the Phase 10 pre-Azure baseline def
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
-- Stable public URL source of truth: `automation/config/runtime-targets.json`
+- Public URL policy source of truth: `automation/config/runtime-targets.json`. Dev resolves generated ACA URLs from live resources; staging/prod retain stable owned domains.
 - Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`; these are compatibility/operator controls, but the preferred hostnames are the stable `xydatalabs.com` URLs in the runtime target catalog.
 - The active `01 Phase 10 Azure Deploy Orchestrator` path does deploy Azure SQL Server and Azure Managed Redis into the environment-scoped app resource group when the baseline runs; they are not part of `rg-orderprocessing-platform`.
 - For the next implementation slice, use [docs/internal/phase10-parity-matrix.md](../internal/phase10-parity-matrix.md) as the SQL / Redis / ACR ownership source of truth before changing Azure again.
@@ -380,14 +380,7 @@ Use this as the current known-good Phase 10 baseline when comparing future workf
 | 2026-07-13 | `03 Phase 10 Azure Transport Smoke` | `29273881488` | PASS | Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
 | 2026-07-13 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | `29268434294` | PASS | Optional Docker Dev HTTP E2E smoke, integration, matrix, and cleanup parity. |
 
-Current stable dev URLs from the runtime target catalog:
-
-| Target | URL |
-|---|---|
-| Gateway/API | `https://dev.orderprocessing-api.xydatalabs.com` |
-| UI | `https://dev.orderprocessing.xydatalabs.com` |
-
-The Azure-generated Container Apps hostnames from a deployment run are diagnostic fallback values only.
+Historical 2026-07 dev runs above used the then-configured custom-domain policy. The current dev policy uses live generated ACA hostnames; historical PASS does not certify a fresh deployment.
 
 ### Workflow Responsibilities
 
@@ -484,15 +477,17 @@ Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD
 | Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
 | ACR image retention | Implemented with the retention workflow | Scheduled ACR cleanup protects active revision images | `phase10-retention-cleanup.yml` | Stale ACR tags/manifests are removed without deleting active revision images |
 
-Phase 10 smoke tests and direct operator access use stable custom domains, not generated Azure Container Apps hostnames:
+Phase 10 public URL policy:
 
 | Environment | UI URL | API/Gateway URL |
 |-------------|--------|-----------------|
-| dev | `https://dev.orderprocessing.xydatalabs.com` | `https://dev.orderprocessing-api.xydatalabs.com` |
+| dev | Live `orderprocessing-ui-dev.<ACA defaultDomain>` | Live `orderprocessing-gate-dev.<ACA defaultDomain>` |
 | staging | `https://staging.orderprocessing.xydatalabs.com` | `https://staging.orderprocessing-api.xydatalabs.com` |
 | prod | `https://orderprocessing.xydatalabs.com` | `https://orderprocessing-api.xydatalabs.com` |
 
-Generated `*.azurecontainerapps.io` URLs are diagnostic fallback values only. They must not be stored as primary runtime targets and must not silently replace the public smoke URLs.
+Dev generated hostnames are discovered from the live ACA environment and apps, never stored in the repository. The dev URL can pass only when the live FQDNs match the selected environment and the Entra UI origin/redirect/logout registrations match exactly. An unselected generated fallback remains PARTIAL; staging/prod reject it.
+
+For the first dev deployment, use this approval-gated sequence: run `00 Azure Platform Foundation` for the persistent ACR; separately approve `00a Azure Dev Hostname Bootstrap` with its default `dryRun=true`, review the delta, then separately approve its billable `dryRun=false` run. That creates only the dev resource group, Log Analytics workspace, and ACA environment. Copy the reported exact UI/API origins into the Entra/GitHub environment setup (no generated suffix in Git). Confirm `IDENTITY_PUBLIC_WEB_ORIGIN`, registered `/auth/callback`, and `/signed-out` URLs. Publish the exact reviewed image release separately, then run `01` what-if and deploy only with separate approvals. Do not run `01` before the hostname and Entra gates agree.
 
 If you need to bind or plan human-friendly public URLs, choose:
 

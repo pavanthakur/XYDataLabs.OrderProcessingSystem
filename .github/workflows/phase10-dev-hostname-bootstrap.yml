@@ -1,0 +1,74 @@
+name: 00a Azure Dev Hostname Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'What-if only; resource creation requires a separate approved run'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: phase10-azure-dev
+  cancel-in-progress: false
+
+jobs:
+  hostname_bootstrap:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      - name: Verify selected subscription and region
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(az account show --query id -o tsv)" = '${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}'
+          test "$(az account show --query state -o tsv)" = 'Enabled'
+          echo 'Azure-dev hostname bootstrap targets the configured OIDC subscription in centralindia.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Review dev hostname infrastructure delta
+        if: inputs.dryRun
+        shell: bash
+        run: |
+          set -euo pipefail
+          az deployment sub what-if \
+            --location centralindia \
+            --template-file infra/main.phase10.dev-hostname-bootstrap.bicep \
+            --parameters location=centralindia environment=dev resourceSuffix=dev \
+            --validation-level ProviderNoRbac
+      - name: Create dev hostname foundation
+        if: ${{ !inputs.dryRun }}
+        id: create
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOYMENT_NAME="phase10-dev-hostname-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          az deployment sub create \
+            --location centralindia \
+            --name "$DEPLOYMENT_NAME" \
+            --template-file infra/main.phase10.dev-hostname-bootstrap.bicep \
+            --parameters location=centralindia environment=dev resourceSuffix=dev \
+            --only-show-errors 1>/dev/null
+          RG_NAME="$(az deployment sub show --name "$DEPLOYMENT_NAME" --query properties.outputs.resourceGroupName.value -o tsv)"
+          ENV_ID="$(az deployment sub show --name "$DEPLOYMENT_NAME" --query properties.outputs.managedEnvironmentId.value -o tsv)"
+          EXPECTED_RG="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); process.stdout.write(t.azureResourceGroupName)')"
+          EXPECTED_ENV="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); process.stdout.write(t.azureManagedEnvironmentName)')"
+          [ "$RG_NAME" = "$EXPECTED_RG" ] && [ "${ENV_ID##*/}" = "$EXPECTED_ENV" ] || { echo 'Bootstrap outputs do not match the Azure-dev runtime target.' >&2; exit 1; }
+          DOMAIN="$(az containerapp env show --resource-group "$RG_NAME" --name "$EXPECTED_ENV" --query properties.defaultDomain -o tsv --only-show-errors)"
+          RESOLVED="$(node scripts/resolve-phase10-azure-generated-urls.mjs --target azure-dev --default-domain "$DOMAIN")"
+          echo "resolved=$RESOLVED" >> "$GITHUB_OUTPUT"
+          echo 'Dev ACA environment created. No application images, Entra registrations, or payment resources were deployed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Register the exact UI callback and signed-out URLs below before running workflow 01.' >> "$GITHUB_STEP_SUMMARY"
+          RESOLVED_JSON="$RESOLVED" node -e 'const v=JSON.parse(process.env.RESOLVED_JSON); process.stdout.write(`UI origin: ${v.uiOrigin}\nAPI origin: ${v.apiOrigin}\nEntra redirect: ${v.uiOrigin}/auth/callback\nEntra logout: ${v.uiOrigin}/signed-out\n`)' >> "$GITHUB_STEP_SUMMARY"

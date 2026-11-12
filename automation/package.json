@@ -14,6 +14,7 @@
     "test:order-continuation:browser": "tsx --test src/browser/order-payment-continuation.browser.test.ts",
     "test:payment-evidence": "tsx --test src/browser/payment-evidence.test.ts",
     "test:tenant-catalog": "tsx --test src/catalog/api-tenant-execution-catalog.test.ts",
+    "test:runtime-target-catalog": "tsx --test src/catalog/json-runtime-target-catalog.test.ts",
     "test:acceptance-coverage": "tsx --test src/cli/payment-acceptance-coverage.test.ts",
     "test:verification-polling": "tsx --test src/verification/verification-polling.test.ts",
     "test:provider-challenges:browser": "tsx --test src/browser/provider-challenge.browser.test.ts",
