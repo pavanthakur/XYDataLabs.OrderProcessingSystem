@@ -13,6 +13,7 @@ export const REQUIRED_CHECKS = [
   'frontend-deps',
   'automation-deps',
   'ci-contract-tests',
+  'release-contract-tests',
   'trx-sanitizer-tests',
   'callback-tests',
   'frontend-typecheck',
