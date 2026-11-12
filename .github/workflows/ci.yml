@@ -95,6 +95,11 @@ jobs:
         id: release-contract-tests
         run: node --test scripts/tests/phase10-release-artifacts.test.mjs scripts/tests/phase10-release-run.test.mjs scripts/tests/phase10-hosted-ci-evidence.test.mjs scripts/tests/phase10-deployment-identity.test.mjs scripts/tests/phase10-release-inputs.test.mjs scripts/tests/phase10-azure-static-preflight.test.mjs scripts/tests/phase10-azure-preflight.test.mjs scripts/tests/phase10-function-package-runtime.test.mjs
 
+      - name: Test Azure tenant topology discovery with synthetic API responses
+        id: tenant-catalog-tests
+        working-directory: automation
+        run: npm run test:tenant-catalog
+
       - name: Test TRX artifact sanitization with synthetic fixture
         id: trx-sanitizer-tests
         shell: pwsh
