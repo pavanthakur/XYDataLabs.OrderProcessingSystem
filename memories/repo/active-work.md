@@ -31,7 +31,7 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 
 ## Next action
 
-Next, complete local/hosted validation for the release-safety changes, then obtain the separately required authorization for ACR publication and live Azure preflight/what-if. Deployment, billable resource changes, migrations, identity writes, sandbox payments and recovery drills remain distinct approval gates.
+The release-safety changes passed local and exact-SHA hosted validation on `dev` `b72b665e`, `staging` `18cb4309`, and `main` `4bc450e6` (ADR validation was skipped by opt-in policy). Next, review the read-only Azure preflight and `what-if` inputs with the owner; do not run them or proceed to ACR publication, deployment, billable resource changes, migrations, identity writes, sandbox payments or recovery drills without their separate scoped approvals.
 
 ## Safety / navigation
 
