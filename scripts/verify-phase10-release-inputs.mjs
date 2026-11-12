@@ -7,8 +7,10 @@ import { calculateDeploymentIdentity } from './phase10-deployment-identity.mjs';
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
-export async function verifyReleaseInputs({ releaseDirectory, repository, sourceSha, runId, runAttempt, artifactName, functionsPackageSha256, approvedParameterIdentity, images, deployment }) {
+export async function verifyReleaseInputs({ releaseDirectory, repository, sourceSha, deploymentWorkflowSha, actualWorkflowSha, runId, runAttempt, artifactName, functionsPackageSha256, approvedParameterIdentity, images, deployment }) {
   if (!/^[0-9a-f]{40}$/.test(sourceSha ?? '')) throw new Error('A full lowercase candidate SHA is required.');
+  if (!/^[0-9a-f]{40}$/.test(deploymentWorkflowSha ?? '')) throw new Error('A full lowercase deployment workflow SHA is required.');
+  if (actualWorkflowSha && deploymentWorkflowSha !== actualWorkflowSha) throw new Error('Deployment workflow SHA does not match the workflow revision running this job.');
   if (!/^[0-9]+$/.test(String(runId)) || !/^[0-9]+$/.test(String(runAttempt))) throw new Error('Release run ID and attempt are required.');
   if (artifactName !== `phase10-release-${sourceSha}`) throw new Error('Release artifact name does not match the source SHA.');
   if (!/^[0-9a-f]{64}$/.test(functionsPackageSha256 ?? '') || !/^[0-9a-f]{64}$/.test(approvedParameterIdentity ?? '')) throw new Error('Functions package hash and approved parameter identity must be SHA-256 values.');
@@ -45,6 +47,8 @@ async function main() {
     releaseDirectory: process.env.RELEASE_DIRECTORY ?? 'phase10-release',
     repository: process.env.GITHUB_REPOSITORY,
     sourceSha: process.env.CANDIDATE_SHA,
+    deploymentWorkflowSha: process.env.DEPLOYMENT_WORKFLOW_SHA,
+    actualWorkflowSha: process.env.ACTUAL_WORKFLOW_SHA,
     runId: process.env.RELEASE_RUN_ID,
     runAttempt: process.env.RELEASE_RUN_ATTEMPT,
     artifactName: process.env.RELEASE_ARTIFACT_NAME,
@@ -68,7 +72,7 @@ async function main() {
       cleanupInfra: process.env.CLEANUP_INFRA === 'true',
     },
   });
-  console.log(`Verified source ${result.manifest.sourceSha}, six immutable images, Functions package, and approved deployment parameter identity.`);
+  console.log(`Verified release source ${result.manifest.sourceSha}, deployment workflow ${process.env.DEPLOYMENT_WORKFLOW_SHA}, six immutable images, Functions package, and approved deployment parameter identity.`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

@@ -70,7 +70,9 @@ Functions now uses a dedicated environment-scoped StorageV2 account and dedicate
 
 Storage is a billable resource. Current parameters select `Standard_LRS` for dev/staging and `Standard_GRS` for prod. Review SKU, region, redundancy, quotas, and cost for the target environment before deployment. No storage account or role assignment has been provisioned by these repository changes.
 
-The current release verifier also requires the release-producing branch to match the target environment branch. Consequently, cross-branch promotion of one unchanged release artifact from `dev` to `staging`/`main` is not yet supported: merges change commit identity and the policy requires a new matching-branch release. Resolve this provenance/promotion policy before claiming same-artifact promotion; do not work around it by disabling the exact-SHA checks or rebuilding under a misleading label.
+Release provenance distinguishes the immutable artifact **source SHA** from the **deployment workflow SHA**. The release producer and manifest must match the source SHA exactly; that source must be an ancestor of the target branch revision running the orchestrator. Required hosted checks must pass on both exact revisions, with the deployment revision's CI evidence packet downloaded and reconciled separately. The orchestrator itself is checked out at the deployment workflow SHA, so it validates the environment's current deployment code without rebuilding or relabelling the artifact.
+
+Promotion branch policy is `dev → dev`, `dev|staging → staging`, and `dev|staging|main → prod`; all promotions retain the same digest-qualified image references and Functions package. Cross-environment execution is still a manually selected workflow, protected by the target GitHub Environment and the separate prerequisite/deployment gates. This provenance check proves source ancestry and hosted checks; it does **not** prove that a release passed deployed staging acceptance. A staging acceptance artifact is not yet machine-enforced by the release verifier: treat staging deployment and acceptance as a mandatory operator gate before any production run. No ACR publication or Azure deployment has been performed by the local contract implementation.
 
 Use this setting as follows:
 
@@ -137,7 +139,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - Set `Dry Run` = `true`
    - Requests Azure authentication and performs a read-only prerequisite check plus Bicep what-if; it does not deploy or intentionally mutate resources
    - Not a substitute for reviewing the selected candidate, target, identity, provider output, or change plan
-   - Requires a valid immutable release artifact and reviewed parameter identity; the current exact-branch policy constrains which release can target each environment
+   - Requires a valid immutable release artifact and reviewed parameter identity; the source SHA must be an ancestor of the deployment workflow SHA and follow the documented environment promotion policy
 
    **🚀 Real Deployment:**
    - Set `Dry Run` = `false`
@@ -299,13 +301,13 @@ Dry Run: FALSE ⚠️
 
 ## 🔄 Deployment triggers and immutable releases
 
-Branch pushes run hosted validation; they do not deploy Azure. The manual release workflow builds/pushes images and packages Functions for an exact source SHA, and the manual orchestrator consumes the selected release. The current policy requires matching source branch and target environment:
+Branch pushes run hosted validation; they do not deploy Azure. The manual release workflow builds/pushes images and packages Functions for an exact source SHA. The manual orchestrator consumes that same artifact while running from a deployment-workflow SHA on the target branch, requiring source ancestry and exact hosted checks on both revisions:
 
 | Branch | Environment | Parameter File | Trigger |
 |--------|-------------|----------------|---------|
 | `dev` | dev | `infra/parameters/phase10-dev.json` | Manual release + separately selected deployment |
-| `staging` | staging | `infra/parameters/phase10-staging.json` | Manual release + separately selected deployment |
-| `main` | prod | `infra/parameters/phase10-prod.json` | Manual release + separately selected deployment |
+| `dev` or `staging` | staging | `infra/parameters/phase10-staging.json` | Promote the selected immutable release after dev validation; manual deployment and separate staging acceptance |
+| `dev`, `staging`, or `main` | prod | `infra/parameters/phase10-prod.json` | Manual deployment and protected environment approval; staging acceptance is a required operator gate, not yet an automated evidence input |
 
 **Example:**
 ```bash

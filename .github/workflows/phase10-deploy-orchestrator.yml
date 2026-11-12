@@ -80,11 +80,15 @@ jobs:
       actions: read
     outputs:
       sourceSha: ${{ steps.manifest.outputs.source_sha }}
+      deploymentWorkflowSha: ${{ github.sha }}
       releaseRunAttempt: ${{ steps.provenance.outputs.release_run_attempt }}
       releaseArtifactName: ${{ inputs.releaseArtifactName }}
       hostedCiRunId: ${{ steps.provenance.outputs.hosted_ci_run_id }}
       hostedCiRunAttempt: ${{ steps.provenance.outputs.hosted_ci_run_attempt }}
       hostedCiArtifactName: ${{ steps.provenance.outputs.hosted_ci_artifact_name }}
+      sourceHostedCiRunId: ${{ steps.provenance.outputs.source_hosted_ci_run_id }}
+      sourceHostedCiRunAttempt: ${{ steps.provenance.outputs.source_hosted_ci_run_attempt }}
+      sourceHostedCiArtifactName: ${{ steps.provenance.outputs.source_hosted_ci_artifact_name }}
       gatewayImage: ${{ steps.manifest.outputs.gateway_image }}
       ordersImage: ${{ steps.manifest.outputs.orders_image }}
       paymentsImage: ${{ steps.manifest.outputs.payments_image }}
@@ -95,19 +99,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.candidateSha || github.sha }}
-          fetch-depth: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
-      - name: Require orchestrator workflow and candidate to share one exact revision
+      - name: Verify deployment branch and source ancestry
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidateSha }}
           WORKFLOW_SHA: ${{ github.sha }}
+          DEPLOYMENT_BRANCH: ${{ github.ref_name }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "candidateSha must be a full commit SHA." >&2; exit 1; }
-          [[ "$CANDIDATE_SHA" == "$WORKFLOW_SHA" ]] || { echo "Dispatch the orchestrator from the same commit selected as candidateSha." >&2; exit 1; }
-          [[ "$(git rev-parse HEAD)" == "$CANDIDATE_SHA" ]] || { echo "The orchestrator checked-out revision does not match candidateSha." >&2; exit 1; }
+          [[ "$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Deployment workflow SHA must be a full commit SHA." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$WORKFLOW_SHA" ]] || { echo "The orchestrator checkout does not match its workflow revision." >&2; exit 1; }
+          case "$TARGET_ENVIRONMENT:$DEPLOYMENT_BRANCH" in
+            dev:dev|staging:staging|prod:main) ;;
+            *) echo "Deployment workflow branch does not match the selected environment." >&2; exit 1 ;;
+          esac
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$WORKFLOW_SHA" || { echo "The immutable release source is not an ancestor of the deployment workflow revision." >&2; exit 1; }
 
       - name: Verify exact producer run, artifact and hosted CI result
         id: provenance
@@ -116,6 +127,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          DEPLOYMENT_WORKFLOW_SHA: ${{ github.sha }}
+          DEPLOYMENT_BRANCH: ${{ github.ref_name }}
           RELEASE_RUN_ID: ${{ inputs.releaseRunId }}
           RELEASE_ARTIFACT_NAME: ${{ inputs.releaseArtifactName }}
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
@@ -131,13 +144,32 @@ jobs:
           github-token: ${{ github.token }}
           path: hosted-ci-evidence
 
+      - name: Download source-release hosted CI evidence
+        uses: actions/download-artifact@v6
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.provenance.outputs.source_hosted_ci_run_id }}
+          name: ${{ steps.provenance.outputs.source_hosted_ci_artifact_name }}
+          github-token: ${{ github.token }}
+          path: hosted-ci-source-evidence
+
+      - name: Reconcile source hosted CI evidence to immutable release source
+        shell: bash
+        env:
+          EVIDENCE_DIRECTORY: hosted-ci-source-evidence
+          HOSTED_CI_RUN_ID: ${{ steps.provenance.outputs.source_hosted_ci_run_id }}
+          HOSTED_CI_RUN_ATTEMPT: ${{ steps.provenance.outputs.source_hosted_ci_run_attempt }}
+          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          SOURCE_BRANCH: ${{ steps.provenance.outputs.release_source_branch }}
+        run: node scripts/verify-phase10-hosted-ci-evidence.mjs
+
       - name: Reconcile hosted CI evidence contents to candidate
         shell: bash
         env:
           EVIDENCE_DIRECTORY: hosted-ci-evidence
           HOSTED_CI_RUN_ID: ${{ steps.provenance.outputs.hosted_ci_run_id }}
           HOSTED_CI_RUN_ATTEMPT: ${{ steps.provenance.outputs.hosted_ci_run_attempt }}
-          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          CANDIDATE_SHA: ${{ github.sha }}
           SOURCE_BRANCH: ${{ github.ref_name }}
         run: node scripts/verify-phase10-hosted-ci-evidence.mjs
 
@@ -406,6 +438,7 @@ jobs:
       dryRun: ${{ inputs.dryRun }}
       cleanupInfra: ${{ inputs.cleanupInfra }}
       candidateSha: ${{ inputs.candidateSha }}
+      deploymentWorkflowSha: ${{ github.sha }}
       releaseRunId: ${{ inputs.releaseRunId }}
       releaseRunAttempt: ${{ needs.verify_release.outputs.releaseRunAttempt }}
       releaseArtifactName: ${{ inputs.releaseArtifactName }}

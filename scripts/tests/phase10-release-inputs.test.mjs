@@ -33,12 +33,14 @@ ${hash(await import('node:fs/promises').then(({ readFile }) => readFile(path.joi
   const identity = await calculateDeploymentIdentity({ repositoryRoot: repoRoot, environment: 'dev', location: 'centralindia' });
   const images = Object.fromEntries(manifest.images.map((image) => [image.name, image.image]));
   const options = {
-    releaseDirectory, repository: manifest.repository, sourceSha, runId: '99', runAttempt: '1',
+    releaseDirectory, repository: manifest.repository, sourceSha, deploymentWorkflowSha: 'c'.repeat(40), runId: '99', runAttempt: '1',
     artifactName: `phase10-release-${sourceSha}`, functionsPackageSha256: manifest.functionsPackage.sha256,
     approvedParameterIdentity: identity.identitySha256, images,
     deployment: { repositoryRoot: repoRoot, environment: 'dev', location: 'centralindia' },
   };
   assert.equal((await verifyReleaseInputs(options)).manifest.sourceSha, sourceSha);
+  await assert.rejects(verifyReleaseInputs({ ...options, actualWorkflowSha: 'd'.repeat(40) }), /does not match the workflow revision/);
+  assert.equal((await verifyReleaseInputs({ ...options, actualWorkflowSha: options.deploymentWorkflowSha })).manifest.sourceSha, sourceSha);
   await assert.rejects(verifyReleaseInputs({ ...options, images: { ...images, ui: `${images.ui}-tampered` } }), /ui image input/);
   await assert.rejects(verifyReleaseInputs({ ...options, approvedParameterIdentity: 'b'.repeat(64) }), /parameter identity changed/);
   await writeFile(path.join(releaseDirectory, 'functions.zip'), 'tampered');

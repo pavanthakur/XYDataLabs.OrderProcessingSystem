@@ -2,7 +2,31 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export function auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles }) {
+export function validateAzureRuntimeTargets(document) {
+  const issues = [];
+  const targets = document?.targets;
+  if (!Array.isArray(targets)) return ['Runtime target catalog must contain a targets array.'];
+  const azureTargets = targets.filter((target) => target?.runtime === 'azure');
+  if (azureTargets.length === 0) return ['Runtime target catalog must define at least one Azure target.'];
+  for (const target of azureTargets) {
+    if (target.verificationMode !== 'azure' || target.browserMode !== 'azure') issues.push(`${target.key}: Azure target must use Azure verification and browser modes.`);
+    for (const field of ['baseUrl', 'apiBaseUrl', 'publicUiBaseUrl', 'publicApiBaseUrl']) {
+      const value = target[field];
+      let url;
+      try { url = new URL(value); } catch { issues.push(`${target.key}: ${field} must be an absolute HTTPS URL.`); continue; }
+      if (url.protocol !== 'https:') issues.push(`${target.key}: ${field} must use HTTPS.`);
+      if (/^(localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i.test(url.hostname) || /(?:azurite|emulator|host\.docker\.internal)/i.test(url.hostname)) {
+        issues.push(`${target.key}: ${field} must not point to a local or emulator host.`);
+      }
+      if (/(?:azurecontainerapps\.io|azurewebsites\.net)$/i.test(url.hostname) && target.allowGeneratedAzureUrlFallback !== true) {
+        issues.push(`${target.key}: generated Azure hostname in ${field} requires explicit diagnostic fallback policy.`);
+      }
+    }
+  }
+  return issues;
+}
+
+export function auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles, runtimeTargets }) {
   const failures = [];
   const blocked = [];
   if (!/TargetFramework>net8\.0<\/TargetFramework>/.test(functionsProject)) failures.push('Functions project must target the validated .NET 8 isolated-worker runtime.');
@@ -46,13 +70,22 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, mai
   if (!/az functionapp function list/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify Functions host indexing after package deployment.');
   if (/:phase10\b|:latest\b/.test(infraDeployWorkflow) || !/@sha256:\[0-9a-f\]\{64\}/.test(infraDeployWorkflow)) failures.push('Reusable deployment must reject mutable image tags and require digest-qualified references.');
   if (!/candidateSha/.test(orchestratorWorkflow) || !/releaseRunId/.test(orchestratorWorkflow) || !/approvedParameterIdentity/.test(orchestratorWorkflow)) failures.push('Orchestrator must require exact candidate, producer run, and reviewed parameter identity.');
+  if (!/deploymentWorkflowSha/.test(orchestratorWorkflow) || !/git merge-base --is-ancestor/.test(orchestratorWorkflow) || !/DEPLOYMENT_WORKFLOW_SHA/.test(infraDeployWorkflow)) {
+    failures.push('Release promotion must preserve a distinct artifact source SHA and verify its ancestry to the exact deployment workflow revision.');
+  }
+  failures.push(...validateAzureRuntimeTargets(runtimeTargets));
+  if (!/ref:\s*\$\{\{\s*github\.sha\s*\}\}/.test(orchestratorWorkflow)
+    || !/source_hosted_ci_artifact_name/.test(orchestratorWorkflow)
+    || !/deploymentWorkflowSha:\s*\$\{\{\s*github\.sha\s*\}\}/.test(orchestratorWorkflow)) {
+    failures.push('Promotion must validate source and deployment CI evidence while checking out and forwarding the exact deployment workflow revision.');
+  }
 
   return { status: failures.length ? 'FAIL' : blocked.length ? 'BLOCKED' : 'PASS', failures, blocked };
 }
 
 async function main() {
   const root = process.cwd();
-  const [functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters] = await Promise.all([
+  const [functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile(path.join(root, 'XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj'), 'utf8'),
     readFile(path.join(root, 'infra/modules/functions.bicep'), 'utf8'),
     readFile(path.join(root, 'infra/main.phase10.bicep'), 'utf8'),
@@ -62,8 +95,9 @@ async function main() {
     readFile(path.join(root, 'infra/parameters/phase10-dev.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'infra/parameters/phase10-staging.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'infra/parameters/phase10-prod.json'), 'utf8').then(JSON.parse),
+    readFile(path.join(root, 'automation/config/runtime-targets.json'), 'utf8').then(JSON.parse),
   ]);
-  const result = auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters } });
+  const result = auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   for (const failure of result.failures) console.error(`[FAIL] ${failure}`);
   for (const reason of result.blocked) console.error(`[BLOCKED] ${reason}`);
   if (result.status === 'PASS') console.log('[PASS] Azure deployment contract is structurally ready for authorized live preflight.');
