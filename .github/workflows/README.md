@@ -31,12 +31,12 @@ Use this rule before removing anything:
 | Workflow | Category | Direct Click? | Purpose |
 |---|---|---|---|
 | `00 Azure Platform Foundation` | Bootstrap | Yes | One-time persistent ACR registry, pull identity, and Azure resource-provider registration for the shared platform used by dev, staging, and prod |
-| `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup for the selected environment and prints the operator summary |
+| `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that verifies a separately produced immutable release, then validates/deploys it or performs selected cleanup |
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `04 Phase 10 Azure Payment Matrix` | Validation | Yes, after transport smoke | Runs the all-tenant Azure browser/payment matrix against live Phase 10 Container Apps URLs and uploads one run packet |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Do not dispatch for acceptance | Retained workflow; hosted execution cannot satisfy the local Docker safety guard. The accepted check is the manual local Docker hook under DW-028 Option A. |
-| `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
+| `build-phase10-images.yml` | Release producer | Yes, separately approval-gated | Builds six service images and the Functions package from one exact SHA; publishes a manifest with image digests |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
 | `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for ACR image tags, historical GHCR cleanup-only package versions, and workflow artifacts |
 | `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
@@ -49,7 +49,8 @@ Use the numbered workflows in this order:
 | Order | Workflow | Use it for |
 |---|---|---|
 | `00` | `00 Azure Platform Foundation` | Create or refresh the persistent shared platform ACR, pull identity, and Azure resource-provider registration used by dev, staging, and prod |
-| `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the selected Azure Phase 10 environment |
+| Release | `Build Phase 10 Immutable Release` | Separately publish an immutable image/package release for a reviewed source SHA; this pushes to ACR and requires separate approval |
+| `01` | `01 Phase 10 Azure Deploy Orchestrator` | Verify a selected release and hosted evidence, then dry-run/deploy it or select cleanup for the Azure Phase 10 environment |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
 | `04` | `04 Phase 10 Azure Payment Matrix` | Prove all-tenant browser/payment E2E against the live Azure Container Apps URLs |
@@ -60,7 +61,7 @@ Under DW-028 Option A, do not dispatch workflow `99` as an acceptance gate: the 
 
 ### Hosted foundation CI (no PR required)
 
-`.github/workflows/ci.yml` runs the same hosted foundation validation for direct pushes to `dev`, `staging`, and `main`, manual `workflow_dispatch`, and pull requests. It intentionally has no path filters so a newly added service or configuration path cannot accidentally bypass validation. Use the GitHub Actions **CI — Build and Contract Validation (No Deployment)** workflow for manual validation; choose the branch or tag whose commit you intend to validate. Its push/manual behavior is prospective until this implementation is reviewed and observed in hosted CI.
+`.github/workflows/ci.yml` runs the same hosted foundation validation for direct pushes to `dev`, `staging`, and `main`, manual `workflow_dispatch`, and pull requests. It intentionally has no path filters so a newly added service or configuration path cannot accidentally bypass validation. Push-triggered behavior was observed on exact candidate `4d929805eed1227285cd02a04fd7873ca95210c9`: CI [43135302113](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43135302113), Documentation Links [43135302248](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43135302248), AI Customization [43135302118](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43135302118), and Drift Scanner [43135302220](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43135302220) passed. Manual dispatch was not separately exercised. These historical checks do not validate the current uncommitted changes; rerun applicable hosted checks on their committed candidate before relying on them.
 
 The workflow is non-deploying and read-only (`contents: read`). It does not start Docker, access databases or provider credentials, publish images, or log in to Azure. Integration/browser/payment acceptance remains outside this hosted profile; workflow `99` remains local-only under DW-028.
 
@@ -134,13 +135,13 @@ or the VS Code task:
 | `validate-prompts.yml` | Prompt file governance and secret-pattern checks | Keep | Yes, if changing the validator path |
 | `azure-bootstrap.yml` | Legacy App Service bootstrap/deploy/cleanup | Keep for legacy compatibility | Yes |
 | `azure-initial-setup.yml` | One-time GitHub App, OIDC, and secrets bootstrap | Keep | Only if refactoring initial setup |
-| `build-phase10-images.yml` | Builds/pushes Phase 10 container images to ACR through the wrapper | Keep as internal reusable workflow | Yes, if changing image contracts |
+| `build-phase10-images.yml` | Builds/pushes six Phase 10 images and creates the Functions package/immutable release manifest; manual and reusable entrypoint | Keep | Yes, if changing release/image contracts |
 | `ci.yml` | Main PR build/test/frontend validation gate | Keep | Yes, if changing CI flow |
 | `configure-github-secrets.yml` | Secret configuration and troubleshooting support | Keep | Yes, if changing setup flow |
 | `Copilot cloud agent` | Not a workflow file in this repo | N/A | N/A |
 | `drift-check.yml` | Broad repository drift scanning | Keep unless you intentionally drop drift scanning | Yes |
 | `infra-deploy.yml` | Active Phase 10 Azure Container Apps deployment | Keep as internal reusable workflow | Yes, if changing IaC flow |
-| `phase10-deploy-orchestrator.yml` | Manual Phase 10 wrapper for build + deploy or cleanup | Keep as the only direct Phase 10 entrypoint | Yes, if changing wrapper flow |
+| `phase10-deploy-orchestrator.yml` | Manual wrapper that verifies a separately produced immutable release, then deploys/validates or cleans up | Keep as the direct infrastructure entrypoint | Yes, if changing wrapper flow |
 | `phase10-azure-runtime-smoke.yml` | Manual Phase 10 runtime/API/UI smoke after deploy | Keep as the direct post-deploy runtime proof | Yes, if changing gateway/API/UI runtime contracts |
 | `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
 | `phase10-docker-dev-http-e2e.yml` | Retained hosted workflow; excluded from acceptance under DW-028 Option A; manual local hook is the Docker acceptance path | Keep | Yes, if changing hook or log paths |
@@ -159,17 +160,17 @@ This repo uses a small set of primary operational workflows, with additional sup
 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
-| `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
+| `ci.yml` | Pushes to dev/staging/main, manual dispatch, and pull requests | Validation only | Hosted contract/build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `phase10-platform-foundation.yml` | Manual | Platform foundation | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Persistent ACR and pull identity bootstrap for the active Phase 10 path |
 | `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
-| `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Wrapper that drives the Phase 10 image build plus infra deploy/cleanup flows |
+| `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Verifies a separately produced immutable release and hosted evidence before infrastructure preflight/deploy/cleanup |
 | `phase10-azure-runtime-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Gateway/API/UI runtime smoke and writes a pass/fail operator summary |
 | `phase10-azure-transport-smoke.yml` | Manual after deploy | dev/staging/prod | Runs broker-level Service Bus publish, consume, DLQ forwarding, and controlled replay checks; deployed Function invocation requires separate Phase 10.4 proof |
 | `phase10-platform-foundation.yml` | Manual platform bootstrap | shared foundation | Persistent ACR and pull identity setup for the active Phase 10 path |
 | `infra-deploy.yml` | Reusable internal workflow | dev/staging/prod | Internal Phase 10 Bicep deployment and cleanup workflow with alias planning and guarded alias binding |
-| `build-phase10-images.yml` | Wrapper-called internal workflow | ACR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
+| `build-phase10-images.yml` | Separate release-producing workflow (manual/reusable) | ACR | Builds and pushes six service images, packages Functions, and publishes an exact-run immutable release artifact |
 | `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
@@ -215,8 +216,8 @@ For the local HTTP launcher, the same operator idea applies:
 | `ci.yml` | PR gate for build and unit/architecture test validation |
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
 | `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
-| `build-phase10-images.yml` | Phase 10 container image build/push internal reusable workflow for ACR |
-| `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that drives build + deploy or cleanup |
+| `build-phase10-images.yml` | Separate manual/reusable ACR release producer for six service images plus the Functions package |
+| `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that verifies a selected release, then deploys/validates or cleans up |
 | `phase10-azure-runtime-smoke.yml` | Phase 10 post-deploy Gateway/API/UI runtime validation |
 | `phase10-azure-transport-smoke.yml` | Phase 10 post-deploy broker publish/consume/DLQ/controlled-replay validation; not deployed Function proof |
 | `phase10-docker-dev-http-e2e.yml` | Retained hosted workflow; excluded from acceptance under DW-028 Option A. The manual local hook is the Docker acceptance path. |
@@ -243,23 +244,24 @@ For the local HTTP launcher, the same operator idea applies:
 | `staging` | orderprocessing-api-xyapp-stg | orderprocessing-ui-xyapp-stg |
 | `main` | orderprocessing-api-xyapp-prod | orderprocessing-ui-xyapp-prod |
 
-The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility, while Phase 10 infra publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and the wrapper calls `build-phase10-images.yml` to publish distinct gateway/orders/inventory/notifications/UI runtime images to ACR for those apps.
+The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility. Phase 10 deploys Container Apps plus a Function App from Bicep. Image/package publication is a separate ACR-mutating release workflow; the deployment orchestrator consumes only its selected manifest and digest references.
 
 For Phase 10, the expected click path is:
 
 1. Open `01 Phase 10 Azure Deploy Orchestrator`.
-2. Run the wrapper manually for `dev`, `staging`, or `prod`.
-3. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally.
-4. Run `02 Phase 10 Azure Runtime Smoke` for the same environment.
-5. Run `03 Phase 10 Azure Transport Smoke` for the same environment.
-6. Confirm the approved manual local Docker acceptance and applicable hosted checks are green on the release-candidate SHA. Do not dispatch workflow `99` for hosted parity under DW-028 Option A.
-7. Use `cleanupInfra=true` when you want teardown instead of deployment.
+2. After the required approval, run the immutable release producer for the exact reviewed candidate SHA and selected GitHub environment. It publishes to ACR; this is not a read-only validation.
+3. Capture its run ID/artifact name, image digests, Functions package hash, and reviewed deployment-parameter identity.
+4. Run the wrapper for the target environment, referencing that exact release and candidate. It verifies hosted CI/evidence and performs read-only Azure preflight before routing to what-if or deployment.
+5. Review what-if output before any real deployment. Cleanup remains a separate destructive mode and is not part of normal deployment.
+6. Run `02` runtime smoke, `03` transport/Functions proof, then `04` assigned-provider payment acceptance, each with its own approval and evidence.
+7. Confirm the accepted local Docker check and applicable hosted checks for the release candidate. Do not dispatch workflow `99` for hosted parity under DW-028 Option A.
 
 In plain terms:
 
 | Number | What it means |
 |---|---|
-| `01` | Azure delivery entrypoint. Use it for deploy, dry run, or cleanup. |
+| Release | Produces the approved digest-pinned images and Functions package in a run-owned manifest; publishing mutates ACR. |
+| `01` | Verifies the selected release and target parameters, then runs Azure preflight and deploy/what-if/cleanup routing. |
 | `02` | Runtime proof. Use it after Azure deploy to verify gateway/API/UI behavior. |
 | `03` | Broker transport proof. Use it after runtime smoke to verify Service Bus fan-out, DLQ, and controlled replay; verify deployed Function invocation separately in Phase 10.4. |
 | `99` | The equivalent Docker check is manual/local under DW-028 Option A. Hosted workflow parity is excluded; keep its Docker safety guard unchanged. |
@@ -330,7 +332,7 @@ Workflows trigger automatically based on **what code changed**:
 # Archived legacy App Service bootstrap surface only
 gh workflow run azure-bootstrap.yml --ref dev
 
-# Change a Phase 10 service host and push → validate through PR/CI, then use the Phase 10 wrapper for image build + deploy
+# Change a Phase 10 service host and push → hosted validation runs. After release approval, publish immutable images/package separately, then use the wrapper with that exact release.
 git add XYDataLabs.OrderProcessingSystem.Orders.API/
 git commit -m "feat: Update Orders host"
 git push origin dev  # CI validates; run 01 Phase 10 Azure Deploy Orchestrator to publish the ACR image and deploy

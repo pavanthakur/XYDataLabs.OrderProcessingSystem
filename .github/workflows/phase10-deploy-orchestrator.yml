@@ -38,27 +38,183 @@ on:
       dryRun:
         description: 'Dry run (what-if only)'
         required: true
-        default: false
+        default: true
         type: boolean
       cleanupInfra:
         description: 'Destructive cleanup (tears down the environment-scoped resource group)'
         required: true
         default: false
         type: boolean
+      candidateSha:
+        description: 'Full source SHA already validated by hosted CI and immutable release build'
+        required: false
+        default: ''
+        type: string
+      releaseRunId:
+        description: 'Exact successful Build Phase 10 Immutable Release workflow run ID'
+        required: false
+        default: ''
+        type: string
+      releaseArtifactName:
+        description: 'Exact release artifact name from the selected producer run'
+        required: false
+        default: ''
+        type: string
+      approvedParameterIdentity:
+        description: 'Reviewed SHA-256 from scripts/phase10-deployment-identity.mjs for these exact parameters'
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 jobs:
+  verify_release:
+    name: Verify candidate, hosted CI and immutable release evidence
+    if: ${{ !inputs.cleanupInfra }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sourceSha: ${{ steps.manifest.outputs.source_sha }}
+      releaseRunAttempt: ${{ steps.provenance.outputs.release_run_attempt }}
+      releaseArtifactName: ${{ inputs.releaseArtifactName }}
+      hostedCiRunId: ${{ steps.provenance.outputs.hosted_ci_run_id }}
+      hostedCiRunAttempt: ${{ steps.provenance.outputs.hosted_ci_run_attempt }}
+      hostedCiArtifactName: ${{ steps.provenance.outputs.hosted_ci_artifact_name }}
+      gatewayImage: ${{ steps.manifest.outputs.gateway_image }}
+      ordersImage: ${{ steps.manifest.outputs.orders_image }}
+      paymentsImage: ${{ steps.manifest.outputs.payments_image }}
+      inventoryImage: ${{ steps.manifest.outputs.inventory_image }}
+      notificationsImage: ${{ steps.manifest.outputs.notifications_image }}
+      uiImage: ${{ steps.manifest.outputs.ui_image }}
+      functionsPackageSha256: ${{ steps.manifest.outputs.functions_package_sha256 }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidateSha || github.sha }}
+          fetch-depth: 1
+
+      - name: Require orchestrator workflow and candidate to share one exact revision
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "candidateSha must be a full commit SHA." >&2; exit 1; }
+          [[ "$CANDIDATE_SHA" == "$WORKFLOW_SHA" ]] || { echo "Dispatch the orchestrator from the same commit selected as candidateSha." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$CANDIDATE_SHA" ]] || { echo "The orchestrator checked-out revision does not match candidateSha." >&2; exit 1; }
+
+      - name: Verify exact producer run, artifact and hosted CI result
+        id: provenance
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          RELEASE_RUN_ID: ${{ inputs.releaseRunId }}
+          RELEASE_ARTIFACT_NAME: ${{ inputs.releaseArtifactName }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: node scripts/phase10-release-run.mjs verify
+
+      - name: Download exact-run hosted CI evidence
+        uses: actions/download-artifact@v6
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.provenance.outputs.hosted_ci_run_id }}
+          name: ${{ steps.provenance.outputs.hosted_ci_artifact_name }}
+          github-token: ${{ github.token }}
+          path: hosted-ci-evidence
+
+      - name: Reconcile hosted CI evidence contents to candidate
+        shell: bash
+        env:
+          EVIDENCE_DIRECTORY: hosted-ci-evidence
+          HOSTED_CI_RUN_ID: ${{ steps.provenance.outputs.hosted_ci_run_id }}
+          HOSTED_CI_RUN_ATTEMPT: ${{ steps.provenance.outputs.hosted_ci_run_attempt }}
+          CANDIDATE_SHA: ${{ inputs.candidateSha }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: node scripts/verify-phase10-hosted-ci-evidence.mjs
+
+      - name: Download selected run artifact only
+        uses: actions/download-artifact@v6
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.releaseRunId }}
+          name: ${{ inputs.releaseArtifactName }}
+          github-token: ${{ github.token }}
+          path: release
+
+      - name: Verify immutable manifest, package hash and reviewed parameter identity
+        id: manifest
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.candidateSha }}
+          RELEASE_RUN_ID: ${{ inputs.releaseRunId }}
+          RELEASE_RUN_ATTEMPT: ${{ steps.provenance.outputs.release_run_attempt }}
+          RELEASE_ARTIFACT_NAME: ${{ inputs.releaseArtifactName }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          TARGET_LOCATION: ${{ inputs.location }}
+          PUBLIC_DOMAIN: ${{ inputs.publicDomain }}
+          BIND_ALIASES: ${{ inputs.bindAliases }}
+          ALIAS_MODE: ${{ inputs.aliasMode }}
+          CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
+          APPROVED_PARAMETER_IDENTITY: ${{ inputs.approvedParameterIdentity }}
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_PARAMETER_IDENTITY" =~ ^[0-9a-f]{64}$ ]] || { echo "A reviewed 64-character parameter identity is required." >&2; exit 1; }
+          node scripts/phase10-release-manifest.mjs validate \
+            --repository "${{ github.repository }}" \
+            --sourceSha "$SOURCE_SHA" \
+            --runId "$RELEASE_RUN_ID" \
+            --runAttempt "$RELEASE_RUN_ATTEMPT" \
+            --functionsZip release/functions.zip \
+            --manifest release/release-manifest.json
+          unzip -Z1 release/functions.zip > "$RUNNER_TEMP/functions-zip-entries.txt"
+          node scripts/phase10-function-package.mjs entries "$RUNNER_TEMP/functions-zip-entries.txt"
+          identity="$(node scripts/phase10-deployment-identity.mjs \
+            --repoRoot . \
+            --environment "$TARGET_ENVIRONMENT" \
+            --location "$TARGET_LOCATION" \
+            --publicDomain "$PUBLIC_DOMAIN" \
+            --bindAliases "$BIND_ALIASES" \
+            --aliasMode "$ALIAS_MODE" \
+            --cleanupInfra "$CLEANUP_INFRA")"
+          calculated="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.identitySha256)' "$identity")"
+          [[ "$calculated" == "$APPROVED_PARAMETER_IDENTITY" ]] || { echo "Approved deployment parameter identity does not match the selected inputs." >&2; exit 1; }
+          node -e 'const fs=require("node:fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const keys={gateway:"gateway_image",orders:"orders_image",payments:"payments_image",inventory:"inventory_image",notifications:"notifications_image",ui:"ui_image"}; let out=`source_sha=${m.sourceSha}\nfunctions_package_sha256=${m.functionsPackage.sha256}\n`; for(const [name,key] of Object.entries(keys)){const image=m.images.find(x=>x.name===name); if(!image) throw new Error(`missing ${name}`); out+=`${key}=${image.image}\n`;} fs.appendFileSync(process.env.GITHUB_OUTPUT,out);' release/release-manifest.json
+
+      - name: Fail closed on unresolved Azure runtime prerequisites
+        run: node scripts/phase10-azure-static-preflight.mjs
+
   preflight:
     name: Phase 10 Preflight
-    if: ${{ !inputs.dryRun && !inputs.cleanupInfra }}
+    if: ${{ !inputs.cleanupInfra }}
+    needs: [verify_release]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Validate configured identity and public origins before Azure login
+        shell: bash
+        env:
+          IDENTITY_ENVIRONMENT: ${{ inputs.environment }}
+          ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
+          ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
+          ENTRA_SPA_CLIENT_ID: ${{ vars.ENTRA_SPA_CLIENT_ID }}
+          IDENTITY_PUBLIC_WEB_ORIGIN: ${{ vars.IDENTITY_PUBLIC_WEB_ORIGIN }}
+          ENTRA_TENANT_CLAIM_TYPE: ${{ vars.ENTRA_TENANT_CLAIM_TYPE }}
+          ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
+          ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
+          IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
+        run: node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
 
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -67,35 +223,17 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
-      - name: Check Phase 10 prerequisites
+      - name: Check subscription, directory, RBAC and provider registrations
         shell: bash
+        env:
+          AZURE_EXPECTED_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+          AZURE_EXPECTED_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
-          if [ "${{ inputs.environment }}" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="${{ inputs.environment }}"; fi
-          RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
-          KV_NAME="kv-orderprocessing-${ENV_SUFFIX}"
-          echo "Checking Phase 10 prerequisites for ${ENV_SUFFIX}..." 
-          echo "## ✅ Phase 10 Preflight" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Azure login | validated by azure/login |" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment suffix | ${ENV_SUFFIX} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Resource Group | will be created by Azure deployment if absent |" >> $GITHUB_STEP_SUMMARY
-          echo "| Key Vault | will be created by Azure deployment if absent |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Phase 10 preflight completed. Clean environments are allowed to continue into Azure deployment." >> $GITHUB_STEP_SUMMARY
-
-  build_images:
-    name: Build Phase 10 Images
-    if: ${{ !inputs.dryRun && !inputs.cleanupInfra }}
-    needs: [preflight, resolve_platform]
-    uses: ./.github/workflows/build-phase10-images.yml
-    with:
-      imageTag: phase10
-      registryLoginServer: ${{ needs.resolve_platform.outputs.acrLoginServer }}
-      registryName: ${{ needs.resolve_platform.outputs.acrName }}
-      environment: ${{ inputs.environment }}
-    secrets: inherit
+          set -euo pipefail
+          if [ "$TARGET_ENVIRONMENT" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="$TARGET_ENVIRONMENT"; fi
+          export AZURE_TARGET_RESOURCE_GROUP="rg-orderprocessing-${ENV_SUFFIX}"
+          node scripts/phase10-azure-preflight.mjs
 
   resolve_platform:
     name: Resolve Phase 10 Platform Foundation
@@ -200,7 +338,7 @@ jobs:
   route_child_workflow:
     name: Phase 10 Routed Child Workflow
     runs-on: ubuntu-latest
-    needs: [preflight, resolve_platform, build_images]
+    needs: [verify_release, preflight, resolve_platform]
     if: always()
     outputs:
       should_call: ${{ steps.route.outputs.should_call }}
@@ -215,24 +353,26 @@ jobs:
           ROUTE_MODE="blocked"
           ROUTE_REASON="unknown"
 
-          if [ "${{ inputs.dryRun }}" = "true" ]; then
-            SHOULD_CALL="true"
-            ROUTE_MODE="validate"
-            ROUTE_REASON="dry-run validation path"
-          elif [ "${{ inputs.cleanupInfra }}" = "true" ]; then
+          if [ "${{ inputs.cleanupInfra }}" = "true" ]; then
             SHOULD_CALL="true"
             ROUTE_MODE="cleanup"
             ROUTE_REASON="destructive cleanup path"
-          elif [ "${{ needs.preflight.result }}" = "success" ] && [ "${{ needs.resolve_platform.result }}" = "success" ] && [ "${{ needs.build_images.result }}" = "success" ]; then
+          elif [ "${{ inputs.dryRun }}" = "true" ] && [ "${{ needs.verify_release.result }}" = "success" ] && [ "${{ needs.preflight.result }}" = "success" ] && [ "${{ needs.resolve_platform.result }}" = "success" ]; then
+            SHOULD_CALL="true"
+            ROUTE_MODE="validate"
+            ROUTE_REASON="dry-run what-if path using prebuilt immutable release"
+          elif [ "${{ inputs.dryRun }}" = "true" ]; then
+            ROUTE_REASON="dry-run blocked by candidate, release, or preflight validation"
+          elif [ "${{ needs.verify_release.result }}" = "success" ] && [ "${{ needs.preflight.result }}" = "success" ] && [ "${{ needs.resolve_platform.result }}" = "success" ]; then
             SHOULD_CALL="true"
             ROUTE_MODE="deploy"
-            ROUTE_REASON="preflight, platform foundation, and image build completed"
+            ROUTE_REASON="exact-SHA hosted checks, release artifact, and platform preflight completed"
+          elif [ "${{ needs.verify_release.result }}" != "success" ]; then
+            ROUTE_REASON="blocked by release evidence result: ${{ needs.verify_release.result }}"
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
             ROUTE_REASON="blocked by preflight result: ${{ needs.preflight.result }}"
           elif [ "${{ needs.resolve_platform.result }}" != "success" ]; then
             ROUTE_REASON="blocked by platform foundation result: ${{ needs.resolve_platform.result }}"
-          else
-            ROUTE_REASON="blocked by image build result: ${{ needs.build_images.result }}"
           fi
 
           {
@@ -253,7 +393,7 @@ jobs:
 
   deploy_or_cleanup:
     name: Deploy Azure Phase 10 Resources (Internal)
-    needs: [resolve_platform, route_child_workflow]
+    needs: [verify_release, resolve_platform, route_child_workflow]
     if: ${{ always() && needs.route_child_workflow.outputs.should_call == 'true' }}
     uses: ./.github/workflows/infra-deploy.yml
     with:
@@ -264,21 +404,27 @@ jobs:
       aliasMode: ${{ inputs.aliasMode }}
       dryRun: ${{ inputs.dryRun }}
       cleanupInfra: ${{ inputs.cleanupInfra }}
+      candidateSha: ${{ inputs.candidateSha }}
+      releaseRunId: ${{ inputs.releaseRunId }}
+      releaseRunAttempt: ${{ needs.verify_release.outputs.releaseRunAttempt }}
+      releaseArtifactName: ${{ inputs.releaseArtifactName }}
+      functionsPackageSha256: ${{ needs.verify_release.outputs.functionsPackageSha256 }}
+      approvedParameterIdentity: ${{ inputs.approvedParameterIdentity }}
       acrName: ${{ needs.resolve_platform.outputs.acrName }}
       acrLoginServer: ${{ needs.resolve_platform.outputs.acrLoginServer }}
       acrPullIdentityId: ${{ needs.resolve_platform.outputs.acrPullIdentityId }}
-      gatewayImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-gateway:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
-      ordersImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-orders:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
-      paymentsImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-payments:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
-      inventoryImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-inventory:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
-      notificationsImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-notifications:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
-      uiImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-ui:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
+      gatewayImage: ${{ needs.verify_release.outputs.gatewayImage }}
+      ordersImage: ${{ needs.verify_release.outputs.ordersImage }}
+      paymentsImage: ${{ needs.verify_release.outputs.paymentsImage }}
+      inventoryImage: ${{ needs.verify_release.outputs.inventoryImage }}
+      notificationsImage: ${{ needs.verify_release.outputs.notificationsImage }}
+      uiImage: ${{ needs.verify_release.outputs.uiImage }}
     secrets: inherit
 
   gate_diagnostic:
     name: Phase 10 Routed Gate Diagnostic
     runs-on: ubuntu-latest
-    needs: [preflight, resolve_platform, build_images, route_child_workflow, deploy_or_cleanup]
+    needs: [verify_release, preflight, resolve_platform, route_child_workflow, deploy_or_cleanup]
     if: always()
     steps:
       - name: Write gate diagnostic
@@ -290,9 +436,9 @@ jobs:
           echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| verify_release | ${{ needs.verify_release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| preflight | ${{ needs.preflight.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| resolve_platform | ${{ needs.resolve_platform.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| build_images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| route_child_workflow | ${{ needs.route_child_workflow.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| route_mode | ${{ needs.route_child_workflow.outputs.route_mode }} |" >> $GITHUB_STEP_SUMMARY
           echo "| route_reason | ${{ needs.route_child_workflow.outputs.route_reason }} |" >> $GITHUB_STEP_SUMMARY
@@ -302,12 +448,12 @@ jobs:
             echo "| decision | dry-run path, deploy intentionally skipped |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ inputs.cleanupInfra }}" = "true" ]; then
             echo "| decision | cleanup path, deploy intentionally replaced by teardown |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.verify_release.result }}" != "success" ]; then
+            echo "| decision | blocked before Azure login by candidate/release evidence |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
-            echo "| decision | blocked before build/deploy by preflight |" >> $GITHUB_STEP_SUMMARY
+            echo "| decision | blocked before deployment by preflight |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.resolve_platform.result }}" != "success" ]; then
-            echo "| decision | blocked before image build by platform foundation resolution |" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.build_images.result }}" != "success" ]; then
-            echo "| decision | blocked before deploy by image build |" >> $GITHUB_STEP_SUMMARY
+            echo "| decision | blocked before deployment by platform foundation resolution |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.route_child_workflow.result }}" != "success" ]; then
             echo "| decision | routed child workflow did not authorize child workflow invocation |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.deploy_or_cleanup.result }}" = "success" ]; then
@@ -319,7 +465,7 @@ jobs:
   summary:
     name: Phase 10 Run Summary
     runs-on: ubuntu-latest
-    needs: [preflight, resolve_platform, build_images, route_child_workflow, deploy_or_cleanup, gate_diagnostic]
+    needs: [verify_release, preflight, resolve_platform, route_child_workflow, deploy_or_cleanup, gate_diagnostic]
     if: always()
     steps:
       - name: Write summary
@@ -342,8 +488,8 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 Preflight | ${{ needs.preflight.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Candidate/release evidence | ${{ needs.verify_release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Resolve Phase 10 Platform Foundation | ${{ needs.resolve_platform.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build Phase 10 Images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 Routed Child Workflow | ${{ needs.route_child_workflow.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy Azure Phase 10 Resources (Internal) | ${{ needs.deploy_or_cleanup.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Summary | success |" >> $GITHUB_STEP_SUMMARY
@@ -356,12 +502,12 @@ jobs:
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
             echo "| Route Gate | blocked by Phase 10 preflight failure |" >> $GITHUB_STEP_SUMMARY
             echo "| Route Status Note | fix preflight before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.verify_release.result }}" != "success" ]; then
+            echo "| Route Gate | blocked by candidate, hosted CI, or immutable release evidence |" >> $GITHUB_STEP_SUMMARY
+            echo "| Route Status Note | select an exact successful candidate and release artifact before Azure login |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.resolve_platform.result }}" != "success" ]; then
             echo "| Route Gate | blocked by platform foundation resolution failure |" >> $GITHUB_STEP_SUMMARY
-            echo "| Route Status Note | fix the platform foundation before expecting image build or Azure deployment |" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.build_images.result }}" != "success" ]; then
-            echo "| Route Gate | blocked by image build failure |" >> $GITHUB_STEP_SUMMARY
-            echo "| Route Status Note | fix the image build before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
+            echo "| Route Status Note | fix the platform foundation before Azure deployment |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.route_child_workflow.result }}" != "success" ]; then
             echo "| Route Gate | routed child workflow did not authorize the child workflow call |" >> $GITHUB_STEP_SUMMARY
             echo "| Route Status Note | inspect the routed child workflow summary for the call mode and reason |" >> $GITHUB_STEP_SUMMARY
@@ -373,9 +519,9 @@ jobs:
             echo "| Route Status Note | Azure deployment should have started or completed normally |" >> $GITHUB_STEP_SUMMARY
           fi
           if [ "${{ inputs.dryRun }}" = "true" ] || [ "${{ inputs.cleanupInfra }}" = "true" ]; then
-            echo "| Build Skipped | Yes |" >> $GITHUB_STEP_SUMMARY
+            echo "| Registry publication | Skipped; deploy consumes a previously approved immutable release artifact |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Build Skipped | No |" >> $GITHUB_STEP_SUMMARY
+            echo "| Registry publication | Skipped; deploy consumes a previously approved immutable release artifact |" >> $GITHUB_STEP_SUMMARY
           fi
           echo "| Cleanup Requested | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -415,7 +561,7 @@ jobs:
           echo "| Azure Generated UI URL | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Child Summary Links" >> $GITHUB_STEP_SUMMARY
-          echo "- Open the Build Phase 10 Images job for the per-service image logs." >> $GITHUB_STEP_SUMMARY
+          echo "- Open release workflow run ${{ inputs.releaseRunId }} for the per-service image and Functions package evidence." >> $GITHUB_STEP_SUMMARY
           echo "- Open the Phase 10 Routed Child Workflow job to see whether the reusable workflow call was authorized." >> $GITHUB_STEP_SUMMARY
           echo "- Open the Deploy Azure Phase 10 Resources (Internal) job for the Azure deployment details or teardown trace." >> $GITHUB_STEP_SUMMARY
           echo "- The detailed outputs remain in the nested child workflow summaries below this wrapper." >> $GITHUB_STEP_SUMMARY
@@ -454,7 +600,7 @@ jobs:
           echo "| OIDC + GitHub Secrets | ✅ Prerequisite | Azure Initial Setup workflow |" >> $GITHUB_STEP_SUMMARY
           echo "| Platform foundation RG + persistent ACR + pull identity | ✅ Yes | 00 Azure Platform Foundation |" >> $GITHUB_STEP_SUMMARY
           echo "| SQL Server + Redis baseline | ✅ Yes | Automatic Phase 10 deploy path |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 10 service images | ✅ Yes | build-phase10-images.yml publishes to ACR from the wrapper run |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 10 service images | No | A separately approved immutable release build must exist before the wrapper consumes it |" >> $GITHUB_STEP_SUMMARY
           echo "| Resource Group + Service Bus + Log Analytics + App Insights + Container Apps + Function App + Key Vault | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🗑️ What Can Be Safely Deleted and Re-Created" >> $GITHUB_STEP_SUMMARY

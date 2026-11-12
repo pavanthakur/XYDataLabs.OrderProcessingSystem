@@ -8,14 +8,15 @@ The `infra-deploy.yml` workflow deploys the active Azure infrastructure surface 
 
 ## Phase 10 Ownership
 
-Use `phase10-deploy-orchestrator.yml` as the bootstrap-style single lifecycle owner for the Azure delivery path:
+Use `phase10-deploy-orchestrator.yml` as the approval-gated lifecycle entrypoint for the Azure delivery path. It no longer builds images implicitly during deployment: a separately completed immutable release run must be selected and verified first.
 
 - one wrapper for humans to click
-- one end-to-end sequence for deploy or cleanup
-- internal reusable workflows for image build and infra execution
+- one operator entrypoint for a selected immutable release and target environment
+- a separately authorized image/package publication workflow
+- an internal reusable workflow for infrastructure execution
 - `00 Azure Platform Foundation` owns the persistent ACR registry and pull identity
 
-The active wrapper may own both the Phase 10 runtime stack and any shared foundation resources we intentionally keep in scope:
+The wrapper owns the selected environment-scoped application lifecycle. Persistent platform ACR creation/provider registration is separate and owned by workflow `00`:
 
 - `dryRun=true` runs what-if only
 - `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack, creating the environment-scoped Azure resources when they are missing
@@ -30,17 +31,18 @@ The workflow summary surfaces the resources that matter for runtime and cleanup:
 - Container Apps environment
 - Gateway / Orders / Inventory / Notifications / UI Container Apps
 - Function App
+- dedicated Functions host Storage account and managed identity
 - Key Vault
 
-`00 Azure Platform Foundation` registers the Azure resource providers used by the Phase 10 platform and app stacks when `Dry Run=false`. The reusable app deploy workflow only verifies that those providers are already registered, so normal `01 Phase 10 Azure Deploy Orchestrator` runs stay faster and fail with a clear "run 00 first" message on a clean subscription.
+`00 Azure Platform Foundation` registers the Azure resource providers used by the Phase 10 platform and app stacks when `Dry Run=false`. The reusable app deploy workflow verifies that required providers are already registered. The orchestrator also verifies the configured subscription/directory, target-scope `roleAssignments/write`, and provider registration before it can route to deploy. This is read-only preflight: it never grants permissions, registers providers, creates a resource group, or deploys resources.
 
 ### Workflow Ownership Table
 
 | workflow | click target | owns RG creation | builds images | deploys app | cleanup | current or legacy |
 |---|---|---:|---:|---:|---:|---|
 | `phase10-platform-foundation.yml` | yes | yes, platform RG only | no | no | no | current |
-| `phase10-deploy-orchestrator.yml` | yes | yes, through the internal infra path | yes | yes, through the internal infra path | yes | current |
-| `build-phase10-images.yml` | no, internal only | no | yes | no | no | current |
+| `phase10-deploy-orchestrator.yml` | yes | yes, through the internal infra path | no | yes, through the internal infra path | yes | current |
+| `build-phase10-images.yml` | yes, separately approval-gated release publication | no | yes | no | no | current |
 | `infra-deploy.yml` | no, internal only | yes, through Bicep | no | yes | yes | current |
 | `phase10-retention-cleanup.yml` | yes | no | no | no | yes, packages/artifacts only | current |
 | `azure-bootstrap.yml` | yes, but legacy | yes, legacy App Service stack | no | yes, legacy API/UI apps | yes | legacy |
@@ -49,22 +51,26 @@ If you are looking for the other responsibilities in the new Phase 10 model:
 
 - `phase10-platform-foundation.yml` owns the persistent platform ACR and runtime pull identity
 - `azure-initial-setup.yml` handles one-time repository and OIDC setup
-- `build-phase10-images.yml` handles wrapper-driven ACR image publication
+- `build-phase10-images.yml` produces a separately approved immutable release; it is not invoked implicitly by the deploy orchestrator
 - `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
 - `azure-bootstrap.yml` is the only remaining legacy App Service workflow surface, and its deploy toggles are retired no-ops
 - `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for ACR image tags, historical GHCR cleanup-only image versions, and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
 
 It supports three execution modes:
 
-1. **Wrapper-driven deployment** - Invoked by `phase10-deploy-orchestrator.yml` for the normal manual Phase 10 path
-2. **Automatic validation** (pull requests) - What-if analysis only
-3. **Reusable workflow call** - Internal invocation from the wrapper or other trusted automation
+1. **Manual immutable release publication** - Builds/pushes six images and packages Functions for the exact selected candidate SHA
+2. **Wrapper-driven deployment or what-if** - Verifies the release/evidence and runs preflight before internal infrastructure execution
+3. **Reusable workflow call** - Internal infrastructure invocation from the wrapper or other trusted automation
 
-Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps previews useful even when optional privileged paths exist, because preview should not fail only because the caller lacks role-assignment write permission.
+The Bicep what-if call uses Azure validation level `ProviderNoRbac`; however, the orchestrator's separate prerequisite check currently requires effective `roleAssignments/write` at the target scope because a real deployment creates the Functions storage grant. Thus dry-run is non-mutating but may still be BLOCKED when the deploy identity lacks this future-deployment prerequisite.
 
-The current Phase 10 architecture now splits ACR ownership into a persistent platform workflow and an environment-scoped app workflow. `00 Azure Platform Foundation` creates the registry and runtime pull identity once. `01 Phase 10 Azure Deploy Orchestrator` consumes the ACR and prepares a scoped pull token for Container Apps, so the normal deploy path does not create registry RBAC inside the app resource group.
+The current Phase 10 architecture splits ACR ownership into a persistent platform workflow and an environment-scoped app workflow. `00 Azure Platform Foundation` creates the registry and runtime pull identity once. The image-release workflow builds six service images and the Functions ZIP from one exact source SHA, verifies the release manifest, and publishes digest-qualified image references. The orchestrator verifies the producer run, artifact ownership, exact-SHA hosted CI evidence, package hash, image set, and reviewed deployment-parameter identity before Azure authentication. It does not silently build or substitute mutable image tags. Deployed Functions-package verification reads the Kudu `SitePackages/packagename.txt` pointer and the mounted ZIP over HTTPS using publishing credentials retrieved at runtime; it fails closed if SCM authentication or the expected package layout is unavailable. This verifier has not been exercised against Azure.
 
-The normal app deploy identity should not need `roleAssignments/write` for Phase 10. The `Assign AcrPull` option in `00 Azure Platform Foundation` is a privileged-only fallback for teams that explicitly choose managed-identity registry pulls.
+Functions now uses a dedicated environment-scoped StorageV2 account and dedicated user-assigned managed identity for `AzureWebJobsStorage`; shared-key and public-blob access are disabled. The storage service endpoint is currently publicly reachable at the network layer (`publicNetworkAccess: Enabled`) and access is authorization-controlled by Entra RBAC; private networking is not implemented in this slice. The identity receives `Storage Blob Data Owner` scoped only to that storage account. The Functions deployment identity therefore requires `Microsoft.Authorization/roleAssignments/write` at the target resource-group scope or inherited scope so Bicep can create this grant. The read-only preflight checks this permission and fails closed; it never elevates the caller. The separate `Assign AcrPull` option in `00 Azure Platform Foundation` remains a privileged-only optional path and is not a substitute for the Functions storage grant.
+
+Storage is a billable resource. Current parameters select `Standard_LRS` for dev/staging and `Standard_GRS` for prod. Review SKU, region, redundancy, quotas, and cost for the target environment before deployment. No storage account or role assignment has been provisioned by these repository changes.
+
+The current release verifier also requires the release-producing branch to match the target environment branch. Consequently, cross-branch promotion of one unchanged release artifact from `dev` to `staging`/`main` is not yet supported: merges change commit identity and the policy requires a new matching-branch release. Resolve this provenance/promotion policy before claiming same-artifact promotion; do not work around it by disabling the exact-SHA checks or rebuilding under a misleading label.
 
 Use this setting as follows:
 
@@ -88,8 +94,9 @@ These workflows overlap in that they are both bootstrap-style, but they own diff
 Recommended order:
 
 1. Run `Azure Initial Setup` if repository auth is not ready.
-2. Run `00 Azure Platform Foundation` once to create the shared ACR and pull identity. Keep `Assign AcrPull=false` for the normal path.
-3. Run `01 Phase 10 Azure Deploy Orchestrator` for normal deploys and cleanups.
+2. Run `00 Azure Platform Foundation` only when the shared ACR, pull identity, or provider registrations are missing. Keep `Assign AcrPull=false` for the normal path.
+3. After separate approval, produce an immutable release for the exact reviewed candidate SHA. This publishes to ACR.
+4. Review the release manifest and parameter identity, then run `01 Phase 10 Azure Deploy Orchestrator` with that release. Deployment, dry-run preflight, and cleanup are distinct choices; cleanup is destructive.
 
 Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless you deliberately want a single high-privilege bootstrap path. Keeping them separate preserves cleaner ownership and a smaller blast radius.
 
@@ -111,7 +118,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    |-----------|-------------|---------|---------|
    | **Environment** | Target environment | dev, staging, prod | dev |
    | **Location** | Azure region | Any region string | centralindia |
-   | **Dry Run** | What-if only (no deploy) | true/false | true |
+   | **Dry Run** | Read-only Azure preflight and Bicep what-if using selected immutable release | true/false | true |
    | **Cleanup Infra** | Destructive teardown of the environment-scoped resource group | true/false | false |
    | **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
 | **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
@@ -128,15 +135,15 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
 
    **🧪 Dry Run (What-If Analysis):**
    - Set `Dry Run` = `true`
-   - Reviews changes without deploying
-   - Safe to run anytime
-   - No Azure resources created/modified
+   - Requests Azure authentication and performs a read-only prerequisite check plus Bicep what-if; it does not deploy or intentionally mutate resources
+   - Not a substitute for reviewing the selected candidate, target, identity, provider output, or change plan
+   - Requires a valid immutable release artifact and reviewed parameter identity; the current exact-branch policy constrains which release can target each environment
 
    **🚀 Real Deployment:**
    - Set `Dry Run` = `false`
    - Deploys actual infrastructure
    - Creates/updates Azure resources
-   - Works for a clean environment as long as the GitHub OIDC secrets are configured
+   - Requires successful exact-candidate hosted CI and release-artifact checks, configured OIDC, registered providers, and scoped role-assignment permission for the Functions storage identity grant
    - **Use carefully!**
 
    **🗑️ Cleanup / Teardown:**
@@ -151,9 +158,8 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - Gateway, Orders, Inventory, Notifications, and UI are deployed as separate Container Apps with separate images, matching the split-service Docker validation lane
    - The workflow summary shows transport-stack outputs and any wrapper-owned shared foundation outputs we choose to keep in scope
    - If `Bind Aliases` is enabled, the workflow binds the stable public names from `automation/config/runtime-targets.json`, such as `dev.orderprocessing-api.xydatalabs.com` and `dev.orderprocessing.xydatalabs.com`; `Public Domain` is only a compatibility fallback for newly cataloged environments
-   - The wrapper execution order is intentionally `preflight -> build images -> internal deploy or cleanup -> summary`, so a real run should show the image job before the internal infra workflow in Actions
-   - The wrapper summary is only the top-level checkpoint; detailed logs and outputs live in the nested build and infra jobs under the run
-   - If you need per-service image logs or deployment traceability, open the child jobs under the wrapper rather than relying on the top-level summary alone
+   - Release publication is a separate run; the deployment wrapper verifies and consumes the selected exact-run artifact rather than building replacement images
+   - The wrapper summary is only the top-level checkpoint; detailed deployment logs and outputs live in the internal infrastructure job
    - SQL Server and Redis are part of the automatic baseline now, so the wrapper no longer asks for parity toggles in the normal operator form
 
 **Shared contract with local Docker validation:**
@@ -162,7 +168,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
 - same baseline SQL and Redis availability in the active Phase 10 path
 - same cleanup symmetry (`appname-env` resources can be torn down safely)
 - different public URL style only at the hosting layer: local Docker uses fixed localhost ports, Azure Container Apps uses generated ingress plus optional aliases
-- the image build stage is intentionally grouped into one wrapper step with one individual log block per service, so exported run logs may be consolidated even though the Actions UI still shows each service build separately
+- the image release runs separately from deployment, with one job per service and a run-owned manifest that records immutable digest references
 
 **Related validation gate:**
 - `phase10-docker-dev-http-e2e.yml` runs the same hook-based Docker Dev HTTP sequence in CI and uploads the matching `TestResults/Playwright/phase10-docker-http` artifacts.
@@ -211,7 +217,7 @@ ACR should be treated as a production prerequisite for the runtime image path, n
 | Step | Goal | Current / Future |
 |---|---|---|
 | Add ACR registry | Host Phase 10 images in Azure ACR | Current Phase 10 target |
-| Switch image publish path | Push build artifacts to ACR from the wrapper build step | Current Phase 10 target |
+| Switch image publish path | Push digest-pinned artifacts to ACR from the separate release workflow | Current Phase 10 target |
 | Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Current Phase 10 target |
 | SQL / Redis baseline | Deploy SQL Server and Redis as part of the default Phase 10 path | Current Phase 10 target |
 | Historical GHCR cleanup | Keep only the cleanup-only path for old package versions | Retained for retention workflow |
@@ -291,22 +297,20 @@ Dry Run: FALSE ⚠️
 
 ---
 
-## 🔄 Automatic Deployment (Push-Based)
+## 🔄 Deployment triggers and immutable releases
 
-When you push to specific branches:
+Branch pushes run hosted validation; they do not deploy Azure. The manual release workflow builds/pushes images and packages Functions for an exact source SHA, and the manual orchestrator consumes the selected release. The current policy requires matching source branch and target environment:
 
 | Branch | Environment | Parameter File | Trigger |
 |--------|-------------|----------------|---------|
-| `dev` | dev | `infra/parameters/phase10-dev.json` | Any push to `infra/**` |
-| `staging` | staging | `infra/parameters/phase10-staging.json` | Any push to `infra/**` |
-| `main` | prod | `infra/parameters/phase10-prod.json` | Any push to `infra/**` |
+| `dev` | dev | `infra/parameters/phase10-dev.json` | Manual release + separately selected deployment |
+| `staging` | staging | `infra/parameters/phase10-staging.json` | Manual release + separately selected deployment |
+| `main` | prod | `infra/parameters/phase10-prod.json` | Manual release + separately selected deployment |
 
 **Example:**
 ```bash
-# Make changes to Bicep files
-git add infra/main.phase10.bicep
-git commit -m "Update infrastructure"
-git push origin dev  # Triggers automatic deployment
+# A branch push validates code; it does not publish or deploy Azure.
+# Release publication and deployment are separate, manually approved workflows.
 ```
 
 ---
@@ -379,19 +383,17 @@ These must be configured in repository settings:
 ```
 
 ### Azure Permissions
-The service principal needs:
-- **Contributor** role on subscription (for resource creation)
-- **(Optional)** Directory permissions for identity module
+Do not grant broad subscription Contributor or directory-admin rights by default. The selected deployment identity must have the resource permissions required at target scope, including `Microsoft.Authorization/roleAssignments/write` for the dedicated Functions storage identity grant. The preflight checks effective current-scope permission and provider registration read-only; it does not assign roles or elevate access. Platform foundation/provider registration and directory provisioning have separate permission requirements and approval gates.
 
 ---
 
 ## 🧪 Testing Strategy
 
-### Step 1: Dry Run Everything First
+### Step 1: Verify release and run the read-only preflight
 ```
-Always start with Dry Run = TRUE
-Review what-if output carefully
-Check for unexpected changes
+Confirm exact candidate SHA, producer run, artifact identity, hosted-CI evidence, Functions package hash, and reviewed parameter identity.
+Review read-only Azure preflight and Bicep what-if output carefully.
+Stop for wrong subscription/directory, missing role-assignment permission, unregistered provider, unresolved diff, or unapproved cost/identity changes.
 ```
 
 ### Step 2: Deploy to Dev

@@ -91,6 +91,10 @@ jobs:
         working-directory: automation
         run: npm run test:hosted-ci-contract
 
+      - name: Test immutable Phase 10 release and Functions package contracts
+        id: release-contract-tests
+        run: node --test scripts/tests/phase10-release-artifacts.test.mjs scripts/tests/phase10-release-run.test.mjs scripts/tests/phase10-hosted-ci-evidence.test.mjs scripts/tests/phase10-deployment-identity.test.mjs scripts/tests/phase10-release-inputs.test.mjs scripts/tests/phase10-azure-static-preflight.test.mjs scripts/tests/phase10-azure-preflight.test.mjs scripts/tests/phase10-function-package-runtime.test.mjs
+
       - name: Test TRX artifact sanitization with synthetic fixture
         id: trx-sanitizer-tests
         shell: pwsh
@@ -165,7 +169,7 @@ jobs:
         env:
           CI_JOB_STATUS: ${{ job.status }}
           CI_CHECK_OUTCOMES_JSON: >-
-            {"checkout":"${{ steps.checkout.outcome }}","provenance":"${{ steps.provenance.outcome }}","generated-artifacts":"${{ steps.generated-artifacts.outcome }}","docker-safety":"${{ steps.docker-safety.outcome }}","environment-contract":"${{ steps.environment-contract.outcome }}","setup-dotnet":"${{ steps.setup-dotnet.outcome }}","setup-node":"${{ steps.setup-node.outcome }}","frontend-deps":"${{ steps.frontend-deps.outcome }}","automation-deps":"${{ steps.automation-deps.outcome }}","ci-contract-tests":"${{ steps.ci-contract-tests.outcome }}","trx-sanitizer-tests":"${{ steps.trx-sanitizer-tests.outcome }}","callback-tests":"${{ steps.callback-tests.outcome }}","frontend-typecheck":"${{ steps.frontend-typecheck.outcome }}","frontend-tests":"${{ steps.frontend-tests.outcome }}","identity-tests":"${{ steps.identity-tests.outcome }}","frontend-build":"${{ steps.frontend-build.outcome }}","dotnet-restore":"${{ steps.dotnet-restore.outcome }}","dotnet-build":"${{ steps.dotnet-build.outcome }}","domain-tests":"${{ steps.domain-tests.outcome }}","application-tests":"${{ steps.application-tests.outcome }}","api-tests":"${{ steps.api-tests.outcome }}","gateway-tests":"${{ steps.gateway-tests.outcome }}","architecture-tests":"${{ steps.architecture-tests.outcome }}","sanitize-trx":"${{ steps.sanitize-trx.outcome }}"}
+            {"checkout":"${{ steps.checkout.outcome }}","provenance":"${{ steps.provenance.outcome }}","generated-artifacts":"${{ steps.generated-artifacts.outcome }}","docker-safety":"${{ steps.docker-safety.outcome }}","environment-contract":"${{ steps.environment-contract.outcome }}","setup-dotnet":"${{ steps.setup-dotnet.outcome }}","setup-node":"${{ steps.setup-node.outcome }}","frontend-deps":"${{ steps.frontend-deps.outcome }}","automation-deps":"${{ steps.automation-deps.outcome }}","ci-contract-tests":"${{ steps.ci-contract-tests.outcome }}","release-contract-tests":"${{ steps.release-contract-tests.outcome }}","trx-sanitizer-tests":"${{ steps.trx-sanitizer-tests.outcome }}","callback-tests":"${{ steps.callback-tests.outcome }}","frontend-typecheck":"${{ steps.frontend-typecheck.outcome }}","frontend-tests":"${{ steps.frontend-tests.outcome }}","identity-tests":"${{ steps.identity-tests.outcome }}","frontend-build":"${{ steps.frontend-build.outcome }}","dotnet-restore":"${{ steps.dotnet-restore.outcome }}","dotnet-build":"${{ steps.dotnet-build.outcome }}","domain-tests":"${{ steps.domain-tests.outcome }}","application-tests":"${{ steps.application-tests.outcome }}","api-tests":"${{ steps.api-tests.outcome }}","gateway-tests":"${{ steps.gateway-tests.outcome }}","architecture-tests":"${{ steps.architecture-tests.outcome }}","sanitize-trx":"${{ steps.sanitize-trx.outcome }}"}
           CI_CHECKOUT_SHA: ${{ steps.provenance.outputs.checkout_sha }}
           CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/hosted-ci-evidence.mjs

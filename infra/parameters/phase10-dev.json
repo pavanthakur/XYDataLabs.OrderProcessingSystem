@@ -12,12 +12,8 @@
     "inventorySubscriptionName": { "value": "inventory-order-created-dev" },
     "notificationsSubscriptionName": { "value": "notifications-order-created-dev" },
     "deadLetterSubscriptionName": { "value": "dlq-replay-dev" },
+    "functionsHostStorageSkuName": { "value": "Standard_LRS" },
     "maxDeliveryCount": { "value": 10 },
-    "messageTtl": { "value": "P7D" },
-    "gatewayImage": { "value": "ghcr.io/pavanthakur/orderprocessing-gateway:phase10" },
-    "ordersImage": { "value": "ghcr.io/pavanthakur/orderprocessing-orders:phase10" },
-    "inventoryImage": { "value": "ghcr.io/pavanthakur/orderprocessing-inventory:phase10" },
-    "notificationsImage": { "value": "ghcr.io/pavanthakur/orderprocessing-notifications:phase10" },
-    "uiImage": { "value": "ghcr.io/pavanthakur/orderprocessing-ui:phase10" }
+    "messageTtl": { "value": "P7D" }
   }
 }
