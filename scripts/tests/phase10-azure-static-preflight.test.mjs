@@ -95,6 +95,20 @@ test('Azure runtime targets require stable HTTPS cloud origins and reject local,
   assert.match(validateAzureRuntimeTargets({})[0] ?? '', /targets array/);
 });
 
+test('environment catalog keeps the branch, environment, and resource suffix contract aligned', async () => {
+  const policy = JSON.parse(await readFile('Resources/Azure-Deployment/branch-policy.json', 'utf8'));
+  assert.deepEqual(Object.fromEntries(Object.entries(policy).map(([key, value]) => [key, [value.branch, value.environment, value.resourceSuffix]])), {
+    dev: ['dev', 'dev', 'dev'],
+    staging: ['staging', 'staging', 'stg'],
+    prod: ['main', 'prod', 'prod'],
+  });
+  for (const environment of ['dev', 'staging', 'prod']) {
+    const parameters = JSON.parse(await readFile(`infra/parameters/phase10-${environment}.json`, 'utf8')).parameters;
+    assert.equal(parameters.environment.value, environment);
+    assert.equal(parameters.resourceSuffix.value, policy[environment].resourceSuffix);
+  }
+});
+
 test('current repository preflight verifies dedicated Functions host storage wiring structurally', async () => {
   const [functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile('XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj', 'utf8'),
