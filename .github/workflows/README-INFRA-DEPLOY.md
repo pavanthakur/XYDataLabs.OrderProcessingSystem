@@ -55,7 +55,7 @@ If you are looking for the other responsibilities in the new Phase 10 model:
 - `build-phase10-images.yml` produces a separately approved immutable release; it is not invoked implicitly by the deploy orchestrator
 - `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
 - `azure-bootstrap.yml` is the only remaining legacy App Service workflow surface, and its deploy toggles are retired no-ops
-- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for ACR image tags, historical GHCR cleanup-only image versions, and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
+- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for historical GHCR package versions and GitHub Actions artifacts. ACR inventory is an explicit manual read-only preview; ACR deletion is disabled until digest protections are independently reviewed. It does not deploy or tear down Azure infrastructure.
 
 It supports three execution modes:
 
@@ -201,21 +201,21 @@ Source-of-truth controls:
 
 - GitHub Actions artifact retention is set per upload step where practical.
 - Historical GHCR package retention is handled by `phase10-retention-cleanup.yml` for cleanup-only packages.
-- ACR image retention is handled by `phase10-retention-cleanup.yml` for the active Phase 10 runtime image path.
+- ACR inventory is a manual, read-only preview in `phase10-retention-cleanup.yml`; manifest deletion is disabled until digest-safe protections are reviewed.
 - Azure Log Analytics retention is configured on the workspace itself.
 - Azure Container Apps image pulls use ACR with managed identity.
 
 Default cleanup policy:
 
 - Keep the last `10` historical GHCR package versions per image.
-- Keep the last `10` ACR tags per service image, skip tags referenced by active Container App revisions, and delete stale tags older than `30` days.
-- Keep platform ACR resources persistent; prune image tags, not the registry.
-- Delete GitHub Actions artifacts older than `14` days.
-- Run the scheduled cleanup workflow in delete mode, but keep the manual `workflow_dispatch` entry in dry-run mode unless you explicitly disable it for an audit run.
+- Proposed ACR policy: keep at least `10` manifests and `30` days per service, plus active and verified rollback digests. No ACR manifests are currently deleted by automation.
+- Keep platform ACR resources persistent. If digest cleanup is separately approved later, delete only reviewed unprotected manifests; do not use tag deletion as a proxy. Current automation deletes no ACR content.
+- Workflow uploads use `14`-day artifact retention; the scheduled cleanup can remove any remaining artifacts older than `30` days.
+- Scheduled cleanup deletes historical GHCR packages/artifacts only. Manual ACR inventory requires explicit opt-in and remains read-only.
 
 | Area | Source of truth | Default |
 |---|---|---|
-| ACR images | `phase10-retention-cleanup.yml` | Keep last `10` tags per service and preserve active revision images |
+| ACR images | `phase10-retention-cleanup.yml`, `scripts/phase10-acr-retention.mjs` | Preview only; keep latest `10`, 30 days, active digest, and one verified rollback digest per service; deletion disabled |
 | GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per historical image |
 | GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
 | Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |

@@ -31,7 +31,7 @@ These are the Phase 10 experience improvements that are worth carrying in the ac
 | Cleanup stays symmetric with creation using the same env suffix and resource scope | Prevents partial teardown and name drift across dev/staging/prod |
 | Local-vs-CI mapping is documented in the runbook | Keeps VS Code tasks and GitHub Actions aligned for repeatable validation |
 | Build logs stay per service while the summary consolidates the end result | Preserves detailed logs without losing the top-level operator view |
-| Retention cleanup exists for ACR, historical GHCR packages, and artifacts | Keeps storage and log accumulation under control without touching Azure runtime resources |
+| Retention controls distinguish ACR from GHCR and artifacts | GHCR/artifact housekeeping is scheduled; ACR inventory is manual and read-only, with deletion disabled |
 
 Keep these out of the active Phase 10 transport baseline unless a later review proves they are needed:
 
@@ -63,7 +63,7 @@ The enterprise target is to keep ACR and the pull identity in a persistent platf
 | ACR registry | `00 Azure Platform Foundation` | Persistent; not deleted by app environment cleanup |
 | Pull identity | `00 Azure Platform Foundation` | Created once; not recreated per app RG |
 | Optional AcrPull RBAC fallback | `00 Azure Platform Foundation` | Privileged-only path; not required by the normal Phase 10 deploy |
-| ACR images and tags | `Phase 10 Retention Cleanup (Internal)` | Scheduled pruning; preserves active revision images |
+| ACR image manifests | `Phase 10 Retention Cleanup (Internal)` | Manual read-only inventory preview; manifest deletion disabled pending complete digest evidence |
 | GitHub artifacts | Workflow upload steps plus retention cleanup | Retained by `retention-days` and scheduled artifact cleanup |
 
 Target implementation sequence:
@@ -72,7 +72,7 @@ Target implementation sequence:
 2. Confirm the platform deployment summary shows the persistent ACR login server and pull identity id.
 3. Run `01 Phase 10 Azure Deploy Orchestrator` with the selected environment.
 4. Let the wrapper resolve the platform foundation and feed those values into the build and deploy jobs.
-5. Keep `phase10-retention-cleanup.yml` as the scheduled ACR image hygiene workflow.
+5. Keep `phase10-retention-cleanup.yml` for GHCR/artifact housekeeping; ACR cleanup is preview-only until digest evidence is complete.
 
 That gives the intended operating model:
 
@@ -80,7 +80,7 @@ That gives the intended operating model:
 - no subscription-scope `User Access Administrator` requirement for the normal app deploy identity
 - app environment RGs can be deleted and recreated cleanly
 - ACR image history survives app RG cleanup
-- scheduled image cleanup remains meaningful
+- ACR manifest cleanup remains disabled until the complete digest inventory, rollback evidence, and release coordination have a separately reviewed deletion design
 
 For the current active path:
 
@@ -102,11 +102,11 @@ ACR retention rules stay separate from app deployment:
 
 | Rule | Policy |
 |---|---|
-| Preserve active images | Query active Container App revisions and do not delete referenced tags |
-| Keep recent history | Keep the latest `10` tags per service image |
-| Age-based cleanup | Delete stale tags older than `30` days by default |
-| Protected tags | Keep release tags such as `phase10`, `latest`, or future signed release labels when marked protected |
-| Environment-aware tags | Prefer `dev-<sha>`, `staging-<sha>`, and `prod-<sha>` if the tagging model becomes environment-specific |
+| Preserve active images | Inventory active Container App revisions across dev/staging/prod and protect referenced manifest digests |
+| Keep recent history | Preview retention of at least the latest `10` manifests per service |
+| Age-based retention | Preview candidates only when older than `30` days; no ACR deletion is currently enabled |
+| Protect rollback images | Require exactly one separately verified rollback digest per service before the planner emits a preview |
+| Treat tags as metadata | Tags do not establish deployment or rollback protection; all decisions are made by repository and manifest digest |
 
 ### Promotion Order After Local Pre-Azure Completion
 
@@ -393,7 +393,7 @@ Historical 2026-07 dev runs above used the then-configured custom-domain policy.
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
-| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR plus historical GHCR retention plus artifact retention | Current internal |
+| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | Historical GHCR/artifact deletion; manual read-only ACR inventory | Current internal |
 | `Azure Bootstrap & Deploy` | Do not use for Phase 10 deployment | Legacy App Service stack | No | Legacy App Service compatibility only; deploy toggles are retired no-ops | Yes, legacy cleanup only | Legacy |
 
 | Area | Legacy bootstrap (`azure-bootstrap.yml`) | Active Phase 10 (`phase10-deploy-orchestrator.yml`) |
@@ -475,7 +475,7 @@ Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD
 | App Service URLs | Legacy only | Not the active target; replace with containerized ingress/aliases | Archive docs/workflows, keep Phase 10 docs containerized | No operator expects `azurewebsites.net` for Phase 10 |
 | Observability | App Insights + LAW present | Add Monitor/trace/alerts as production baseline | `infra/main.phase10.bicep`, monitoring modules | Logs, traces, and alerts visible end to end |
 | Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
-| ACR image retention | Implemented with the retention workflow | Scheduled ACR cleanup protects active revision images | `phase10-retention-cleanup.yml` | Stale ACR tags/manifests are removed without deleting active revision images |
+| ACR image retention | Safe preview implemented; deletion intentionally disabled | Require complete manifest, active revision, and verified rollback digest evidence before enabling deletion | `phase10-retention-cleanup.yml`, `scripts/phase10-acr-retention.mjs` | Preview is read-only; no active or rollback digest can be selected |
 
 Phase 10 public URL policy:
 
@@ -524,13 +524,62 @@ Shared operator rule:
   - GitHub Actions logs follow repository or organization retention settings.
   - Phase 10 artifacts uploaded by runtime, transport, and optional Docker E2E workflows use `retention-days: 14`.
   - Log Analytics uses the workspace retention value from `infra/modules/loganalytics.phase10.bicep`, currently defaulted to `30` days.
-- `phase10-retention-cleanup.yml` handles ACR stale-tag cleanup, historical GHCR retention cleanup, and stale artifact cleanup without touching Azure deployment resources.
+- `phase10-retention-cleanup.yml` handles historical GHCR and artifact cleanup; its optional ACR job inventories manifests and active revisions only. It does not delete ACR content.
 
 Retention source of truth:
 - Artifact retention should be set on the upload step whenever the workflow owns the artifact.
-- ACR image retention is handled by the scheduled cleanup workflow for the active runtime image path.
+- ACR manifests are inventoried only by an explicit manual preview; scheduled ACR deletion is disabled until active and verified rollback digest evidence is available.
 - GHCR package retention is handled by the scheduled cleanup workflow for historical packages only.
 - Azure Log Analytics retention is configured on the workspace module, not in the deploy wrapper.
+
+### Phase 10 Cost Guardrails and Cleanup Policy
+
+This is an operator policy, not an Azure spending cap. Cost Management budgets alert; they do not stop resources, and usage data can lag. The owner created a **₹5,000 monthly subscription budget** on the approved Pay-As-You-Go subscription ending `980c`; the verified configuration has a **50% actual-cost alert**, one email recipient, and expiry `2028-10-31`. The owner accepted this configuration. It is an alert threshold, not an approved maximum bill; subscription-wide costs and the persistent platform ACR may also count toward it. Review the alert configuration after the first measured run. The agreed live test window is at most **35 hours**.
+
+Portal path for later review: **Cost Management + Billing → select the approved subscription → Cost Management → Budgets**. The current budget was created by the owner in the portal; repository tooling does not create or modify budgets. Confirm the recipient and alert delivery in the portal before relying on notifications.
+
+Keep the dev environment deployed for no more than **35 hours**. Any extension requires an explicit operator decision and a refreshed cost check. Store the scheduled start/teardown time, owner, cleanup approver, and evidence location in the run record. The dev resource group is disposable and cleanup loses trial SQL data. The platform ACR is separate and may continue billing after dev cleanup.
+
+Before the live window, fill and review this run record; blank fields mean the cost-control gate is not ready:
+
+| Record | Value before deployment |
+|---|---|
+| Subscription | Approved Pay-As-You-Go subscription ending `980c` |
+| Monthly budget alert | `₹5,000`; monthly subscription budget, 50% actual-cost alert, expires `2028-10-31` |
+| Budget alert recipients | One recipient configured; verify in portal before live run |
+| Test owner | `TBD` |
+| Planned deployment start / teardown time | `TBD` / `TBD` (35-hour maximum window) |
+| Cleanup approver | `TBD` |
+| Evidence location outside dev resource group | `TBD` |
+| Protected image policy | Current deployed digest and one verified rollback digest per service |
+
+For each active Phase 10 service, preserve the currently deployed image digest and one verified rollback digest. Retention must use manifest digests, not tag strings: deleting a tag can delete its underlying manifest and all tags on that digest. Keep sanitized evidence outside the disposable dev resource group. Never remove staging/prod-protected digests during dev cleanup.
+
+Use the read-only usage snapshot before deployment, after each test day, and after cleanup:
+
+```powershell
+node scripts/phase10-cost-snapshot.mjs `
+  --subscription-id <approved-subscription-id> `
+  --resource-group rg-orderprocessing-dev `
+  --acr-name <platform-acr-name> `
+  --workspace-name loganalytics-phase10-dev `
+  --output TestResults/AzureCost/dev-snapshot-<unique-id>.json
+```
+
+The output is a point-in-time observation, not a bill or cap. It reports month-to-date cost grouped by service and resource ID, dev resource inventory, active Container App revisions and replica counts, ACR usage, Log Analytics table ingestion, SQL storage percentage/limits, and Functions host-storage account/used-capacity when Azure exposes those metrics. Azure CLI, Cost Management query access, and Monitor query access are required. The command is cloud-read-only, writes a new local report, and refuses to overwrite an existing report. Review query errors as missing evidence; do not treat them as zero usage.
+
+Compare two snapshots without calling Azure:
+
+```powershell
+node scripts/phase10-cost-snapshot.mjs `
+  --compare TestResults/AzureCost/before.json `
+  --to TestResults/AzureCost/after.json `
+  --output TestResults/AzureCost/delta-<unique-id>.json
+```
+
+The comparison requires matching subscription and resource group, sums month-to-date cost by service/resource, and reports metric deltas. Missing metrics remain `null` and mark the comparison `INCOMPLETE`; Log Analytics is explicitly a rolling seven-day comparison, not cumulative usage.
+
+Do not set a low Log Analytics daily cap before telemetry and payment/Functions acceptance: reaching the cap can stop collection and hide evidence. The cap is not perfectly precise. Alert on ingestion, measure during the test window, then tune retention/caps separately.
 
 ### Scheduled Cleanup Policy
 
@@ -538,7 +587,7 @@ Phase 10 uses scheduled housekeeping for generated storage, not for live Azure e
 
 | Storage layer | Owner | Automatic cleanup | Default policy |
 |---|---|---|---|
-| ACR image tags | `Phase 10 Retention Cleanup (Internal)` | Yes, Sundays at `03:00 UTC` | Keep the latest `10` tags per service, delete stale tags older than `30` days, and skip images referenced by active Container App revisions |
+| ACR image manifests | `Phase 10 Retention Cleanup (Internal)` | Manual inventory preview only | Keep at least `10` recent manifests per service and 30 days of age; protect current deployed and one verified rollback digest. Deletion is disabled until digest inventory and rollback evidence are complete. |
 | GHCR container package versions | `Phase 10 Retention Cleanup (Internal)` | Yes, Sundays at `03:00 UTC` | Keep the latest `10` historical versions per image and delete older versions only when they are older than `30` days |
 | GitHub Actions artifacts | Upload steps plus `Phase 10 Retention Cleanup (Internal)` | Yes | Uploaded Phase 10 smoke artifacts retain for `14` days; scheduled cleanup deletes stale artifacts older than `30` days as a backup |
 | GitHub Actions logs | Repository or organization Actions settings | Yes, by platform setting | Keep at the repo/org standard; do not manage logs from the deploy wrapper |
@@ -549,6 +598,7 @@ Architectural rule:
 - It is safe to schedule cleanup for generated build outputs and stale image versions.
 - It is not safe to schedule destructive Azure environment deletion for dev/staging/prod.
 - Azure environment cleanup must remain an explicit operator action.
+- ACR preview is read-only, so it does not need a release lock for safety. Any future digest deletion must coordinate with the image publication workflow, revalidate protected digests while holding that shared lock, and require a separately reviewed exact-digest preview.
 
 ### Phase 10 include-now / defer-later checklist
 
@@ -560,20 +610,20 @@ Architectural rule:
 | Symmetric cleanup by env-suffixed name | Include now | Required for predictable dev/staging/prod teardown |
 | Local-vs-CI task mapping | Include now | Prevents drift between VS Code and GitHub Actions |
 | Per-service build logs plus consolidated summary | Include now | Retains detail without losing the executive view |
-| ACR + historical GHCR retention + artifact retention cleanup | Include now | Reduces storage and noise without expanding Azure scope |
+| ACR retention preview + historical GHCR/artifact cleanup | Include now | ACR preview is read-only; no manifest deletion until digest safety is separately reviewed |
 | Broad shared-contract extraction | Defer | Add only when duplication is proven across multiple services |
 | New platform layer unrelated to transport/deploy/operator UX | Defer | Avoid scope creep in Phase 10 |
 
 Default retention policy:
-- Keep the last `10` ACR image tags per service and preserve tags used by active Container App revisions.
+- Keep the last `10` ACR manifests per service and at least `30` days of history; preserve the active deployed digest and one verified rollback digest. ACR deletion remains disabled while rollback evidence is unavailable.
 - Keep the last `10` historical GHCR package versions per image.
 - Upload Phase 10 smoke artifacts with `retention-days: 14`.
 - Delete stale GitHub Actions artifacts older than `30` days in the scheduled cleanup workflow as a backup.
-- Use dry-run only for manual cleanup previews; the scheduled cleanup run should perform the actual deletion.
+- Scheduled cleanup may delete only historical GHCR versions and GitHub artifacts. ACR can be inventoried by explicit manual preview only; it must never delete until a separately reviewed digest-aware workflow is approved.
 
 | Area | Source of truth | Default |
 |---|---|---|
-| ACR images | `phase10-retention-cleanup.yml` | Keep last `10` tags per service and preserve active revision images |
+| ACR images | `phase10-retention-cleanup.yml` + `scripts/phase10-acr-retention.mjs` | Preview only; last `10` manifests, `30` days, active digest and verified rollback digest protected; deletion disabled |
 | GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per historical image |
 | GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | Upload retention `14` days; scheduled cleanup threshold `30` days |
 | Azure Log Analytics | `infra/modules/loganalytics.phase10.bicep` / Azure policy | Workspace retention default `30` days |
@@ -582,7 +632,7 @@ Default retention policy:
 |---|---|---|
 | Azure resource-group teardown | Covered by `cleanupInfra=true` in the Phase 10 wrapper | No |
 | GHCR package cleanup | Covered by `phase10-retention-cleanup.yml` for historical packages only | No |
-| ACR package cleanup | Covered by `phase10-retention-cleanup.yml` | No |
+| ACR manifest deletion | Disabled pending complete active/rollback digest evidence and separate review | Yes |
 | GitHub artifact retention | Covered by `retention-days` plus optional cleanup in the housekeeping workflow | No for the updated workflows |
 | Azure Log Analytics retention | Covered by the workspace module default; environment-specific policy can tune it later | No blocker |
 

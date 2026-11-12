@@ -38,7 +38,7 @@ Use this rule before removing anything:
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Do not dispatch for acceptance | Retained workflow; hosted execution cannot satisfy the local Docker safety guard. The accepted check is the manual local Docker hook under DW-028 Option A. |
 | `build-phase10-images.yml` | Release producer | Yes, separately approval-gated | Builds six service images and the Functions package from one exact SHA; publishes a manifest with image digests |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
-| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for ACR image tags, historical GHCR cleanup-only package versions, and workflow artifacts |
+| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled GHCR/artifact cleanup; manual ACR inventory preview only (deletion disabled) |
 | `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
 | `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
 
@@ -101,7 +101,7 @@ Before approving any workflow or infrastructure change, ask:
 | Prove all-tenant Azure browser/payment E2E after runtime and transport are green | `04 Phase 10 Azure Payment Matrix` |
 | Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
-| Clean old Phase 10 ACR tags, historical GHCR cleanup-only versions, and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
+| Clean historical GHCR versions and workflow artifacts; preview ACR inventory | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; manually opt in to a read-only ACR inventory preview. ACR deletion is disabled. |
 | Do one-time GitHub App and OIDC bootstrap | `azure-initial-setup.yml` |
 | Work on archived App Service compatibility only | `azure-bootstrap.yml` |
 
@@ -117,7 +117,7 @@ Before approving any workflow or infrastructure change, ask:
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; equivalent local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
-| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR plus historical GHCR cleanup-only plus artifact retention only | Current internal |
+| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | Historical GHCR/artifact retention; manual read-only ACR inventory | Current internal |
 | `Azure Bootstrap & Deploy` | Do not use for Phase 10 | Legacy App Service stack | No | Legacy App Service only | Legacy App Service RG path | Legacy |
 
 For detailed operator steps, use [Phase 10 Azure Smoke Runbook](../../docs/runbooks/phase10-azure-smoke.md). For the local equivalent of workflow `99`, use either:
@@ -147,7 +147,7 @@ or the VS Code task:
 | `phase10-azure-runtime-smoke.yml` | Manual Phase 10 runtime/API/UI smoke after deploy | Keep as the direct post-deploy runtime proof | Yes, if changing gateway/API/UI runtime contracts |
 | `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
 | `phase10-docker-dev-http-e2e.yml` | Retained hosted workflow; excluded from acceptance under DW-028 Option A; manual local hook is the Docker acceptance path | Keep | Yes, if changing hook or log paths |
-| `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 ACR, historical GHCR cleanup-only, and artifact housekeeping | Keep | Yes, if changing retention thresholds |
+| `phase10-retention-cleanup.yml` | Scheduled/manual GHCR and artifact housekeeping; manual read-only ACR inventory | Keep | Yes, if changing retention thresholds |
 | `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
 | `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
 | `test-validate-deployment.yml` | Tests the validation workflow itself | Keep | Yes, definitely |

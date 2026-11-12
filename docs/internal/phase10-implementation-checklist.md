@@ -327,8 +327,10 @@ Operator evidence packet:
 | Azure Functions infrastructure | Provisioned host | `infra/modules/functions.bicep` creates the Function App host and identity plumbing. |
 | Azure Functions worker implementation | Local replay path implemented | `XYDataLabs.OrderProcessingSystem.Functions` now includes the .NET 8 isolated startup validation, DLQ intake trigger, and guarded DLQ replay Function; Azure deployment proof and portal Function App smoke remain pending before the Function App is treated as complete behavior. |
 | SQL / Redis baseline wiring | Automatic baseline | The wrapper and child deploy workflows include SQL and Redis as part of the default Phase 10 path; no manual parity toggle is required in the normal operator form. |
-| Cleanup policy closeout | Covered for Phase 10 | Historical GHCR retention, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
-| ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
+| Cleanup policy closeout | Partial | GHCR/artifact retention remains scheduled and Azure teardown remains manual. ACR deletion is disabled until digest inventory, active revision protection, and verified rollback evidence are complete. |
+| ACR image cleanup policy | Preview implemented; deletion blocked | Manual inventory preview includes Payments. Digest selection has fixture tests; scheduled ACR deletion is disabled because the prior tag-based check did not protect digest-qualified deployed images or establish a verified rollback digest. |
+| P0 cost controls | Budget configured; deployment run record incomplete | Owner-created ₹5,000 monthly subscription budget on subscription ending `980c`, with one 50% actual-cost alert recipient and expiry `2028-10-31`, was verified and accepted. The 35-hour maximum window remains. Test owner, scheduled start/teardown, cleanup approver and evidence location must be recorded before deployment. Budget alerts do not stop charges. |
+| P2 cost snapshot | Read-only capture/comparison implemented; live use pending Azure access | `scripts/phase10-cost-snapshot.mjs` reports cost/service/resource, replicas, ACR, Log Analytics, SQL, and Functions storage observations and compares two captured snapshots; Azure results have not been queried or validated in this implementation batch. |
 
 ### Enterprise Standard Placement
 
@@ -386,7 +388,7 @@ Use this placement rule so the current Phase 10 closure remains narrow and futur
 |---|---|---|
 | Azure resource-group teardown | Covered by `cleanupInfra=true` in the Phase 10 wrapper | No |
 | GHCR package cleanup | Covered by `phase10-retention-cleanup.yml`; weekly schedule keeps latest `10` historical package versions and deletes older versions after `30` days | No |
-| ACR package cleanup | Covered by `phase10-retention-cleanup.yml`; weekly schedule keeps latest `10` tags per service, deletes stale tags after `30` days, and skips active Container App revision images | No |
+| ACR manifest cleanup | Manual inventory preview only; deletion disabled pending complete digest and rollback evidence | Yes |
 | GitHub artifact retention | Covered by `retention-days: 14` on Phase 10 uploads plus scheduled stale-artifact cleanup after `30` days | No |
 | Azure Log Analytics retention | Covered by `infra/modules/loganalytics.phase10.bicep` default `30` day workspace retention | No blocker |
 | Azure resource-group scheduled deletion | Intentionally not automated | No; keep destructive cleanup manual |
@@ -398,21 +400,21 @@ ACR is the enterprise target for Phase 10 runtime images. The ACR cutover is not
 | Step | Implementation requirement | Done when |
 |---|---|---|
 | 1 | Provision the persistent platform ACR and runtime pull identity from `00 Azure Platform Foundation` | The platform resource group contains the registry and pull identity; `AcrPull` is granted only when the privileged platform path is allowed to manage RBAC |
-| 2 | Build and push gateway, Orders, Inventory, Notifications, and UI images to ACR | The Phase 10 build workflow publishes service-specific ACR image refs |
+| 2 | Build and push gateway, Orders, Payments, Inventory, Notifications, and UI images to ACR | The Phase 10 build workflow publishes all six service-specific ACR image refs |
 | 3 | Point the app deployment at the platform ACR and pull identity | Container Apps pull ACR images without `GHCR_READ_TOKEN` and without the app deployment itself creating RG-level role assignments |
 | 4 | Keep SQL and Redis in the automatic deploy baseline | The wrapper and child workflow provision SQL and Redis as part of the default Phase 10 path so the operator does not need to toggle them on |
-| 5 | Add ACR image cleanup automation | `phase10-retention-cleanup.yml` keeps the latest approved image versions and deletes stale tags/manifests |
+| 5 | Add safe ACR retention automation | Preview is implemented; digest-level deletion remains blocked until complete cross-environment active revision inventory, one verified rollback digest per service, and release/cleanup coordination are proven |
 | 6 | Retire GHCR runtime dependency | `GHCR_READ_TOKEN` is no longer required by the active Azure deployment path |
 | 7 | Update summaries and runbooks | Deploy summary identifies ACR image refs, parity flags, and the cleanup policy owner |
 
-ACR retention default for dev:
-- Keep the latest `10` image versions per service.
-- Delete untagged or stale image manifests older than `30` days.
-- Keep cleanup in dry-run mode for the first manual validation, then enable the schedule after one successful ACR-backed deploy.
+ACR retention policy proposal for dev (deletion currently disabled):
+- Keep the latest `10` manifests per service and at least `30` days of history.
+- Protect the current deployed digest and one verified rollback digest per service.
+- Require a complete read-only preview and separate review before any future deletion implementation; do not enable a schedule by default.
 
 ACR retention posture for staging/prod:
 - Use a longer retention window than dev.
-- Keep release tags that map to deployed revisions.
+- Preserve digest-qualified images referenced by active and verified rollback Container App revisions; tags are descriptive and are not the protection key.
 - Do not delete images referenced by active or rollback Container App revisions.
 
 Use the existing envelope and metadata types as the canonical shape:

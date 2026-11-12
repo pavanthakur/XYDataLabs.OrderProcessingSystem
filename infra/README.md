@@ -77,7 +77,7 @@ Supporting workflows:
 - `build-phase10-images.yml` publishes the runtime images to ACR when called by the wrapper
 - `phase10-deploy-orchestrator.yml` is the current manual entrypoint
 - `phase10-docker-dev-http-e2e.yml` verifies the local Docker and CI validation path
-- `phase10-retention-cleanup.yml` handles historical GHCR retention, ACR stale-tag cleanup, and stale GitHub artifact cleanup
+- `phase10-retention-cleanup.yml` handles historical GHCR and stale GitHub artifact cleanup; ACR inventory is manual/read-only and deletion is disabled pending digest-safe rollback evidence
 
 Legacy compatibility workflows:
 - `azure-bootstrap.yml`

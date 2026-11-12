@@ -4,6 +4,15 @@
 
 This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management, including GitHub App automation tools.
 
+## Phase 10 Azure cost and image retention (read-only)
+
+- `phase10-cost-snapshot.mjs` captures month-to-date cost by service/resource, an explicitly selected subscription's dev resource inventory, active Container App revisions/replicas, ACR usage, Log Analytics table ingestion, SQL storage metrics and Functions host-storage usage when available. It requires Azure CLI read permissions, Cost Management/Monitor query support, and PowerShell 7 on Windows. It writes a new sanitized JSON file and refuses to overwrite an existing report; Azure cost data may lag.
+- The same command compares snapshots without contacting Azure: `node scripts/phase10-cost-snapshot.mjs --compare <before.json> --to <after.json> --output <new-delta.json>`. It refuses cross-subscription/resource-group comparisons and marks missing metrics `INCOMPLETE` rather than treating them as zero.
+- `phase10-acr-retention.mjs` validates a complete six-repository manifest inventory and exactly one verified rollback digest per repository, then emits a read-only digest-level retention preview. It has no deletion implementation. The workflow's ACR path is also preview-only; do not add deletion until live inventory, rollback provenance, and release coordination are proven.
+- The offline planner input is an operator-produced JSON snapshot with `inventoryComplete: { manifests: true, activeRevisions: true }`, `activeRevisionEnvironments: ["dev", "staging", "prod"]`, `manifests` (all six repositories with digest, tags, and update time), `activeDigests` (environment/repository/digest), and `rollbackDigests` (one per repository with `verified: true`, source commit SHA, and evidence reference). Set completeness flags only after the corresponding Azure queries succeeded and were fully paginated. Example: `node scripts/phase10-acr-retention.mjs --input <inventory.json> --output <new-preview.json>`. The tool checks the declared shape; it does not authenticate the Azure evidence or prove a release lock. Deletion remains disabled, so this preview is safe during image publication; any future delete implementation must add and test shared publication coordination first.
+
+Run focused offline tests with `node --test scripts/tests/phase10-acr-retention.test.mjs scripts/tests/phase10-cost-snapshot.test.mjs scripts/tests/phase10-retention-workflow.test.mjs`.
+
 ## Phase 10 fresh SSD storage and safe reset
 
 See the [fresh G: setup runbook](../docs/runbooks/phase10-docker-fresh-ssd.md) before moving or resetting Docker storage.
