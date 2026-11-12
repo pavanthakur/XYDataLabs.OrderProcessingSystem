@@ -54,8 +54,17 @@ Use the numbered workflows in this order:
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
 | `04` | `04 Phase 10 Azure Payment Matrix` | Prove all-tenant browser/payment E2E against the live Azure Container Apps URLs |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted parity excluded under DW-028 Option A; run the equivalent local Docker hook manually |
+| `ci.yml` | `CI — Build and Contract Validation (No Deployment)` | Hosted build and safe contract validation on branch push, manual dispatch, or PR; no Azure or Docker acceptance |
 
 Under DW-028 Option A, do not dispatch workflow `99` as an acceptance gate: the hosted runner cannot satisfy the local Docker named-pipe safety guard. Keep that guard unchanged. Run `scripts/run-phase10-docker-dev-e2e-hook.ps1` on the local Docker Desktop host for the manual Docker acceptance; claim hosted status only for other applicable workflows that actually run on the target SHA. A future hosted-safe Docker profile requires separate review.
+
+### Hosted foundation CI (no PR required)
+
+`.github/workflows/ci.yml` runs the same hosted foundation validation for direct pushes to `dev`, `staging`, and `main`, manual `workflow_dispatch`, and pull requests. It intentionally has no path filters so a newly added service or configuration path cannot accidentally bypass validation. Use the GitHub Actions **CI — Build and Contract Validation (No Deployment)** workflow for manual validation; choose the branch or tag whose commit you intend to validate. Its push/manual behavior is prospective until this implementation is reviewed and observed in hosted CI.
+
+The workflow is non-deploying and read-only (`contents: read`). It does not start Docker, access databases or provider credentials, publish images, or log in to Azure. Integration/browser/payment acceptance remains outside this hosted profile; workflow `99` remains local-only under DW-028.
+
+Each run records event SHA, checked-out SHA, and PR head SHA separately where applicable, plus the required step outcomes in a sanitized JSON evidence file. A PASS requires every required step to succeed and the event/checkout SHA to match. Failed checks are FAIL; skipped/missing checks, cancellation, or unbound revision evidence are INCOMPLETE. The workflow itself and its evidence-artifact upload must also conclude successfully before the evidence is used. The bounded artifact contains the JSON summary and sanitized named TRX files, retained for 14 days; it is not L5-R, Docker acceptance, or Azure acceptance. Path-filtered specialist workflows remain subject to their own applicability rules and are not implicitly required on unrelated changes.
 
 Historical hosted workflow run packets used this deterministic single-root layout; it is not current acceptance evidence under DW-028:
 

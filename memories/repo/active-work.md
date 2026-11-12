@@ -4,7 +4,7 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 
 ## Checkpoint — 12 November 2026
 
-- Acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at both E2E and NFR start/finish. The current checkout may be dirty from this documentation/evidence closeout; verify Git before binding any new evidence.
+- Acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at both E2E and NFR start/finish. Current branch tip before Checkpoint A work was `fb3e74ad`; the worktree now contains uncommitted CI-hardening changes. Verify Git before binding any new evidence.
 - Review revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
 - Worktree state: `UNKNOWN`
 - Verify Git state before continuing.
@@ -18,11 +18,11 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 - E2E passed cold build, foundations, smoke, isolated integration, identity, deterministic and sandbox journeys (TenantA/B/C × Razorpay/OpenPay), messaging/Functions, persistence after Docker restart, and settings restoration. Six positives per payment mode; six Razorpay failure/cancellation cases passed.
 - NFR passed all categories: 100/100 messages/effects at 2.273 s P95; replay visibility 1.080 s; outage recovery 26.201 s, zero lost/duplicate effects; retained Inventory rollback and restore passed. L5-R HTML had no issues and measured backend, frontend, and integration coverage.
 - L6 A passed on this candidate (42 architecture-invariant tests + 1 Gateway topology test). L6 B passed with bounded local evidence. L6 C passed under DW-028 Option A: Drift Scanner, AI Customization Windows/Linux, and Documentation Links passed on this SHA; workflow `99` hosted parity is excluded. See the checklist for action links and limits.
-- L6 C is closed/PASS for `494ab4fd` under Option A; no corrective rerun is required for that candidate. Azure and the separate combined `l6-ci-parity-and-azure` report gate remain NOT-RUN; that combined gate is not non-Azure L6 C. Proposed Checkpoint A CI improvements do not reopen the accepted verdict or certify later candidates. DW-023/DW-024 remain Phase 11 deferrals. Fulfillment, installments, unresolved-payment recovery, visible OpenPay 3DS, Razorpay S2S, and ACA revision rollback remain uncertified.
+- L6 C is closed/PASS for `494ab4fd` under Option A; no corrective rerun is required for that candidate. Azure and the separate combined `l6-ci-parity-and-azure` report gate remain NOT-RUN; that combined gate is not non-Azure L6 C. Checkpoint A CI improvements do not reopen the accepted verdict or certify later candidates. DW-023/DW-024 remain Phase 11 deferrals. Fulfillment, installments, unresolved-payment recovery, visible OpenPay 3DS, Razorpay S2S, and ACA revision rollback remain uncertified.
 
 ## Next action
 
-Review/approve the proposed Checkpoint A CI improvements separately before implementation; they are not a gate C repair. Do not begin Azure work or Phase 11 automatically. Azure requires a separately approved plan; no Azure resources, directory settings, or CI/CD deployment were touched during this acceptance. The 12 November status clarification changed documentation only; it did not rerun runtime acceptance.
+Checkpoint A implementation is locally validated and ready for review. Workflow contract tests (9), synthetic TRX sanitizer test, AI-customization validation, documentation-link validation, environment contract (178/178), `git diff --check`, existing .NET suites and frontend checks passed. Hosted acceptance remains pending separately authorized commit/push, then exact-SHA run and artifact review. No Azure, Docker runtime or payment tests were performed for Checkpoint A; it does not reopen L6 C. Do not begin Azure work or Phase 11 automatically.
 
 ## Safety / navigation
 
