@@ -8,7 +8,13 @@ const settings = { directoryId:"11111111-1111-1111-1111-111111111111", apiClient
   spaClientId:"33333333-3333-3333-3333-333333333333", webOrigin:origin, tenantClaimType:"extn.applicationTenantCode",
   registeredRedirectUris:[`${origin}/auth/callback`], registeredLogoutUris:[`${origin}/signed-out`], selectorEnabled:false };
 test("validates Entra contract for every cloud environment with production selector off", () => {
-  for (const env of ["dev", "staging", "prod"]) assert.equal(validateEntraDeployment(settings, env).selectorEnabled, false);
+  for (const env of ["dev", "staging", "prod"]) {
+    const identity = validateEntraDeployment(settings, env);
+    assert.equal(identity.selectorEnabled, false);
+    assert.equal(identity.requiredScope, "access_as_user");
+    assert.equal(identity.audience, settings.apiClientId);
+    assert.equal(identity.apiScope, `api://${settings.apiClientId}/access_as_user`);
+  }
 });
 test("rejects incomplete provisioning, insecure origins, missing registration and directory tenant as application tenant", () => {
   for (const change of [{directoryId:""}, {apiClientId:""}, {spaClientId:""}, {tenantClaimType:"tid"},
