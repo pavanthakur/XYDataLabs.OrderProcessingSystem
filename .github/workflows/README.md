@@ -138,7 +138,7 @@ or the VS Code task:
 | `azure-bootstrap.yml` | Legacy App Service bootstrap/deploy/cleanup | Keep for legacy compatibility | Yes |
 | `azure-initial-setup.yml` | One-time GitHub App, OIDC, and secrets bootstrap | Keep | Only if refactoring initial setup |
 | `build-phase10-images.yml` | Builds/pushes six Phase 10 images and creates the Functions package/immutable release manifest; manual and reusable entrypoint | Keep | Yes, if changing release/image contracts |
-| `ci.yml` | Main PR build/test/frontend validation gate | Keep | Yes, if changing CI flow |
+| `ci.yml` | Hosted foundation build/test gate on branch pushes, manual dispatch, and pull requests; no deployment | Keep | Yes, if changing CI flow |
 | `configure-github-secrets.yml` | Secret configuration and troubleshooting support | Keep | Yes, if changing setup flow |
 | `Copilot cloud agent` | Not a workflow file in this repo | N/A | N/A |
 | `drift-check.yml` | Broad repository drift scanning | Keep unless you intentionally drop drift scanning | Yes |
