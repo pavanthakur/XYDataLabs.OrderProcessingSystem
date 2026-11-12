@@ -70,6 +70,12 @@ permissions:
   actions: read
   id-token: write
 
+# Serialize deployment against runtime, transport and payment acceptance for this environment.
+concurrency:
+  group: phase10-azure-${{ inputs.environment }}
+  queue: max
+  cancel-in-progress: false
+
 jobs:
   verify_release:
     name: Verify candidate, hosted CI and immutable release evidence

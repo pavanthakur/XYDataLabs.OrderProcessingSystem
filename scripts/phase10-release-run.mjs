@@ -81,15 +81,43 @@ async function getJson(url, token) {
   return response.json();
 }
 
-export function applicableHostedWorkflows(paths, { adrValidationEnabled = false } = {}) {
+export function classifyHostedWorkflows(paths, { adrValidationEnabled = false } = {}) {
   const changed = paths ?? [];
   const any = (regex) => changed.some((file) => regex.test(file));
-  const required = new Set(['ci.yml', 'drift-check.yml']);
-  if (adrValidationEnabled && any(/^(\.github\/workflows\/|scripts\/|Resources\/Azure-Deployment\/|infra\/|docs\/architecture\/decisions\/|XYDataLabs\.OrderProcessingSystem\.sln|\.markdownlint\.json$)/i)) required.add('validate-adrs.yml');
-  if (any(/^(docs\/|scripts\/validate-doc-links\.js$|\.github\/workflows\/validate-doc-links\.yml$)/i)) required.add('validate-doc-links.yml');
-  if (any(/^(AGENTS\.md$|memories\/repo\/|scripts\/tests\/test-ai-customization(?:-exit)?\.ps1$|\.github\/(copilot-instructions\.md|completion-check-rubric\.md|instructions\/|prompts\/|agents\/|skills\/|workflows\/validate-ai-customization\.yml|workflows\/README\.md)|docs\/(AI-OPERATING-MODEL\.md|DEVELOPER-OPERATING-MODEL\.md|README\.md|internal\/DEFERRED-WORK-LOG\.md|internal\/README\.md)|scripts\/(validate-ai-customization\.ps1|README\.md))/i)) required.add('validate-ai-customization.yml');
-  if (any(/^((\.github\/prompts\/)|ai-runtime\/|scripts\/)/i)) required.add('validate-prompts.yml');
-  return [...required].sort();
+  const adrPathsChanged = any(/^(\.github\/workflows\/|scripts\/|Resources\/Azure-Deployment\/|infra\/|docs\/architecture\/decisions\/|XYDataLabs\.OrderProcessingSystem\.sln|\.markdownlint\.json$)/i);
+  const docsPathsChanged = any(/^(docs\/|scripts\/validate-doc-links\.js$|\.github\/workflows\/validate-doc-links\.yml$)/i);
+  const aiCustomizationPathsChanged = any(/^(AGENTS\.md$|memories\/repo\/|scripts\/tests\/test-ai-customization(?:-exit)?\.ps1$|\.github\/(copilot-instructions\.md|completion-check-rubric\.md|instructions\/|prompts\/|agents\/|skills\/|workflows\/validate-ai-customization\.yml|workflows\/README\.md)|docs\/(AI-OPERATING-MODEL\.md|DEVELOPER-OPERATING-MODEL\.md|README\.md|internal\/DEFERRED-WORK-LOG\.md|internal\/README\.md)|scripts\/(validate-ai-customization\.ps1|README\.md))/i);
+  const promptPathsChanged = any(/^((\.github\/prompts\/)|ai-runtime\/|scripts\/)/i);
+  return [
+    { workflow: 'ci.yml', required: true, reason: 'Required for every release candidate.' },
+    { workflow: 'drift-check.yml', required: true, reason: 'Required for every release candidate.' },
+    {
+      workflow: 'validate-adrs.yml',
+      required: adrValidationEnabled && adrPathsChanged,
+      reason: adrValidationEnabled
+        ? adrPathsChanged ? 'Required: ADR-sensitive files changed.' : 'Not applicable: no ADR-sensitive files changed.'
+        : 'Not applicable: ADR validation is not enabled in the target GitHub Environment.',
+    },
+    {
+      workflow: 'validate-doc-links.yml',
+      required: docsPathsChanged,
+      reason: docsPathsChanged ? 'Required: documentation or link-validator files changed.' : 'Not applicable: no documentation/link-validator files changed.',
+    },
+    {
+      workflow: 'validate-ai-customization.yml',
+      required: aiCustomizationPathsChanged,
+      reason: aiCustomizationPathsChanged ? 'Required: AI guidance or customization-validator files changed.' : 'Not applicable: no AI guidance/customization-validator files changed.',
+    },
+    {
+      workflow: 'validate-prompts.yml',
+      required: promptPathsChanged,
+      reason: promptPathsChanged ? 'Required: prompt, AI runtime, or scripts files changed.' : 'Not applicable: no prompt/AI-runtime/scripts files changed.',
+    },
+  ];
+}
+
+export function applicableHostedWorkflows(paths, options = {}) {
+  return classifyHostedWorkflows(paths, options).filter((entry) => entry.required).map((entry) => entry.workflow).sort();
 }
 
 async function getCommitChangedPaths(repository, sourceSha, token) {
@@ -121,7 +149,8 @@ export async function verifyReleaseEvidence({ repository, sourceSha, deploymentW
   const workflowIndex = await getJson(`${root}/actions/workflows?per_page=100`, token);
   const sourceFiles = await getCommitChangedPaths(repository, sourceSha, token);
   const deploymentFiles = deploymentWorkflowSha === sourceSha ? [] : await getCommitChangedPaths(repository, deploymentWorkflowSha, token);
-  const requiredPaths = applicableHostedWorkflows([...sourceFiles, ...deploymentFiles], { adrValidationEnabled: process.env.ADR_VALIDATION_ENABLED === 'true' });
+  const workflowApplicability = classifyHostedWorkflows([...sourceFiles, ...deploymentFiles], { adrValidationEnabled: process.env.ADR_VALIDATION_ENABLED === 'true' });
+  const requiredPaths = workflowApplicability.filter((entry) => entry.required).map((entry) => entry.workflow).sort();
   let hostedCiEvidence;
   for (const workflowPath of requiredPaths) {
     const workflow = workflowIndex.workflows?.find((candidate) => candidate.path === `.github/workflows/${workflowPath}`);
@@ -146,7 +175,7 @@ export async function verifyReleaseEvidence({ repository, sourceSha, deploymentW
     }
   }
   if (!hostedCiEvidence) throw new Error('Required hosted CI workflow did not produce evidence for the selected candidate.');
-  return { releaseRunId: String(runId), releaseRunAttempt: String(run.run_attempt), releaseSourceBranch: run.head_branch, sourceSha, deploymentWorkflowSha, deploymentBranch, releaseArtifactId: artifact.id, releaseArtifactName: artifact.name, requiredWorkflows: requiredPaths, hostedCiEvidence };
+  return { releaseRunId: String(runId), releaseRunAttempt: String(run.run_attempt), releaseSourceBranch: run.head_branch, sourceSha, deploymentWorkflowSha, deploymentBranch, releaseArtifactId: artifact.id, releaseArtifactName: artifact.name, requiredWorkflows: requiredPaths, workflowApplicability, hostedCiEvidence };
 }
 
 async function main() {
@@ -164,7 +193,12 @@ async function main() {
   });
   if (process.env.GITHUB_OUTPUT) {
     const { appendFile } = await import('node:fs/promises');
-    await appendFile(process.env.GITHUB_OUTPUT, `release_run_attempt=${result.releaseRunAttempt}\nrelease_source_branch=${result.releaseSourceBranch}\nrelease_artifact_id=${result.releaseArtifactId}\nhosted_ci_run_id=${result.hostedCiEvidence.runId}\nhosted_ci_run_attempt=${result.hostedCiEvidence.runAttempt}\nhosted_ci_artifact_name=${result.hostedCiEvidence.name}\nsource_hosted_ci_run_id=${result.hostedCiEvidence.sourceRunId}\nsource_hosted_ci_run_attempt=${result.hostedCiEvidence.sourceRunAttempt}\nsource_hosted_ci_artifact_name=hosted-ci-${result.hostedCiEvidence.sourceRunId}-${result.hostedCiEvidence.sourceRunAttempt}\ndeployment_workflow_sha=${result.deploymentWorkflowSha}\n`);
+    await appendFile(process.env.GITHUB_OUTPUT, `release_run_attempt=${result.releaseRunAttempt}\nrelease_source_branch=${result.releaseSourceBranch}\nrelease_artifact_id=${result.releaseArtifactId}\nhosted_ci_run_id=${result.hostedCiEvidence.runId}\nhosted_ci_run_attempt=${result.hostedCiEvidence.runAttempt}\nhosted_ci_artifact_name=${result.hostedCiEvidence.name}\nsource_hosted_ci_run_id=${result.hostedCiEvidence.sourceRunId}\nsource_hosted_ci_run_attempt=${result.hostedCiEvidence.sourceRunAttempt}\nsource_hosted_ci_artifact_name=hosted-ci-${result.hostedCiEvidence.sourceRunId}-${result.hostedCiEvidence.sourceRunAttempt}\ndeployment_workflow_sha=${result.deploymentWorkflowSha}\nworkflow_applicability=${JSON.stringify(result.workflowApplicability)}\n`);
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const { appendFile } = await import('node:fs/promises');
+    const rows = result.workflowApplicability.map(({ workflow, required, reason }) => `| ${workflow} | ${required ? 'REQUIRED' : 'NOT APPLICABLE'} | ${reason.replace(/[|\r\n]/g, ' ')} |`).join('\n');
+    await appendFile(process.env.GITHUB_STEP_SUMMARY, `\n### Hosted workflow applicability\n\n| Workflow | Status | Reason |\n|---|---|---|\n${rows}\n`);
   }
   console.log(JSON.stringify(result));
 }

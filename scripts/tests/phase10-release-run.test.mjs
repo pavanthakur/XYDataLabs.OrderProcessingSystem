@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allowedReleaseBranches, applicableHostedWorkflows, expectedBranch, selectHostedCiRun, selectPromotionHostedCiRuns, validateHostedCiArtifact, validateHostedCiRuns, validatePromotionAncestry, validateReleaseRun } from '../phase10-release-run.mjs';
+import { allowedReleaseBranches, applicableHostedWorkflows, classifyHostedWorkflows, expectedBranch, selectHostedCiRun, selectPromotionHostedCiRuns, validateHostedCiArtifact, validateHostedCiRuns, validatePromotionAncestry, validateReleaseRun } from '../phase10-release-run.mjs';
 
 const sha = 'a'.repeat(40);
 const repository = 'pavanthakur/XYDataLabs.OrderProcessingSystem';
@@ -110,4 +110,19 @@ test('hosted workflow applicability requires unconditional and affected speciali
   ]);
   assert.ok(applicableHostedWorkflows(['docs/architecture/decisions/ADR-999-example.md'], { adrValidationEnabled: true }).includes('validate-adrs.yml'));
   assert.ok(applicableHostedWorkflows(['memories/repo/active-work.md']).includes('validate-ai-customization.yml'));
+});
+
+test('hosted workflow applicability reports explicit reasons for required and path-filtered checks', () => {
+  const baseline = classifyHostedWorkflows(['XYDataLabs.OrderProcessingSystem.API/Program.cs']);
+  assert.deepEqual(baseline.filter((entry) => entry.required).map((entry) => entry.workflow), ['ci.yml', 'drift-check.yml']);
+  for (const entry of baseline.filter((item) => !item.required)) assert.match(entry.reason, /^Not applicable:/, entry.workflow);
+
+  const docs = classifyHostedWorkflows(['docs/internal/phase10.md']);
+  assert.equal(docs.find((entry) => entry.workflow === 'validate-doc-links.yml')?.required, true);
+  assert.match(docs.find((entry) => entry.workflow === 'validate-doc-links.yml')?.reason ?? '', /^Required:/);
+  assert.equal(docs.find((entry) => entry.workflow === 'validate-prompts.yml')?.required, false);
+
+  const adrOptIn = classifyHostedWorkflows(['infra/main.phase10.bicep'], { adrValidationEnabled: true });
+  assert.equal(adrOptIn.find((entry) => entry.workflow === 'validate-adrs.yml')?.required, true);
+  assert.match(adrOptIn.find((entry) => entry.workflow === 'validate-adrs.yml')?.reason ?? '', /ADR-sensitive files changed/);
 });
