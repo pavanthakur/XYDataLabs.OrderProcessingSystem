@@ -4,7 +4,7 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 
 ## Checkpoint — 12 November 2026
 
-- Historical acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at E2E/NFR start and finish. Current branch is `dev` at `42513d666fbc84724e121c090c340c6b3fcd4a62`; worktree is dirty with uncommitted Checkpoint B contract-test/CI changes. Do not bind new evidence to this dirty tree as a committed candidate.
+- Historical acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at E2E/NFR start and finish. Current `dev` is `0b9e97c56905f04e8234703a89d375a220af847d`; the worktree is clean. This later commit does not inherit the historical Docker acceptance.
 - Review revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
 - Worktree state: `UNKNOWN`
 - Verify Git state before continuing.
@@ -23,13 +23,14 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 ## Current implementation checkpoint — 12 November 2026
 
 - Release promotion on the committed baseline includes full-SHA release building, six digest-pinned images, Functions ZIP/package hash, exact producer-run/artifact and hosted-evidence checks, source-to-deployment ancestry, environment mapping, a dedicated Functions StorageV2 account + user-assigned identity, and a shared non-cancelling Actions lease. Storage + managed identity was selected; no Azure resource has been provisioned.
-- This dirty `dev` worktree adds offline tests for arbitrary shared/dedicated tenant catalog discovery, fail-closed Azure discovery, repeated missing-only seed preservation, environment/suffix mapping, and Entra scope/audience contract. It registers the tenant-catalog tests in hosted CI. No live runtime was accessed.
-- Local checks passed: release/identity/static-preflight 38 tests; tenant catalog 4/4; Application.Tests 80/80; Docker safety 45/45; environment contract 185/185; hosted-CI contract 9/9; payment/evidence/report suites 43/43; local Bicep compilation; AI customization/doc-link validators; `git diff --check`. Release solution build succeeded with 174 warnings and no errors, including existing OpenPay `NU1701` warnings. Hosted validation for this dirty worktree has not run.
+- Commit `0b9e97c56905f04e8234703a89d375a220af847d` adds offline tests for arbitrary shared/dedicated tenant discovery, fail-closed Azure discovery, repeated missing-only seed preservation, environment/suffix mapping and Entra scope/audience. It registers tenant-catalog tests in hosted CI. No live runtime was accessed.
+- Local checks passed: release/identity/static-preflight 38 tests; tenant catalog 4/4; Application.Tests 80/80; Docker safety 45/45; environment contract 185/185; hosted-CI contract 9/9; payment/evidence/report suites 43/43; local Bicep compilation; AI customization/doc-link validators; `git diff --check`. Release solution build succeeded with 174 warnings and no errors, including existing OpenPay `NU1701` warnings.
+- Exact-SHA hosted checks passed on `dev` (CI 43164671576; docs 43164671593; AI customization 43164671552; prompts 43164671726; drift 43164671539), `staging` merge `e35da419338d21b636c6415d3c8cc09233590023` (CI 43165496815; docs 43165496775; AI customization 43165496713; prompts 43165496845; drift 43165496703) and `main` merge `c14d721fc8b790be5c213647fe11e1ec32d546d6` (CI 43165517250; docs 43165517293; AI customization 43165517281; prompts 43165517432; drift 43165517265). ADR was skipped by opt-in policy on each.
 - Docker acceptance/L6 evidence remains historical and bound only to `494ab4fd`; it does not certify the current candidate. Azure identity/RBAC/quotas/cost, ACR publication, live `what-if`, deployment, runtime, payments, Functions invocation and rollback remain NOT-RUN. Staging deployment acceptance is not machine-enforced before production promotion.
 
 ## Next action
 
-Review and complete repository-only Checkpoint B, then request separate approval before any Azure preflight or mutation. Current worktree is not committed and no B–D completion is claimed. Keep `dev` as the working branch; do not sync unreviewed changes to staging/main.
+Continue repository-only Checkpoint B review, especially the production-promotion gap: staging deployment acceptance is not machine-enforced. Checkpoint C/D live Azure preflight and acceptance remain NOT-RUN and separately approval-gated. Keep `dev` as the working branch.
 
 ## Safety / navigation
 
