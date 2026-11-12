@@ -23,13 +23,13 @@ Session navigation only—not proof. Verify current Git, code, evidence and runt
 ## Current implementation checkpoint — 12 November 2026
 
 - Docker acceptance/L6 evidence remains historical and bound only to `494ab4fd`; it does not certify the current candidate. Azure identity/RBAC/quotas/cost, ACR publication, live `what-if`, deployment, runtime, payments, Functions invocation and rollback remain NOT-RUN. Staging deployment acceptance is not machine-enforced before production promotion.
-- Current branch heads: `dev` `e8433081a8256b68cd597473bcc8221adafca2a6`, `staging` `a3916ac2249912486df9c5d1cc2e4e6b16021564`, and `main` `becdaab42963382f54cf3110d031f0fefc7ef364`; each was synced to its origin and hosted CI, AI customization and Drift Scanner passed on its exact SHA. Documentation/prompt-specific checks passed on the earlier feature commits where applicable; ADR validation remained skipped by its opt-in policy.
+- The prior synced status-only checkpoint was `dev` `e8433081`, `staging` `a3916ac2`, and `main` `becdaab4`. A later scoped documentation correction was committed and synced; verify current branch tips and remote equality from Git rather than relying on these historical checkpoint IDs. Its exact-SHA CI, AI Customization, and Drift Scanner passed; ADR checks were skipped by applicability.
 - Repository-only B2 contract implementation and its offline validation are complete on the feature candidate `0b9e97c56905f04e8234703a89d375a220af847d`; the handoff-only `e8433081` update does not change runtime code. Checks included release/identity/static-preflight (38), tenant catalog (4), Application.Tests (80), Docker safety (45), environment contract (185), hosted-CI contract (9), payment/evidence/report (43), Bicep compilation, AI customization/doc links, and `git diff --check`. Release build succeeded with 174 warnings and no errors; existing warnings were not remediated here.
 - Azure remains unverified: identity/RBAC/quotas/cost, ACR publication, live `what-if`, deployment, runtime, payments, Functions invocation and rollback are NOT-RUN. The chosen dedicated Functions StorageV2 + user-assigned managed-identity design is in IaC only; no resource has been provisioned. Staging acceptance is a required operator gate before production, but is not machine-enforced by the release verifier. Historical Docker/L6 evidence remains bound only to `494ab4fd` and does not certify the current candidate.
 
 ## Next action
 
-Next: decide whether to implement a machine-enforced staging-acceptance evidence gate before production promotion. Checkpoint C/D live Azure preflight and acceptance remain NOT-RUN and require separate scoped approval; do not infer that the selected storage design authorizes provisioning or deployment. Keep `dev` as the working branch.
+Next: complete repository-only review of whether to machine-enforce staging-acceptance evidence before production promotion. Checkpoint C/D live Azure preflight and acceptance remain NOT-RUN and require separate scoped approval; do not infer that the selected storage design authorizes provisioning or deployment. Keep `dev` as the working branch.
 
 ## Safety / navigation
 
