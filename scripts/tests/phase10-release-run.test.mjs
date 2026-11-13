@@ -95,6 +95,19 @@ test('promotion requires successful exact-SHA CI on both artifact source and dep
   }), /not completed successfully/);
 });
 
+test('promotion requires specialist checks only on revisions whose changed paths trigger them', () => {
+  const deploymentSha = 'c'.repeat(40);
+  const sourceRun = { id: 55, head_sha: sha, head_branch: 'dev', status: 'completed', conclusion: 'success' };
+  assert.deepEqual(selectPromotionHostedCiRuns([sourceRun], [], {
+    sourceSha: sha, sourceBranch: 'dev', deploymentWorkflowSha: deploymentSha, deploymentBranch: 'dev',
+    requireSource: true, requireDeployment: false,
+  }), { sourceRun, deploymentRun: null });
+  assert.deepEqual(selectPromotionHostedCiRuns([], [{ ...sourceRun, id: 56, head_sha: deploymentSha }], {
+    sourceSha: sha, sourceBranch: 'dev', deploymentWorkflowSha: deploymentSha, deploymentBranch: 'dev',
+    requireSource: false, requireDeployment: true,
+  }), { sourceRun: null, deploymentRun: { ...sourceRun, id: 56, head_sha: deploymentSha } });
+});
+
 test('hosted workflow applicability requires unconditional and affected specialist checks', () => {
   assert.deepEqual(applicableHostedWorkflows(['docs/internal/phase10.md', '.github/workflows/ci.yml', 'scripts/release-check.mjs']), [
     'ci.yml', 'drift-check.yml', 'validate-doc-links.yml', 'validate-prompts.yml',

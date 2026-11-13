@@ -56,11 +56,11 @@ export function selectHostedCiRun(runs, { sourceSha, branch }) {
   return matching[0];
 }
 
-export function selectPromotionHostedCiRuns(sourceRuns, deploymentRuns, { sourceSha, sourceBranch, deploymentWorkflowSha, deploymentBranch }) {
-  const sourceRun = selectHostedCiRun(sourceRuns, { sourceSha, branch: sourceBranch });
+export function selectPromotionHostedCiRuns(sourceRuns, deploymentRuns, { sourceSha, sourceBranch, deploymentWorkflowSha, deploymentBranch, requireSource = true, requireDeployment = true }) {
+  const sourceRun = requireSource ? selectHostedCiRun(sourceRuns, { sourceSha, branch: sourceBranch }) : null;
   const deploymentRun = deploymentWorkflowSha === sourceSha
-    ? sourceRun
-    : selectHostedCiRun(deploymentRuns, { sourceSha: deploymentWorkflowSha, branch: deploymentBranch });
+    ? (requireDeployment ? sourceRun ?? selectHostedCiRun(sourceRuns, { sourceSha, branch: sourceBranch }) : sourceRun)
+    : requireDeployment ? selectHostedCiRun(deploymentRuns, { sourceSha: deploymentWorkflowSha, branch: deploymentBranch }) : null;
   return { sourceRun, deploymentRun };
 }
 
@@ -149,18 +149,26 @@ export async function verifyReleaseEvidence({ repository, sourceSha, deploymentW
   const workflowIndex = await getJson(`${root}/actions/workflows?per_page=100`, token);
   const sourceFiles = await getCommitChangedPaths(repository, sourceSha, token);
   const deploymentFiles = deploymentWorkflowSha === sourceSha ? [] : await getCommitChangedPaths(repository, deploymentWorkflowSha, token);
-  const workflowApplicability = classifyHostedWorkflows([...sourceFiles, ...deploymentFiles], { adrValidationEnabled: process.env.ADR_VALIDATION_ENABLED === 'true' });
-  const requiredPaths = workflowApplicability.filter((entry) => entry.required).map((entry) => entry.workflow).sort();
+  const classifierOptions = { adrValidationEnabled: process.env.ADR_VALIDATION_ENABLED === 'true' };
+  const sourceApplicability = classifyHostedWorkflows(sourceFiles, classifierOptions);
+  const deploymentApplicability = deploymentWorkflowSha === sourceSha ? sourceApplicability : classifyHostedWorkflows(deploymentFiles, classifierOptions);
+  const workflowApplicability = classifyHostedWorkflows([...sourceFiles, ...deploymentFiles], classifierOptions);
+  const sourceRequiredPaths = new Set(sourceApplicability.filter((entry) => entry.required).map((entry) => entry.workflow));
+  const deploymentRequiredPaths = new Set(deploymentApplicability.filter((entry) => entry.required).map((entry) => entry.workflow));
+  const requiredPaths = [...new Set([...sourceRequiredPaths, ...deploymentRequiredPaths])].sort();
   let hostedCiEvidence;
   for (const workflowPath of requiredPaths) {
     const workflow = workflowIndex.workflows?.find((candidate) => candidate.path === `.github/workflows/${workflowPath}`);
     if (!workflow) throw new Error(`Required hosted workflow is missing from repository inventory: ${workflowPath}.`);
-    const sourceRuns = await getJson(`${root}/actions/workflows/${workflow.id}/runs?head_sha=${sourceSha}&per_page=100`, token);
-    const deploymentRuns = deploymentWorkflowSha === sourceSha
+    const sourceRuns = sourceRequiredPaths.has(workflowPath)
+      ? await getJson(`${root}/actions/workflows/${workflow.id}/runs?head_sha=${sourceSha}&per_page=100`, token)
+      : { workflow_runs: [] };
+    const deploymentRuns = deploymentWorkflowSha === sourceSha || !deploymentRequiredPaths.has(workflowPath)
       ? sourceRuns
       : await getJson(`${root}/actions/workflows/${workflow.id}/runs?head_sha=${deploymentWorkflowSha}&per_page=100`, token);
     const { sourceRun, deploymentRun } = selectPromotionHostedCiRuns(sourceRuns.workflow_runs, deploymentRuns.workflow_runs, {
       sourceSha, sourceBranch: run.head_branch, deploymentWorkflowSha, deploymentBranch,
+      requireSource: sourceRequiredPaths.has(workflowPath), requireDeployment: deploymentRequiredPaths.has(workflowPath),
     });
     if (workflowPath === 'ci.yml') {
       const [sourceArtifacts, deploymentArtifacts] = await Promise.all([
