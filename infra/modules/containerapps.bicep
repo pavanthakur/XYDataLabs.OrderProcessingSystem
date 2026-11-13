@@ -51,6 +51,9 @@ param deadLetterTopicName string = 'order-events-dlq'
 @description('Dead-letter replay subscription name')
 param deadLetterSubscriptionName string = 'dlq-replay'
 
+@description('Approved replay request queue name')
+param replayRequestQueueName string = 'dlq-replay-requests'
+
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -75,7 +78,7 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
-@description('Optional SQL connection string for Phase 10 parity runs')
+@description('Optional managed-identity SQL connection string for Phase 10 application runtime')
 param sqlConnectionString string = ''
 
 @description('Optional Redis connection string for Phase 10 parity runs')
@@ -173,6 +176,10 @@ var publisherEnv = [
   {
     name: 'ServiceBus__DeadLetterSubscriptionName'
     value: deadLetterSubscriptionName
+  }
+  {
+    name: 'ServiceBus__ReplayRequestQueueName'
+    value: replayRequestQueueName
   }
   {
     name: 'ServiceBus__MaxDeliveryCount'

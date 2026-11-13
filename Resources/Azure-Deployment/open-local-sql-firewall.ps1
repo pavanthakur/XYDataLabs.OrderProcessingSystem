@@ -82,13 +82,7 @@ else {
     Msg "  Database (TenantC): OrderProcessingSystem_TenantC_$envSufDb" Cyan
     Msg "  Auth              : SQL Server Authentication" Cyan
     Msg "  Login             : sqladmin" Cyan
-    $kvName = "kv-orderprocessing-$envSuffix"
-    $sqlPwd = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>$null
-    if (-not [string]::IsNullOrWhiteSpace($sqlPwd)) {
-        Msg "  Password          : $sqlPwd" Cyan
-    } else {
-        Msg "  Password          : (run: az keyvault secret show --vault-name $kvName --name sql-admin-password --query value -o tsv)" Yellow
-    }
+    Msg "  Password          : not displayed by this script; retrieve through an authorized secure workflow if SQL authentication is required" Yellow
     Msg "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" DarkGray
     Msg ""
     Msg "Remember to close the rule when done:" Yellow

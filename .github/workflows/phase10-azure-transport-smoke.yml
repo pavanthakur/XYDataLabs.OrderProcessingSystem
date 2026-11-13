@@ -74,8 +74,9 @@ jobs:
           NOTIFICATIONS_SUB="notifications-order-created-${BROKER_SUFFIX}"
           DLQ_TOPIC="order-events-dlq"
           DLQ_REPLAY_SUB="dlq-replay-${BROKER_SUFFIX}"
+          REPLAY_REQUEST_QUEUE="$(read_target_field azureReplayRequestQueueName)"
 
-          if [ -z "$RG_NAME" ] || [ -z "$GATEWAY_APP" ] || [ -z "$SB_NAMESPACE" ] || [ -z "$KEY_VAULT_NAME" ] || [ -z "$SQL_SERVER" ]; then
+          if [ -z "$RG_NAME" ] || [ -z "$GATEWAY_APP" ] || [ -z "$SB_NAMESPACE" ] || [ -z "$KEY_VAULT_NAME" ] || [ -z "$SQL_SERVER" ] || [ -z "$REPLAY_REQUEST_QUEUE" ]; then
             echo "Selected runtime target ${TARGET_KEY} is missing Azure transport metadata in automation/config/runtime-targets.json." >&2
             exit 1
           fi
@@ -93,6 +94,7 @@ jobs:
           echo "notificationsSubscription=${NOTIFICATIONS_SUB}" >> "$GITHUB_OUTPUT"
           echo "deadLetterTopic=${DLQ_TOPIC}" >> "$GITHUB_OUTPUT"
           echo "deadLetterSubscription=${DLQ_REPLAY_SUB}" >> "$GITHUB_OUTPUT"
+          echo "replayRequestQueue=${REPLAY_REQUEST_QUEUE}" >> "$GITHUB_OUTPUT"
           echo "subscriptionId=${SUBSCRIPTION_ID}" >> "$GITHUB_OUTPUT"
           echo "sqlServer=${SQL_SERVER}" >> "$GITHUB_OUTPUT"
           echo "keyVaultName=${KEY_VAULT_NAME}" >> "$GITHUB_OUTPUT"
@@ -115,6 +117,7 @@ jobs:
             echo "| Notifications Subscription | ${NOTIFICATIONS_SUB} |"
             echo "| DLQ Topic | ${DLQ_TOPIC} |"
             echo "| Replay Subscription | ${DLQ_REPLAY_SUB} |"
+            echo "| Replay Request Queue | ${REPLAY_REQUEST_QUEUE} |"
             echo '| Replay implementation target | `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs` |'
             echo ""
             echo "### Azure Links"
@@ -122,9 +125,9 @@ jobs:
             echo "- [Resource group](${RESOURCE_GROUP_URL})"
             echo "- [Service Bus namespace](${SERVICE_BUS_URL})"
             echo ""
-            echo "### Broker Replay Proof"
+            echo "### Broker and Functions Intake Proof"
             echo ""
-            echo "This workflow validates broker topology, live consumer durable effects, DLQ forwarding, and replay-subscription visibility through the transport-smoke utility. It does not invoke or prove the deployed DLQ replay Function."
+            echo "This workflow validates broker topology, live consumer durable effects, DLQ forwarding, and deployed Functions quarantine intake through a read-only SQL poll. It does not prove approved DLQ replay; that capability remains NOT RUN."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Service Bus topology exists
@@ -137,6 +140,7 @@ jobs:
           NOTIFICATIONS_SUB="${{ steps.topology.outputs.notificationsSubscription }}"
           DLQ_TOPIC="${{ steps.topology.outputs.deadLetterTopic }}"
           DLQ_REPLAY_SUB="${{ steps.topology.outputs.deadLetterSubscription }}"
+          REPLAY_REQUEST_QUEUE="${{ steps.topology.outputs.replayRequestQueue }}"
 
           az servicebus namespace show --resource-group "$RG_NAME" --name "$SB_NAMESPACE" --only-show-errors 1>/dev/null
           az servicebus topic show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$TOPIC_NAME" --only-show-errors 1>/dev/null
@@ -144,6 +148,7 @@ jobs:
           az servicebus topic subscription show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --topic-name "$TOPIC_NAME" --name "$NOTIFICATIONS_SUB" --only-show-errors 1>/dev/null
           az servicebus topic show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$DLQ_TOPIC" --only-show-errors 1>/dev/null
           az servicebus topic subscription show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --topic-name "$DLQ_TOPIC" --name "$DLQ_REPLAY_SUB" --only-show-errors 1>/dev/null
+          az servicebus queue show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$REPLAY_REQUEST_QUEUE" --only-show-errors 1>/dev/null
 
           echo "✅ Service Bus topology exists." >> "$GITHUB_STEP_SUMMARY"
 

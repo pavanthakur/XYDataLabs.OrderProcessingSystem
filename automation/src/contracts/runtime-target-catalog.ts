@@ -32,9 +32,11 @@ export interface RuntimeTargetDefinition {
   azureUiContainerAppName?: string;
   azureFunctionAppName?: string;
   azureSqlServerName?: string;
+  azureOperationsDatabaseName?: string;
   azureRedisName?: string;
   azureBrokerSuffix?: string;
   azureServiceBusNamespaceName?: string;
+  azureReplayRequestQueueName?: string;
   azureApplicationInsightsName?: string;
   azureKeyVaultName?: string;
   ignoreHttpsErrors: boolean;

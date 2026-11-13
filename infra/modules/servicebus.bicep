@@ -27,6 +27,9 @@ param notificationsSubscriptionName string = 'notifications-order-created'
 @description('Name of the DLQ replay subscription')
 param deadLetterSubscriptionName string = 'dlq-replay'
 
+@description('Name of the approved replay request queue')
+param replayRequestQueueName string = 'dlq-replay-requests'
+
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -123,6 +126,16 @@ resource dlqReplaySubscription 'Microsoft.ServiceBus/namespaces/topics/subscript
   }
 }
 
+resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' = {
+  parent: sbNamespace
+  name: replayRequestQueueName
+  properties: {
+    defaultMessageTimeToLive: messageTtl
+    maxDeliveryCount: maxDeliveryCount
+    deadLetteringOnMessageExpiration: true
+  }
+}
+
 output serviceBusNamespaceName string = sbNamespace.name
 output orderEventsTopic string = orderTopic.name
 output ordersPaymentStateSubscription string = ordersPaymentStateSubscription.name
@@ -130,6 +143,7 @@ output inventorySubscription string = inventorySubscription.name
 output notificationsSubscription string = notificationsSubscription.name
 output deadLetterTopic string = dlqTopic.name
 output deadLetterSubscription string = dlqReplaySubscription.name
+output replayRequestQueueName string = replayRequestQueue.name
 output transportAuthRuleName string = transportAuthRule.name
 #disable-next-line use-resource-symbol-reference
 var transportAuthRuleConnectionString = listKeys(transportAuthRule.id, '2022-10-01-preview').primaryConnectionString

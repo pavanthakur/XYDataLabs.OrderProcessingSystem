@@ -11,11 +11,14 @@ const runtimeTarget = (key, environment) => ({
   key, runtime: 'azure', verificationMode: 'azure', browserMode: 'azure', allowGeneratedAzureUrlFallback: false,
   baseUrl: `https://${environment}.example.test`, apiBaseUrl: `https://api-${environment}.example.test`,
   publicUiBaseUrl: `https://${environment}.example.test`, publicApiBaseUrl: `https://api-${environment}.example.test`,
+  azureReplayRequestQueueName: `dlq-replay-requests-${environment}`,
+  azureSqlServerName: `orderprocessing-sql-${environment}`,
+  azureOperationsDatabaseName: environment === 'stg' ? 'OrderProcessingSystem_Staging' : `OrderProcessingSystem_${environment === 'prod' ? 'Prod' : 'Dev'}`,
 });
 
 const valid = {
   functionsProject: '<TargetFramework>net8.0</TargetFramework>',
-  functionsBicep: `resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' resource hostStorageIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' resource hostStorageBlobDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' scope: hostStorage roleDefinitionId: storageBlobDataOwnerRoleId principalId: hostStorageIdentity.properties.principalId allowBlobPublicAccess: false allowSharedKeyAccess: false minimumTlsVersion: 'TLS1_2' supportsHttpsTrafficOnly: true name: 'WEBSITE_RUN_FROM_PACKAGE' value: '1' name: 'FUNCTIONS_EXTENSION_VERSION' value: '~4' name: 'FUNCTIONS_WORKER_RUNTIME' value: 'dotnet-isolated' name: 'ServiceBusConnection' value: serviceBusConnectionString name: 'ServiceBus__ConnectionString' value: serviceBusConnectionString name: 'AzureWebJobsStorage__accountName' value: hostStorage.name name: 'AzureWebJobsStorage__credential' value: 'managedidentity' name: 'AzureWebJobsStorage__clientId' value: hostStorageIdentity.properties.clientId type: 'SystemAssigned, UserAssigned' userAssignedIdentities: hostStorageIdentity.id dependsOn: [ hostStorageBlobDataOwner
+  functionsBicep: `resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' resource hostStorageIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' resource hostStorageBlobDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' scope: hostStorage roleDefinitionId: storageBlobDataOwnerRoleId principalId: hostStorageIdentity.properties.principalId allowBlobPublicAccess: false allowSharedKeyAccess: false minimumTlsVersion: 'TLS1_2' supportsHttpsTrafficOnly: true name: 'WEBSITE_RUN_FROM_PACKAGE' value: '1' name: 'FUNCTIONS_EXTENSION_VERSION' value: '~4' name: 'FUNCTIONS_WORKER_RUNTIME' value: 'dotnet-isolated' name: 'ServiceBusConnection' value: serviceBusConnectionString name: 'ServiceBus__ConnectionString' value: serviceBusConnectionString name: 'AzureWebJobsStorage__accountName' value: hostStorage.name name: 'AzureWebJobsStorage__credential' value: 'managedidentity' name: 'AzureWebJobsStorage__clientId' value: hostStorageIdentity.properties.clientId name: 'ConnectionStrings__OrderProcessingSystemDbConnection' value: operationsDatabaseConnectionString name: 'Phase10DlqTopicName' value: deadLetterTopicName name: 'Phase10DlqIntakeSubscriptionName' value: deadLetterSubscriptionName name: 'Phase10ReplayRequestQueueName' value: replayRequestQueueName name: 'ServiceBus__ReplayRequestQueueName' value: replayRequestQueueName Authentication=Active Directory Managed Identity type: 'SystemAssigned, UserAssigned' userAssignedIdentities: hostStorageIdentity.id dependsOn: [ hostStorageBlobDataOwner
   resource app 'Microsoft.Web/sites@2023-12-01' = { name: 'function-app' }
   resource appScm 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: app name: 'scm' properties: { allow: false } }
   resource appFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: app name: 'ftp' properties: { allow: false } }`,
@@ -25,22 +28,41 @@ const valid = {
   resource apiFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: apiApp name: 'ftp' properties: { allow: false } }
   resource uiScm 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: uiApp name: 'scm' properties: { allow: false } }
   resource uiFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: uiApp name: 'ftp' properties: { allow: false } }`,
+  serviceBusBicep: "resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' output replayRequestQueueName string = replayRequestQueue.name",
   functionsPackageVerifier: "execFile('az', ['account', 'get-access-token']); authorization: `Bearer \${accessToken}`",
-  mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName",
-  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list image@sha256:[0-9a-f]{64}',
+  mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName param replayRequestQueueName string replayRequestQueueName: serviceBus.outputs.replayRequestQueueName output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName",
+  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after identity, SQL, and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
   orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs dryRun: default: true',
   azurePreflightScript: 'phase10-azure-preflight.mjs Microsoft.Authorization/roleAssignments/write',
   parameterFiles: {
-    dev: { parameters: { functionsHostStorageSkuName: { value: 'Standard_LRS' } } },
-    staging: { parameters: { functionsHostStorageSkuName: { value: 'Standard_LRS' } } },
-    prod: { parameters: { functionsHostStorageSkuName: { value: 'Standard_GRS' } } },
+    dev: { parameters: { functionsHostStorageSkuName: { value: 'Standard_LRS' }, replayRequestQueueName: { value: 'dlq-replay-requests-dev' } } },
+    staging: { parameters: { functionsHostStorageSkuName: { value: 'Standard_LRS' }, replayRequestQueueName: { value: 'dlq-replay-requests-stg' } } },
+    prod: { parameters: { functionsHostStorageSkuName: { value: 'Standard_GRS' }, replayRequestQueueName: { value: 'dlq-replay-requests-prod' } } },
   },
   runtimeTargets: { targets: [runtimeTarget('azure-dev', 'dev'), runtimeTarget('azure-stg', 'stg'), runtimeTarget('azure-prod', 'prod')] },
 };
 
+valid.functionsBicep = `@minLength(1) param sqlServerFqdn string @minLength(1) param sqlDatabaseName string ${valid.functionsBicep} name: 'AzureWebJobs.DlqIntakeFunction.Disabled' value: 'true' name: 'AzureWebJobs.DlqReplayFunction.Disabled' value: 'true'`;
+valid.mainBicep += " param existingFunctionsSqlServerName string param existingFunctionsSqlDatabaseName string sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}' sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName";
+valid.mainBicep += " var sqlConnectionString = deploySql ? 'Server=tcp:sql.database.windows.net;Authentication=Active Directory Managed Identity;' : ''";
+
 test('static Azure deployment contract accepts explicit host, transport, immutable release and package settings', () => {
   const result = auditAzureDeployContract(valid);
   assert.equal(result.status, 'PASS', JSON.stringify(result));
+});
+
+test('Azure deploy contract rejects missing SQL fallback workflow wiring and SQL-admin runtime credentials', () => {
+  const missingFallback = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replace('--parameters existingFunctionsSqlServerName=', ''),
+  });
+  assert.match(missingFallback.failures.join('\n'), /must pass existing Functions SQL targets/);
+
+  const sqlAdminRuntime = auditAzureDeployContract({
+    ...valid,
+    mainBicep: valid.mainBicep.replace('Authentication=Active Directory Managed Identity;', 'User ID=sqladmin;Password=admin-secret;'),
+  });
+  assert.match(sqlAdminRuntime.failures.join('\n'), /Container Apps SQL access must use managed identity/);
 });
 
 test('static Azure contract requires every Functions and App Service endpoint to disable publishing Basic auth', () => {
@@ -159,6 +181,12 @@ test('Azure runtime targets require stable HTTPS cloud origins and reject local,
   assert.match(validateAzureRuntimeTargets({})[0] ?? '', /targets array/);
 });
 
+test('Azure runtime targets require an explicit Functions replay queue name', () => {
+  const broken = structuredClone(valid.runtimeTargets);
+  delete broken.targets[1].azureReplayRequestQueueName;
+  assert.match(validateAzureRuntimeTargets(broken).join(' '), /azure-stg: azureReplayRequestQueueName is required/);
+});
+
 test('Azure dev alone may resolve generated origins at runtime without committing their suffix', () => {
   const generated = structuredClone(valid.runtimeTargets);
   Object.assign(generated.targets[0], { publicUrlMode: 'generated', allowGeneratedAzureUrlFallback: true,
@@ -209,10 +237,11 @@ test('environment catalog keeps the branch, environment, and resource suffix con
   }
 });
 
-test('current repository preflight verifies dedicated Functions host storage wiring structurally', async () => {
-  const [functionsProject, functionsBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
+test('current repository preflight verifies Functions storage, SQL identity, and replay topology wiring structurally', async () => {
+  const [functionsProject, functionsBicep, serviceBusBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile('XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj', 'utf8'),
     readFile('infra/modules/functions.bicep', 'utf8'),
+    readFile('infra/modules/servicebus.bicep', 'utf8'),
     readFile('infra/modules/hosting.bicep', 'utf8'),
     readFile('scripts/verify-phase10-function-package-runtime.mjs', 'utf8'),
     readFile('infra/main.phase10.bicep', 'utf8'),
@@ -224,12 +253,20 @@ test('current repository preflight verifies dedicated Functions host storage wir
     readFile('infra/parameters/phase10-prod.json', 'utf8').then(JSON.parse),
     readFile('automation/config/runtime-targets.json', 'utf8').then(JSON.parse),
   ]);
-  const result = auditAzureDeployContract({ functionsProject, functionsBicep, hostingBicep, infraBicepFiles: [
+  const result = auditAzureDeployContract({ functionsProject, functionsBicep, serviceBusBicep, hostingBicep, infraBicepFiles: [
     { path: 'infra/modules/functions.bicep', content: functionsBicep },
     { path: 'infra/modules/hosting.bicep', content: hostingBicep },
   ], deploymentWorkflows: [{ path: '.github/workflows/infra-deploy.yml', content: infraDeployWorkflow }], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   assert.equal(result.status, 'PASS');
   assert.deepEqual(result.blocked, []);
+});
+
+test('Azure transport smoke never competes with the deployed Functions intake subscription', async () => {
+  const source = await readFile('tools/Phase10.TransportSmoke/Program.cs', 'utf8');
+  assert.match(source, /WaitForQuarantineRecordAsync\(options, dlqMessageId\)/);
+  assert.match(source, /\[operations\]\.\[DlqQuarantineRecords\]/);
+  assert.doesNotMatch(source, /CreateReceiver\(|ReceiveMessagesAsync\(|CompleteMessageAsync\(/);
+  assert.match(source, /does not prove approved Functions replay/);
 });
 
 test('deployment parameter identity is recorded before the approval comparison for diagnosable failures', async () => {

@@ -8,7 +8,7 @@ This runbook covers the first live check for the Phase 10 pre-Azure baseline def
 - App/runtime entry point: `infra/main.phase10.bicep`
 - Parameters: `infra/parameters/phase10-dev.json`, `infra/parameters/phase10-staging.json`, `infra/parameters/phase10-prod.json`
 - Transport path: `Orders -> Service Bus -> Inventory/Notifications`
-- Current validated replay smoke path: `order-events-dlq -> dlq-replay-<environment> -> order-events-<environment>`
+- Current transport-smoke path: main topic -> durable consumer effects -> DLQ quarantine intake. Approved Functions replay remains a separate, unproven acceptance gate.
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
@@ -26,6 +26,21 @@ Use GitHub Actions OIDC federated to Microsoft Entra as the default deployment i
 For Function ZIP deployment, use the OIDC-authenticated Azure CLI and an Entra Bearer token for SCM package verification. Validate the runner's Azure CLI version before deployment; if Entra authentication is unavailable, fail closed. The Azure contract validator and regression tests must reject a new App Service without the disabled Basic-auth policies and reject publishing-credential retrieval or Basic-auth code in the deployment path. A narrow OIDC migration does not authorize broadening role assignments or changing runtime identities.
 
 The previous Functions deployment attempt exposed an app-scoped SCM publishing credential in diagnostic output. Do not reuse it. The target remediation is to deploy the Entra-only path and apply the IaC policies that disable SCM/FTP Basic auth; until those controls are live, treat the old credential as exposed. No separate password-policy document is maintained—this runbook, IaC, validator and tests are the canonical implementation guidance.
+
+## Functions Runtime Configuration Contract
+
+The Functions worker uses separate authentication modes for local and cloud host storage:
+
+- Local Docker/non-Docker runs use `AzureWebJobsStorage` with the local Azurite connection string.
+- Azure uses `AzureWebJobsStorage__accountName`, `AzureWebJobsStorage__credential=managedidentity`, and `AzureWebJobsStorage__clientId` for the dedicated host-storage identity. Do not add a storage key or connection-string fallback to Azure.
+- Azure SQL operations state uses `ConnectionStrings__OrderProcessingSystemDbConnection` with `Authentication=Active Directory Managed Identity`. The existing `setup-phase10-sql-managed-identities.ps1` deployment step provisions the Function App identity in SQL; do not give the Function the rotating SQL administrator password.
+- Container Apps connect to SQL with their system-assigned managed identities as well. The SQL administrator credential is reserved for provisioning/migrations and Key Vault recovery; it must never be placed in application runtime settings or printed by local-access helpers.
+- Service Bus trigger settings must agree with `ServiceBus__DeadLetterTopicName`, `ServiceBus__DeadLetterSubscriptionName`, and `ServiceBus__ReplayRequestQueueName`. IaC creates the replay request queue; `automation/config/runtime-targets.json` is the smoke-test name source. The Functions queue trigger and application publisher must use the same environment-specific value.
+- IaC initially deploys `DlqIntakeFunction` and `DlqReplayFunction` with their per-function `Disabled=true` app settings. The workflow applies SQL migrations and identity grants, deploys and verifies the exact package/index, then enables both triggers and rechecks indexing. Failure before the activation step leaves these triggers paused.
+
+Deployment run `43485246975` uploaded the approved Functions ZIP and verified its package hash, but host indexing reported `0/2`. The Function process log showed `Phase10FunctionStartupValidator` rejecting the valid Azure managed-identity storage settings because it required a local-style connection string. The same run’s live settings inspection also found the operations SQL connection and trigger entity settings absent, and the replay-request queue was not declared in IaC. Those are separate configuration gaps; correcting only the storage check would not complete the runtime contract.
+
+The source/IaC remediation adds the cloud storage validation path, managed-identity SQL connections for Functions and Container Apps, explicit topic/subscription/queue settings, and the IaC-owned replay queue. It also defers trigger activation until identity grants and package checks pass. These edits are **local implementation only**: they have not been published or deployed. Do not treat Function indexing, live identity grants, invocation, quarantine, or replay as passing until a new immutable release is deployed and the Function host reports the expected functions. Keep the partially deployed dev resources; no cleanup was selected in the failed run.
 
 ## Phase 10 Operator Checklist
 
@@ -1086,9 +1101,10 @@ The smoke verifies:
 3. A valid `OrderCreatedV1` smoke message can be published to `order-events-<env>`.
 4. Live Inventory and Notifications consumers persist durable SQL effects for that correlation id.
 5. A malformed contract message is forwarded into `order-events-dlq` by the live consumer path.
-6. `dlq-replay-<env>` receives the dead-lettered message.
-7. A replay-stage valid message can be republished to `order-events-<env>`.
-8. Inventory and Notifications both persist replay-stage durable effects for the same correlation id.
+6. The deployed `DlqIntakeFunction` persists the forwarded message into `operations.DlqQuarantineRecords`; the smoke polls SQL read-only instead of competing with the Function by consuming its subscription.
+7. A second valid smoke message is published and Inventory and Notifications persist its durable effects under the same run correlation.
+
+This does **not** invoke `DlqReplayFunction` or prove approved replay. The current “second-fanout” flow is not replay. Keep Function replay acceptance separately NOT RUN until a safe, explicitly scoped Azure-dev replay proof is implemented and executed.
 
 Expected workflow summary:
 
@@ -1098,10 +1114,11 @@ Expected workflow summary:
 | Inventory fan-out processing | PASS |
 | Notifications fan-out processing | PASS |
 | Publish dlq-seed | PASS |
-| DLQ replay subscription receive | PASS |
-| Publish replay | PASS |
-| Inventory replay processing | PASS |
-| Notifications replay processing | PASS |
+| Deployed Functions quarantine intake | PASS |
+| Publish second fan-out message | PASS |
+| Inventory second-message processing | PASS |
+| Notifications second-message processing | PASS |
+| Approved deployed Functions replay | NOT RUN by this smoke |
 
 Local equivalent:
 
@@ -1111,18 +1128,18 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transpor
 
 The local command requires Azure CLI login and access to the `phase10-transport` Service Bus auth rule.
 
-### 9. Broker Replay Smoke
+### 9. Broker and Functions Intake Smoke
 
-The automated transport smoke proves the broker path through `tools/Phase10.TransportSmoke`:
+The automated transport smoke proves the broker and deployed intake path through `tools/Phase10.TransportSmoke`:
 
 1. It resolves active topology from the deployed runtime and validates tenant/provider plus dedicated-database contracts.
 2. It publishes a valid `OrderCreatedV1` message and verifies durable Inventory and Notifications effects in Azure SQL.
 3. It publishes a malformed contract message and verifies forwarding to `order-events-dlq`.
-4. It receives the dead-lettered message from `dlq-replay-<env>`.
-5. It republishes a replay-stage valid message to `order-events-<env>`.
-6. It verifies both downstream consumers persist replay-stage durable effects for the same correlation id.
+4. It waits for the deployed `DlqIntakeFunction` to persist that source message in SQL, without receiving/completing from the Function-owned subscription.
+5. It publishes a separate second valid event to the main topic.
+6. It verifies both downstream consumers persist effects for that event.
 
-This proves topology and controlled receive/republish behavior. It does **not** invoke or prove the deployed `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`. Phase 10.4 must separately capture the Function package identifier, function discovery, invocation identifier, quarantine/approval state, replay attempt, and downstream business effect before deployed Function behavior is considered complete.
+This proves topology, deployed quarantine intake, and downstream processing. It does **not** invoke or prove the deployed `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`. Phase 10.4 must separately capture the Function package identifier, function discovery, invocation evidence, quarantine/approval state, replay attempt, and downstream business effect before deployed Function replay is considered complete.
 
 ## Success Criteria
 

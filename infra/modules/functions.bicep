@@ -39,6 +39,17 @@ param deadLetterTopicName string = 'order-events-dlq'
 @description('Dead-letter replay subscription name')
 param deadLetterSubscriptionName string = 'dlq-replay'
 
+@description('Approved replay request queue name')
+param replayRequestQueueName string = 'dlq-replay-requests'
+
+@description('Azure SQL server FQDN for the Functions operations database')
+@minLength(1)
+param sqlServerFqdn string
+
+@description('Azure SQL database name for the Functions operations state')
+@minLength(1)
+param sqlDatabaseName string
+
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -56,6 +67,7 @@ var functionAppName = '${baseName}-functions-${effectiveResourceSuffix}'
 // across environments without embedding generated hostnames in runtime config.
 var storageAccountName = '${take(replace(toLower(baseName), '-', ''), 8)}${take(replace(toLower(effectiveResourceSuffix), '-', ''), 3)}${uniqueString(resourceGroup().id)}'
 var hostStorageIdentityName = '${baseName}-functions-storage-${effectiveResourceSuffix}'
+var operationsDatabaseConnectionString = 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Managed Identity;'
 var storageBlobDataOwnerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
 
 resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -142,6 +154,20 @@ var appSettings = [
     name: 'AzureWebJobsStorage__clientId'
     value: hostStorageIdentity.properties.clientId
   }
+  // Keep triggers paused while deployment applies settings and grants the
+  // Function App system identity access to the operations database.
+  {
+    name: 'AzureWebJobs.DlqIntakeFunction.Disabled'
+    value: 'true'
+  }
+  {
+    name: 'AzureWebJobs.DlqReplayFunction.Disabled'
+    value: 'true'
+  }
+  {
+    name: 'ConnectionStrings__OrderProcessingSystemDbConnection'
+    value: operationsDatabaseConnectionString
+  }
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
     value: appInsightsConnectionString
@@ -189,6 +215,22 @@ var appSettings = [
   {
     name: 'ServiceBus__DeadLetterSubscriptionName'
     value: deadLetterSubscriptionName
+  }
+  {
+    name: 'ServiceBus__ReplayRequestQueueName'
+    value: replayRequestQueueName
+  }
+  {
+    name: 'Phase10DlqTopicName'
+    value: deadLetterTopicName
+  }
+  {
+    name: 'Phase10DlqIntakeSubscriptionName'
+    value: deadLetterSubscriptionName
+  }
+  {
+    name: 'Phase10ReplayRequestQueueName'
+    value: replayRequestQueueName
   }
   {
     name: 'ServiceBus__MaxDeliveryCount'

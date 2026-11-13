@@ -178,11 +178,13 @@
       "azureUiContainerAppName": "orderprocessing-ui-dev",
       "azureFunctionAppName": "orderprocessing-functions-dev",
       "azureSqlServerName": "orderprocessing-sql-dev",
+      "azureOperationsDatabaseName": "OrderProcessingSystem_Dev",
       "azureRedisName": "orderprocessing-redis-dev",
       "azureKeyVaultName": "kv-orderprocessing-dev",
       "azureApplicationInsightsName": "ai-orderprocessing-dev",
       "azureServiceBusNamespaceName": "sb-orderprocessing-dev",
-      "azureBrokerSuffix": "dev"
+      "azureBrokerSuffix": "dev",
+      "azureReplayRequestQueueName": "dlq-replay-requests-dev"
     },
     {
       "key": "azure-stg",
@@ -211,11 +213,13 @@
       "azureUiContainerAppName": "orderprocessing-ui-stg",
       "azureFunctionAppName": "orderprocessing-functions-stg",
       "azureSqlServerName": "orderprocessing-sql-stg",
+      "azureOperationsDatabaseName": "OrderProcessingSystem_Staging",
       "azureRedisName": "orderprocessing-redis-stg",
       "azureKeyVaultName": "kv-orderprocessing-stg",
       "azureApplicationInsightsName": "ai-orderprocessing-stg",
       "azureServiceBusNamespaceName": "sb-orderprocessing-stg",
-      "azureBrokerSuffix": "staging"
+      "azureBrokerSuffix": "staging",
+      "azureReplayRequestQueueName": "dlq-replay-requests-stg"
     },
     {
       "key": "azure-prod",
@@ -244,11 +248,13 @@
       "azureUiContainerAppName": "orderprocessing-ui-prod",
       "azureFunctionAppName": "orderprocessing-functions-prod",
       "azureSqlServerName": "orderprocessing-sql-prod",
+      "azureOperationsDatabaseName": "OrderProcessingSystem_Prod",
       "azureRedisName": "orderprocessing-redis-prod",
       "azureKeyVaultName": "kv-orderprocessing-prod",
       "azureApplicationInsightsName": "ai-orderprocessing-prod",
       "azureServiceBusNamespaceName": "sb-orderprocessing-prod",
-      "azureBrokerSuffix": "prod"
+      "azureBrokerSuffix": "prod",
+      "azureReplayRequestQueueName": "dlq-replay-requests-prod"
     }
   ]
 }

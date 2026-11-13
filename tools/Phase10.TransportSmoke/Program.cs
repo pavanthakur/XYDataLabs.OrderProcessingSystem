@@ -46,12 +46,7 @@ internal static class Program
                 dlqMessageId,
                 runId));
 
-            checks.Add(await ReceiveExpectedAsync(
-                client,
-                options.DeadLetterTopicName,
-                options.DeadLetterSubscriptionName,
-                dlqMessageId,
-                "DLQ replay subscription receive"));
+            checks.Add(await WaitForQuarantineRecordAsync(options, dlqMessageId));
 
             checks.Add(await PublishValidAsync(
                 client,
@@ -60,15 +55,15 @@ internal static class Program
                 options.TenantId,
                 options.TenantCode,
                 runId,
-                "replay"));
+                "second-fanout"));
 
-            var replayEffects = await WaitForEffectsAsync(
+            var secondMessageEffects = await WaitForEffectsAsync(
                 options,
                 runId,
                 expectedMessagesPerConsumer: 2,
-                stageName: "replay");
-            checks.Add(replayEffects.InventoryCheck);
-            checks.Add(replayEffects.NotificationsCheck);
+                stageName: "second-message");
+            checks.Add(secondMessageEffects.InventoryCheck);
+            checks.Add(secondMessageEffects.NotificationsCheck);
         }
         catch (Exception ex)
         {
@@ -165,43 +160,41 @@ internal static class Program
             $"Published malformed `{messageId}` to `{topicName}` so live consumers should dead-letter it.");
     }
 
-    private static async Task<SmokeCheck> ReceiveExpectedAsync(
-        ServiceBusClient client,
-        string topicName,
-        string subscriptionName,
-        string expectedMessageId,
-        string checkName)
+    private static async Task<SmokeCheck> WaitForQuarantineRecordAsync(
+        SmokeOptions options,
+        string sourceMessageId)
     {
-        await using var receiver = client.CreateReceiver(topicName, subscriptionName, new ServiceBusReceiverOptions
-        {
-            ReceiveMode = ServiceBusReceiveMode.PeekLock
-        });
+        const string sql = """
+            SET NOCOUNT ON;
+            SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+            SET LOCK_TIMEOUT 5000;
 
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(75);
-        var inspected = 0;
+            SELECT TOP (1) [SourceMessageId]
+            FROM [operations].[DlqQuarantineRecords] WITH (READUNCOMMITTED)
+            WHERE [SourceMessageId] = @sourceMessageId;
+            """;
 
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(options.SqlTimeoutSeconds);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            var messages = await receiver.ReceiveMessagesAsync(maxMessages: 10, maxWaitTime: TimeSpan.FromSeconds(5));
-            if (messages.Count == 0)
+            await using var connection = new SqlConnection(options.SqlConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.Add(new SqlParameter("@sourceMessageId", SqlDbType.NVarChar, 128) { Value = sourceMessageId });
+            var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+            if (result is string persistedMessageId)
             {
-                continue;
+                return SmokeCheck.Pass(
+                    "Deployed Functions quarantine intake",
+                    $"Observed source message `{persistedMessageId}` persisted by the Functions intake trigger in `{options.SqlDatabaseName}`.");
             }
 
-            foreach (var message in messages)
-            {
-                inspected++;
-                if (string.Equals(message.MessageId, expectedMessageId, StringComparison.Ordinal))
-                {
-                    await receiver.CompleteMessageAsync(message);
-                    return SmokeCheck.Pass(checkName, $"Received and completed `{expectedMessageId}` from `{topicName}/{subscriptionName}` after inspecting {inspected} message(s).");
-                }
-
-                await receiver.AbandonMessageAsync(message);
-            }
+            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
         }
 
-        return SmokeCheck.Fail(checkName, $"Did not receive `{expectedMessageId}` from `{topicName}/{subscriptionName}` before timeout. Inspected {inspected} message(s).");
+        return SmokeCheck.Fail(
+            "Deployed Functions quarantine intake",
+            $"No quarantine record for source message `{sourceMessageId}` appeared in `{options.SqlDatabaseName}` before the configured timeout.");
     }
 
     private static async Task<EffectCheckResult> WaitForEffectsAsync(
@@ -319,7 +312,7 @@ internal static class Program
         Console.WriteLine($"| Inventory Subscription | `{options.InventorySubscriptionName}` |");
         Console.WriteLine($"| Notifications Subscription | `{options.NotificationsSubscriptionName}` |");
         Console.WriteLine($"| DLQ Topic | `{options.DeadLetterTopicName}` |");
-        Console.WriteLine($"| Replay Subscription | `{options.DeadLetterSubscriptionName}` |");
+        Console.WriteLine($"| Functions Intake Subscription | `{options.DeadLetterSubscriptionName}` |");
         Console.WriteLine($"| Smoke Tenant | `{options.TenantCode}` (`{options.TenantId}`) |");
         Console.WriteLine($"| Verification Database | `{options.SqlDatabaseName}` |");
         Console.WriteLine();
@@ -337,7 +330,7 @@ internal static class Program
         Console.WriteLine("### Next Operator Action");
         Console.WriteLine();
         Console.WriteLine(failed == 0
-            ? "Transport publish, live consumer durable effects, DLQ forwarding, and replay consume are verified."
+            ? "Transport publish, live consumer durable effects, broker DLQ forwarding, and deployed Functions quarantine intake are verified. This run does not prove approved Functions replay; that remains a separate acceptance gate."
             : "Review the failed check details, then inspect Azure SQL durable effects, Service Bus message counts, and application logs before rerunning.");
     }
 

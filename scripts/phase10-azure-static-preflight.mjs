@@ -10,6 +10,8 @@ export function validateAzureRuntimeTargets(document) {
   if (azureTargets.length === 0) return ['Runtime target catalog must define at least one Azure target.'];
   for (const target of azureTargets) {
     if (target.verificationMode !== 'azure' || target.browserMode !== 'azure') issues.push(`${target.key}: Azure target must use Azure verification and browser modes.`);
+    if (!target.azureReplayRequestQueueName) issues.push(`${target.key}: azureReplayRequestQueueName is required for deployed Functions replay topology.`);
+    if (!target.azureSqlServerName || !target.azureOperationsDatabaseName) issues.push(`${target.key}: SQL server and operations database targets are required for fail-closed Functions configuration when SQL deployment is skipped.`);
     if (target.publicUrlMode && !['catalog', 'generated'].includes(target.publicUrlMode)) issues.push(`${target.key}: publicUrlMode is unsupported.`);
     if (target.publicUrlMode === 'generated') {
       if (target.key !== 'azure-dev' || target.allowGeneratedAzureUrlFallback !== true) issues.push(`${target.key}: generated URL mode is permitted only for explicitly enabled Azure dev.`);
@@ -66,7 +68,7 @@ function validateAppServiceDeploymentWorkflows(workflows = []) {
   return failures;
 }
 
-export function auditAzureDeployContract({ functionsProject, functionsBicep, hostingBicep, infraBicepFiles = [], deploymentWorkflows = [], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles, runtimeTargets }) {
+export function auditAzureDeployContract({ functionsProject, functionsBicep, serviceBusBicep, hostingBicep, infraBicepFiles = [], deploymentWorkflows = [], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles, runtimeTargets }) {
   const failures = [];
   const blocked = [];
   if (!/TargetFramework>net8\.0<\/TargetFramework>/.test(functionsProject)) failures.push('Functions project must target the validated .NET 8 isolated-worker runtime.');
@@ -74,6 +76,50 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, hos
   if (!/name:\s*'FUNCTIONS_WORKER_RUNTIME'[\s\S]*?value:\s*'dotnet-isolated'/.test(functionsBicep)) failures.push('Function App must explicitly configure the dotnet-isolated worker.');
   if (!/name:\s*'ServiceBusConnection'[\s\S]*?value:\s*serviceBusConnectionString/.test(functionsBicep)) failures.push('Functions trigger connection name ServiceBusConnection must map to the configured Azure Service Bus connection.');
   if (!/name:\s*'ServiceBus__ConnectionString'[\s\S]*?value:\s*serviceBusConnectionString/.test(functionsBicep)) failures.push('Functions application Service Bus configuration must remain present.');
+  for (const [name, value] of [
+    ['ConnectionStrings__OrderProcessingSystemDbConnection', 'operationsDatabaseConnectionString'],
+    ['Phase10DlqTopicName', 'deadLetterTopicName'],
+    ['Phase10DlqIntakeSubscriptionName', 'deadLetterSubscriptionName'],
+    ['Phase10ReplayRequestQueueName', 'replayRequestQueueName'],
+    ['ServiceBus__ReplayRequestQueueName', 'replayRequestQueueName'],
+  ]) {
+    if (!new RegExp(`name:\\s*'${name}'[\\s\\S]*?value:\\s*${value}`).test(functionsBicep)) {
+      failures.push(`Functions must configure ${name} from its authoritative deployment value.`);
+    }
+  }
+  if (!/Authentication=Active Directory Managed Identity/.test(functionsBicep)) {
+    failures.push('Functions SQL access must use managed identity rather than a SQL administrator credential.');
+  }
+  if (!/var\s+sqlConnectionString\s*=\s*deploySql\s*\?\s*'[^']*Authentication=Active Directory Managed Identity;[^']*'\s*:\s*''/.test(mainBicep)) {
+    failures.push('Container Apps SQL access must use managed identity; SQL administrator credentials are provisioning-only.');
+  }
+  if (!/param\s+existingFunctionsSqlServerName\s+string/.test(mainBicep)
+    || !/param\s+existingFunctionsSqlDatabaseName\s+string/.test(mainBicep)
+    || !/sqlServerFqdn:\s*deploySql\s*\?\s*sql\.outputs\.sqlServerFqdn\s*:\s*'\$\{existingFunctionsSqlServerName\}\.\$\{az\.environment\(\)\.suffixes\.sqlServerHostname\}'/.test(mainBicep)
+    || !/sqlDatabaseName:\s*deploySql\s*\?\s*sql\.outputs\.databaseName\s*:\s*existingFunctionsSqlDatabaseName/.test(mainBicep)
+    || !/@minLength\(1\)[\s\S]*?param\s+sqlServerFqdn\s+string/.test(functionsBicep)
+    || !/@minLength\(1\)[\s\S]*?param\s+sqlDatabaseName\s+string/.test(functionsBicep)) {
+    failures.push('Functions must receive nonempty SQL target details from the deployed SQL module or an explicit existing SQL target; blank SQL settings are invalid.');
+  }
+  for (const name of ['AzureWebJobs.DlqIntakeFunction.Disabled', 'AzureWebJobs.DlqReplayFunction.Disabled']) {
+    const settingIndex = functionsBicep.indexOf(`name: '${name}'`);
+    const settingBlock = settingIndex < 0 ? '' : functionsBicep.slice(settingIndex, settingIndex + 180);
+    if (!settingBlock.includes("value: 'true'")) {
+      failures.push(`Functions deployment must pause ${name} until the database identity grant and package checks complete.`);
+    }
+  }
+  if (!/ConnectionStrings__OrderProcessingSystemDbConnection/.test(functionsBicep) || /sqlAdminPassword/.test(functionsBicep)) {
+    failures.push('Functions SQL connection must be present and must not contain the SQL administrator password.');
+  }
+  if (!/param\s+replayRequestQueueName\s+string/.test(mainBicep)
+    || !/replayRequestQueueName:\s*serviceBus\.outputs\.replayRequestQueueName/.test(mainBicep)
+    || !/output\s+replayRequestQueueName\s+string\s*=\s*serviceBus\.outputs\.replayRequestQueueName/.test(mainBicep)) {
+    failures.push('The Phase 10 main template must pass and publish the authoritative replay-request queue name.');
+  }
+  if (!/resource\s+replayRequestQueue\s+'Microsoft\.ServiceBus\/namespaces\/queues@/.test(serviceBusBicep ?? '')
+    || !/output\s+replayRequestQueueName\s+string\s*=\s*replayRequestQueue\.name/.test(serviceBusBicep ?? '')) {
+    failures.push('Service Bus IaC must create and output the replay-request queue consumed by Functions and the API.');
+  }
   const appServiceTemplates = infraBicepFiles.length ? infraBicepFiles : [
     { path: 'infra/modules/functions.bicep', content: functionsBicep },
     { path: 'infra/modules/hosting.bicep', content: hostingBicep },
@@ -115,6 +161,15 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, hos
     if (!parameters || parameters.functionsHostStorageSkuName?.value !== (environment === 'prod' ? 'Standard_GRS' : 'Standard_LRS')) {
       failures.push(`The ${environment} parameter contract must explicitly select the reviewed Functions host-storage redundancy profile.`);
     }
+    const replayQueueName = parameters?.replayRequestQueueName?.value;
+    const targetKey = environment === 'staging' ? 'azure-stg' : `azure-${environment}`;
+    const runtimeTarget = runtimeTargets?.targets?.find((target) => target.key === targetKey);
+    if (!replayQueueName || runtimeTarget?.azureReplayRequestQueueName !== replayQueueName) {
+      failures.push(`The ${environment} replay queue name must match its runtime-target catalog entry.`);
+    }
+    if (!runtimeTarget?.azureSqlServerName || !runtimeTarget?.azureOperationsDatabaseName) {
+      failures.push(`The ${environment} runtime target must identify the existing SQL server and Operations database for SQL-disabled validation/deployment paths.`);
+    }
     if (imageParameterNames.some((name) => Object.hasOwn(parameters ?? {}, name))) {
       failures.push(`The ${environment} parameter file must not select mutable image references; release digests are required at deployment.`);
     }
@@ -134,6 +189,22 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, hos
   }
   failures.push(...validateAppServiceDeploymentWorkflows(deploymentWorkflows));
   if (!/az functionapp function list/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify Functions host indexing after package deployment.');
+  if (!/azureOperationsDatabaseName/.test(infraDeployWorkflow)
+    || !/azureSqlServerName/.test(infraDeployWorkflow)
+    || !/--parameters existingFunctionsSqlServerName=/.test(infraDeployWorkflow)
+    || !/--parameters existingFunctionsSqlDatabaseName=/.test(infraDeployWorkflow)) {
+    failures.push('Deployment what-if/create must pass existing Functions SQL targets from the runtime target catalog when the SQL module is skipped.');
+  }
+  const sqlMigrationStep = infraDeployWorkflow.indexOf('name: Run Azure SQL Migrations');
+  const sqlIdentityGrantStep = infraDeployWorkflow.indexOf('name: Grant Phase 10 Runtime SQL Managed Identity Access');
+  const functionPackageStep = infraDeployWorkflow.indexOf('name: Deploy exact Functions package and verify host indexing');
+  const triggerActivationStep = infraDeployWorkflow.indexOf('name: Enable Functions triggers after identity, SQL, and package gates');
+  if (sqlMigrationStep < 0 || sqlIdentityGrantStep <= sqlMigrationStep || functionPackageStep <= sqlIdentityGrantStep || triggerActivationStep <= functionPackageStep
+    || !infraDeployWorkflow.includes('AzureWebJobs.DlqIntakeFunction.Disabled=false')
+    || !infraDeployWorkflow.includes('AzureWebJobs.DlqReplayFunction.Disabled=false')
+    || !infraDeployWorkflow.includes('az functionapp config appsettings list')) {
+    failures.push('Functions DLQ/replay triggers must remain paused until SQL migrations, runtime identity grants, and exact package/index checks pass, then be enabled and verified.');
+  }
   if (/:phase10\b|:latest\b/.test(infraDeployWorkflow) || !/@sha256:\[0-9a-f\]\{64\}/.test(infraDeployWorkflow)) failures.push('Reusable deployment must reject mutable image tags and require digest-qualified references.');
   if (!/candidateSha/.test(orchestratorWorkflow) || !/releaseRunId/.test(orchestratorWorkflow) || !/approvedParameterIdentity/.test(orchestratorWorkflow)) failures.push('Orchestrator must require exact candidate, producer run, and reviewed parameter identity.');
   if (!/deploymentWorkflowSha/.test(orchestratorWorkflow) || !/git merge-base --is-ancestor/.test(orchestratorWorkflow) || !/DEPLOYMENT_WORKFLOW_SHA/.test(infraDeployWorkflow)) {
@@ -173,9 +244,10 @@ async function main() {
   }
   const infraBicepFiles = await collectBicepFiles(path.join(root, 'infra'));
   const deploymentWorkflows = await collectWorkflowFiles(path.join(root, '.github/workflows'));
-  const [functionsProject, functionsBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
+  const [functionsProject, functionsBicep, serviceBusBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile(path.join(root, 'XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj'), 'utf8'),
     readFile(path.join(root, 'infra/modules/functions.bicep'), 'utf8'),
+    readFile(path.join(root, 'infra/modules/servicebus.bicep'), 'utf8'),
     readFile(path.join(root, 'infra/modules/hosting.bicep'), 'utf8'),
     readFile(path.join(root, 'scripts/verify-phase10-function-package-runtime.mjs'), 'utf8'),
     readFile(path.join(root, 'infra/main.phase10.bicep'), 'utf8'),
@@ -187,7 +259,7 @@ async function main() {
     readFile(path.join(root, 'infra/parameters/phase10-prod.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'automation/config/runtime-targets.json'), 'utf8').then(JSON.parse),
   ]);
-  const result = auditAzureDeployContract({ functionsProject, functionsBicep, hostingBicep, infraBicepFiles, deploymentWorkflows, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
+  const result = auditAzureDeployContract({ functionsProject, functionsBicep, serviceBusBicep, hostingBicep, infraBicepFiles, deploymentWorkflows, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   for (const failure of result.failures) console.error(`[FAIL] ${failure}`);
   for (const reason of result.blocked) console.error(`[BLOCKED] ${reason}`);
   if (result.status === 'PASS') console.log('[PASS] Azure deployment contract is structurally ready for authorized live preflight.');

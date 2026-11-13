@@ -326,6 +326,14 @@ jobs:
             echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT
             echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT
             echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+            TARGET_KEY="azure-${{ inputs.environment }}"
+            if [ "${{ inputs.environment }}" = "staging" ]; then TARGET_KEY="azure-stg"; fi
+            RUNTIME_TARGET="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc=require("./automation/config/runtime-targets.json"); const target=doc.targets.find((item)=>item.key===process.env.TARGET_KEY); if(!target) process.exit(2); process.stdout.write(JSON.stringify(target));')"
+            EXISTING_FUNCTIONS_SQL_SERVER="$(RUNTIME_TARGET="$RUNTIME_TARGET" node -e 'process.stdout.write(JSON.parse(process.env.RUNTIME_TARGET).azureSqlServerName || "")')"
+            EXISTING_FUNCTIONS_SQL_DATABASE="$(RUNTIME_TARGET="$RUNTIME_TARGET" node -e 'process.stdout.write(JSON.parse(process.env.RUNTIME_TARGET).azureOperationsDatabaseName || "")')"
+            [[ -n "$EXISTING_FUNCTIONS_SQL_SERVER" && -n "$EXISTING_FUNCTIONS_SQL_DATABASE" ]] || { echo "Runtime target is missing the existing Functions SQL server/database fallback." >&2; exit 1; }
+            echo "existingFunctionsSqlServerName=${EXISTING_FUNCTIONS_SQL_SERVER}" >> $GITHUB_OUTPUT
+            echo "existingFunctionsSqlDatabaseName=${EXISTING_FUNCTIONS_SQL_DATABASE}" >> $GITHUB_OUTPUT
             if [ "${{ inputs.environment }}" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="${{ inputs.environment }}"; fi
             echo "envSuffix=${ENV_SUFFIX}" >> $GITHUB_OUTPUT
             echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
@@ -354,6 +362,12 @@ jobs:
             echo "deployRedis=false" >> $GITHUB_OUTPUT
             echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
             echo "sqlAdminPassword=" >> $GITHUB_OUTPUT
+            RUNTIME_TARGET="$(TARGET_KEY=azure-dev node -e 'const doc=require("./automation/config/runtime-targets.json"); const target=doc.targets.find((item)=>item.key===process.env.TARGET_KEY); if(!target) process.exit(2); process.stdout.write(JSON.stringify(target));')"
+            EXISTING_FUNCTIONS_SQL_SERVER="$(RUNTIME_TARGET="$RUNTIME_TARGET" node -e 'process.stdout.write(JSON.parse(process.env.RUNTIME_TARGET).azureSqlServerName || "")')"
+            EXISTING_FUNCTIONS_SQL_DATABASE="$(RUNTIME_TARGET="$RUNTIME_TARGET" node -e 'process.stdout.write(JSON.parse(process.env.RUNTIME_TARGET).azureOperationsDatabaseName || "")')"
+            [[ -n "$EXISTING_FUNCTIONS_SQL_SERVER" && -n "$EXISTING_FUNCTIONS_SQL_DATABASE" ]] || { echo "Azure dev runtime target is missing the existing Functions SQL server/database fallback." >&2; exit 1; }
+            echo "existingFunctionsSqlServerName=${EXISTING_FUNCTIONS_SQL_SERVER}" >> $GITHUB_OUTPUT
+            echo "existingFunctionsSqlDatabaseName=${EXISTING_FUNCTIONS_SQL_DATABASE}" >> $GITHUB_OUTPUT
           fi
           PLATFORM_SUFFIX="platform"
           ACR_NAME="${{ inputs.acrName }}"
@@ -514,6 +528,8 @@ jobs:
             --validation-level ProviderNoRbac \
             --parameters deploySql="${{ steps.params.outputs.deploySql }}" \
             --parameters deployRedis="${{ steps.params.outputs.deployRedis }}" \
+            --parameters existingFunctionsSqlServerName="${{ steps.params.outputs.existingFunctionsSqlServerName }}" \
+            --parameters existingFunctionsSqlDatabaseName="${{ steps.params.outputs.existingFunctionsSqlDatabaseName }}" \
             --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
             --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
@@ -659,6 +675,14 @@ jobs:
           echo "deploySql=true" >> $GITHUB_OUTPUT
           echo "deployRedis=true" >> $GITHUB_OUTPUT
           echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+          TARGET_KEY="azure-${{ inputs.environment }}"
+          if [ "${{ inputs.environment }}" = "staging" ]; then TARGET_KEY="azure-stg"; fi
+          RUNTIME_TARGET="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc=require("./automation/config/runtime-targets.json"); const target=doc.targets.find((item)=>item.key===process.env.TARGET_KEY); if(!target) process.exit(2); process.stdout.write(JSON.stringify(target));')"
+          EXISTING_FUNCTIONS_SQL_SERVER="$(RUNTIME_TARGET="$RUNTIME_TARGET" node -e 'process.stdout.write(JSON.parse(process.env.RUNTIME_TARGET).azureSqlServerName || "")')"
+          EXISTING_FUNCTIONS_SQL_DATABASE="$(RUNTIME_TARGET="$RUNTIME_TARGET" node -e 'process.stdout.write(JSON.parse(process.env.RUNTIME_TARGET).azureOperationsDatabaseName || "")')"
+          [[ -n "$EXISTING_FUNCTIONS_SQL_SERVER" && -n "$EXISTING_FUNCTIONS_SQL_DATABASE" ]] || { echo "Runtime target is missing the existing Functions SQL server/database fallback." >&2; exit 1; }
+          echo "existingFunctionsSqlServerName=${EXISTING_FUNCTIONS_SQL_SERVER}" >> $GITHUB_OUTPUT
+          echo "existingFunctionsSqlDatabaseName=${EXISTING_FUNCTIONS_SQL_DATABASE}" >> $GITHUB_OUTPUT
           SQL_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)Aa1!"
           echo "::add-mask::${SQL_ADMIN_PASSWORD}"
           echo "sqlAdminPassword=${SQL_ADMIN_PASSWORD}" >> $GITHUB_OUTPUT
@@ -942,6 +966,8 @@ jobs:
             --parameters @${{ steps.params.outputs.file }} \
             --parameters deploySql="${{ steps.params.outputs.deploySql }}" \
             --parameters deployRedis="${{ steps.params.outputs.deployRedis }}" \
+            --parameters existingFunctionsSqlServerName="${{ steps.params.outputs.existingFunctionsSqlServerName }}" \
+            --parameters existingFunctionsSqlDatabaseName="${{ steps.params.outputs.existingFunctionsSqlDatabaseName }}" \
             --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
             --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
@@ -1225,6 +1251,48 @@ jobs:
             echo "| Indexed functions | ${indexed_count} |"
             echo "| Invocation evidence | pending Phase 10 transport workflow 03 |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enable Functions triggers after identity, SQL, and package gates
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: bash
+        env:
+          RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
+          FUNCTION_APP: ${{ steps.outputs.outputs.function }}
+          PACKAGE_PATH: phase10-release/functions.zip
+        run: |
+          set -euo pipefail
+          [[ -n "$FUNCTION_APP" ]] || { echo "Function App output is empty; refusing to enable triggers." >&2; exit 1; }
+          az functionapp config appsettings set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$FUNCTION_APP" \
+            --settings \
+              "AzureWebJobs.DlqIntakeFunction.Disabled=false" \
+              "AzureWebJobs.DlqReplayFunction.Disabled=false" \
+            --only-show-errors 1>/dev/null
+          az functionapp restart \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$FUNCTION_APP" \
+            --only-show-errors 1>/dev/null
+
+          for setting in AzureWebJobs.DlqIntakeFunction.Disabled AzureWebJobs.DlqReplayFunction.Disabled; do
+            value="$(az functionapp config appsettings list \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$FUNCTION_APP" \
+              --query "[?name=='${setting}'].value | [0]" \
+              --output tsv)"
+            [[ "$value" == "false" ]] || { echo "Required Functions trigger setting ${setting} is not enabled." >&2; exit 1; }
+          done
+
+          expected_count="$(unzip -p "$PACKAGE_PATH" functions.metadata | jq 'length')"
+          indexed_count=0
+          for attempt in $(seq 1 24); do
+            indexed_count="$(az functionapp function list --resource-group "$RESOURCE_GROUP" --name "$FUNCTION_APP" --query 'length(@)' --output tsv 2>/dev/null || echo 0)"
+            [[ "$indexed_count" =~ ^[0-9]+$ ]] || indexed_count=0
+            if [ "$indexed_count" -eq "$expected_count" ]; then break; fi
+            sleep 15
+          done
+          [[ "$indexed_count" == "$expected_count" ]] || { echo "Expected ${expected_count} indexed Functions after activation; found ${indexed_count}." >&2; exit 1; }
+          echo "✅ Deployed Functions triggers are enabled only after SQL identity grants and package verification; ${indexed_count}/${expected_count} Functions are indexed." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Refresh Runtime Hosts After SQL Setup
         if: ${{ steps.params.outputs.deploySql == 'true' }}

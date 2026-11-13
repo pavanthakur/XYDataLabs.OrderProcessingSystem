@@ -12,6 +12,7 @@
     "inventorySubscriptionName": { "value": "inventory-order-created-prod" },
     "notificationsSubscriptionName": { "value": "notifications-order-created-prod" },
     "deadLetterSubscriptionName": { "value": "dlq-replay-prod" },
+    "replayRequestQueueName": { "value": "dlq-replay-requests-prod" },
     "functionsHostStorageSkuName": { "value": "Standard_GRS" },
     "maxDeliveryCount": { "value": 10 },
     "messageTtl": { "value": "P7D" }

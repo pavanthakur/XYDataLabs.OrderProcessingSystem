@@ -116,6 +116,191 @@ public sealed class Phase10LocalSetupContractTests
     }
 
     [Fact]
+    public void Functions_Startup_Validator_Should_Allow_Azure_Managed_Identity_Storage_And_Complete_Trigger_Settings()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureWebJobsStorage:accountName"] = "phase10hoststorage",
+                ["AzureWebJobsStorage:credential"] = "managedidentity",
+                ["AzureWebJobsStorage:clientId"] = "storage-identity-client-id",
+                ["ConnectionStrings:OrderProcessingSystemDbConnection"] = "Server=tcp:sql.example.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;Authentication=Active Directory Managed Identity;Encrypt=True;",
+                ["ServiceBus:Enabled"] = "true",
+                ["ServiceBus:ConnectionString"] = "Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["ServiceBus:DeadLetterTopicName"] = "order-events-dlq",
+                ["ServiceBus:DeadLetterSubscriptionName"] = "dlq-replay-dev",
+                ["ServiceBus:ReplayRequestQueueName"] = "dlq-replay-requests-dev",
+                ["ServiceBusConnection"] = "Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["Phase10DlqTopicName"] = "order-events-dlq",
+                ["Phase10DlqIntakeSubscriptionName"] = "dlq-replay-dev",
+                ["Phase10ReplayRequestQueueName"] = "dlq-replay-requests-dev"
+            })
+            .Build();
+
+        var options = Options.Create(new ServiceBusOptions
+        {
+            Enabled = true,
+            ConnectionString = configuration["ServiceBus:ConnectionString"]!,
+            DeadLetterTopicName = "order-events-dlq",
+            DeadLetterSubscriptionName = "dlq-replay-dev",
+            ReplayRequestQueueName = "dlq-replay-requests-dev"
+        });
+
+        var validator = new Phase10FunctionStartupValidator(configuration, options);
+
+        validator.Invoking(subject => subject.Validate()).Should().NotThrow();
+    }
+
+    [Fact]
+    public void Functions_Startup_Validator_Should_Reject_Partial_Azure_Storage_Identity_Settings()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureWebJobsStorage:accountName"] = "phase10hoststorage",
+                ["AzureWebJobsStorage:credential"] = "managedidentity"
+            })
+            .Build();
+        var validator = new Phase10FunctionStartupValidator(
+            configuration,
+            Options.Create(new ServiceBusOptions { Enabled = false }));
+
+        validator.Invoking(subject => subject.Validate())
+            .Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Configure AzureWebJobsStorage for local storage or AzureWebJobsStorage:accountName, AzureWebJobsStorage:credential=managedidentity, and AzureWebJobsStorage:clientId for Azure host storage.");
+    }
+
+    [Theory]
+    [InlineData("Server=tcp:sql.example.database.windows.net;Initial Catalog=OrderProcessingSystem_Dev;User ID=sqladmin;Password=not-a-real-secret;")]
+    [InlineData("Server=tcp:sql.example.database.windows.net;Initial Catalog=OrderProcessingSystem_Dev;Authentication=Active Directory Default;")]
+    public void Functions_Startup_Validator_Should_Reject_Azure_SQL_Connections_Without_Managed_Identity(
+        string connectionString)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureWebJobsStorage:accountName"] = "phase10hoststorage",
+                ["AzureWebJobsStorage:credential"] = "managedidentity",
+                ["AzureWebJobsStorage:clientId"] = "storage-identity-client-id",
+                ["ConnectionStrings:OrderProcessingSystemDbConnection"] = connectionString,
+                ["ServiceBus:ConnectionString"] = "Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["ServiceBus:DeadLetterTopicName"] = "order-events-dlq",
+                ["ServiceBus:DeadLetterSubscriptionName"] = "dlq-replay-dev",
+                ["ServiceBus:ReplayRequestQueueName"] = "dlq-replay-requests-dev",
+                ["ServiceBusConnection"] = "Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["Phase10DlqTopicName"] = "order-events-dlq",
+                ["Phase10DlqIntakeSubscriptionName"] = "dlq-replay-dev",
+                ["Phase10ReplayRequestQueueName"] = "dlq-replay-requests-dev"
+            })
+            .Build();
+        var validator = new Phase10FunctionStartupValidator(
+            configuration,
+            Options.Create(new ServiceBusOptions
+            {
+                Enabled = true,
+                ConnectionString = configuration["ServiceBus:ConnectionString"]!,
+                DeadLetterTopicName = "order-events-dlq",
+                DeadLetterSubscriptionName = "dlq-replay-dev",
+                ReplayRequestQueueName = "dlq-replay-requests-dev"
+            }));
+
+        validator.Invoking(subject => subject.Validate())
+            .Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Azure Functions SQL access must use Active Directory Managed Identity when Azure host storage uses managed identity.");
+    }
+
+    [Fact]
+    public void Functions_Startup_Validator_Should_Reject_SQL_Credentials_Alongside_Azure_Managed_Identity()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureWebJobsStorage:accountName"] = "phase10hoststorage",
+                ["AzureWebJobsStorage:credential"] = "managedidentity",
+                ["AzureWebJobsStorage:clientId"] = "storage-identity-client-id",
+                ["ConnectionStrings:OrderProcessingSystemDbConnection"] = "Server=tcp:sql.example.database.windows.net;Initial Catalog=OrderProcessingSystem_Dev;Authentication=Active Directory Managed Identity;User ID=sqladmin;Password=not-a-real-secret;",
+                ["ServiceBus:ConnectionString"] = "Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["ServiceBus:DeadLetterTopicName"] = "order-events-dlq",
+                ["ServiceBus:DeadLetterSubscriptionName"] = "dlq-replay-dev",
+                ["ServiceBus:ReplayRequestQueueName"] = "dlq-replay-requests-dev",
+                ["ServiceBusConnection"] = "Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["Phase10DlqTopicName"] = "order-events-dlq",
+                ["Phase10DlqIntakeSubscriptionName"] = "dlq-replay-dev",
+                ["Phase10ReplayRequestQueueName"] = "dlq-replay-requests-dev"
+            })
+            .Build();
+        var validator = new Phase10FunctionStartupValidator(
+            configuration,
+            Options.Create(new ServiceBusOptions
+            {
+                Enabled = true,
+                ConnectionString = configuration["ServiceBus:ConnectionString"]!,
+                DeadLetterTopicName = "order-events-dlq",
+                DeadLetterSubscriptionName = "dlq-replay-dev",
+                ReplayRequestQueueName = "dlq-replay-requests-dev"
+            }));
+
+        validator.Invoking(subject => subject.Validate())
+            .Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Azure Functions SQL connection must not contain SQL username or password credentials.");
+    }
+
+    [Fact]
+    public void Functions_Startup_Validator_Should_Reject_Conflicting_Storage_Authentication_Modes()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureWebJobsStorage"] = "UseDevelopmentStorage=true",
+                ["AzureWebJobsStorage:accountName"] = "phase10hoststorage",
+                ["AzureWebJobsStorage:credential"] = "managedidentity",
+                ["AzureWebJobsStorage:clientId"] = "storage-identity-client-id"
+            })
+            .Build();
+        var validator = new Phase10FunctionStartupValidator(
+            configuration,
+            Options.Create(new ServiceBusOptions { Enabled = false }));
+
+        validator.Invoking(subject => subject.Validate())
+            .Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Configure either AzureWebJobsStorage for local connection-string storage or the complete AzureWebJobsStorage identity settings, not both.");
+    }
+
+    [Fact]
+    public void Functions_Startup_Validator_Should_Reject_Trigger_And_Application_Queue_Drift()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AzureWebJobsStorage"] = "UseDevelopmentStorage=true",
+                ["ConnectionStrings:OrderProcessingSystemDbConnection"] = "Server=localhost;Database=OrderProcessingSystem_Dev;",
+                ["ServiceBusConnection"] = "Endpoint=sb://localhost;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+                ["Phase10DlqTopicName"] = "order-events-dlq",
+                ["Phase10DlqIntakeSubscriptionName"] = "dlq-replay-dev",
+                ["Phase10ReplayRequestQueueName"] = "dlq-replay-requests-dev"
+            })
+            .Build();
+        var options = Options.Create(new ServiceBusOptions
+        {
+            Enabled = true,
+            ConnectionString = "Endpoint=sb://localhost;SharedAccessKeyName=runtime;SharedAccessKey=not-a-real-secret;",
+            DeadLetterTopicName = "order-events-dlq",
+            DeadLetterSubscriptionName = "dlq-replay-dev",
+            ReplayRequestQueueName = "dlq-replay-requests"
+        });
+        var validator = new Phase10FunctionStartupValidator(configuration, options);
+
+        validator.Invoking(subject => subject.Validate())
+            .Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Phase10ReplayRequestQueueName must match ServiceBus:ReplayRequestQueueName so replay requests reach the configured queue.");
+    }
+
+    [Fact]
     public void Functions_Startup_Validator_Should_Require_Trigger_Connection_When_ServiceBus_Is_Enabled()
     {
         var configuration = new ConfigurationBuilder()

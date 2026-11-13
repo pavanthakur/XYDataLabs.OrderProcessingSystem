@@ -33,6 +33,9 @@ param notificationsSubscriptionName string = 'notifications-order-created'
 @description('Dead-letter replay subscription name')
 param deadLetterSubscriptionName string = 'dlq-replay'
 
+@description('Approved replay request queue name')
+param replayRequestQueueName string = 'dlq-replay-requests'
+
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -59,6 +62,12 @@ param uiImage string
 
 @description('Deploy Azure SQL as part of the default Phase 10 baseline')
 param deploySql bool = true
+
+@description('Existing SQL server name used by Functions when the SQL baseline module is intentionally not deployed')
+param existingFunctionsSqlServerName string = ''
+
+@description('Existing operations database name used by Functions when the SQL baseline module is intentionally not deployed')
+param existingFunctionsSqlDatabaseName string = ''
 
 @description('Deploy Azure Managed Redis as part of the default Phase 10 baseline')
 param deployRedis bool = true
@@ -131,6 +140,7 @@ module serviceBus 'modules/servicebus.bicep' = {
     ordersPaymentStateSubscriptionName: ordersPaymentStateSubscriptionName
     notificationsSubscriptionName: notificationsSubscriptionName
     deadLetterSubscriptionName: deadLetterSubscriptionName
+    replayRequestQueueName: replayRequestQueueName
     maxDeliveryCount: maxDeliveryCount
     messageTtl: messageTtl
   }
@@ -167,7 +177,7 @@ module redis 'modules/redis.phase10.bicep' = if (deployRedis) {
 }
 
 #disable-next-line BCP318
-var sqlConnectionString = deploySql ? 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.databaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' : ''
+var sqlConnectionString = deploySql ? 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.databaseName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Managed Identity;' : ''
 #disable-next-line BCP318
 var baselineDedicatedTenantConnectionStrings = deploySql ? {
   // TenantC is sample baseline seed data. Runtime topology remains registry-driven.
@@ -254,6 +264,7 @@ module containerApps 'modules/containerapps.bicep' = {
     notificationsSubscriptionName: serviceBus.outputs.notificationsSubscription
     deadLetterTopicName: serviceBus.outputs.deadLetterTopic
     deadLetterSubscriptionName: serviceBus.outputs.deadLetterSubscription
+    replayRequestQueueName: serviceBus.outputs.replayRequestQueueName
     maxDeliveryCount: maxDeliveryCount
     messageTtl: messageTtl
   }
@@ -276,6 +287,11 @@ module functions 'modules/functions.bicep' = {
     serviceBusConnectionString: serviceBusConnectionString
     deadLetterTopicName: serviceBus.outputs.deadLetterTopic
     deadLetterSubscriptionName: serviceBus.outputs.deadLetterSubscription
+    replayRequestQueueName: serviceBus.outputs.replayRequestQueueName
+    #disable-next-line BCP318
+    sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}'
+    #disable-next-line BCP318
+    sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName
     maxDeliveryCount: maxDeliveryCount
     messageTtl: messageTtl
   }
@@ -303,6 +319,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
 
 output resourceGroupName string = appRg.name
 output serviceBusNamespaceName string = serviceBus.outputs.serviceBusNamespaceName
+output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName
 output logAnalyticsWorkspaceName string = logAnalytics.outputs.logAnalyticsWorkspaceName
 output managedEnvironmentId string = containerApps.outputs.managedEnvironmentId
 output gatewayContainerAppName string = containerApps.outputs.gatewayContainerAppName
@@ -323,11 +340,11 @@ output acrLoginServer string = platformAcrLoginServer
 output acrPullIdentityId string = platformAcrPullIdentityId
 output oidcClientId string = identity.outputs.clientId
 #disable-next-line BCP318
-output sqlServerName string = deploySql ? sql.outputs.sqlServerName : ''
+output sqlServerName string = deploySql ? sql.outputs.sqlServerName : existingFunctionsSqlServerName
 #disable-next-line BCP318
-output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : ''
+output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}'
 #disable-next-line BCP318
-output sqlDatabaseName string = deploySql ? sql.outputs.databaseName : ''
+output sqlDatabaseName string = deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName
 #disable-next-line BCP318
 output tenantCDatabaseName string = deploySql ? sql.outputs.tenantCDatabaseName : ''
 #disable-next-line BCP318
