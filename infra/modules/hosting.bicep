@@ -108,6 +108,40 @@ resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
+// All Web Apps created by this module use Entra/OIDC for deployment. Keep
+// publishing credentials disabled independently for SCM/Kudu and FTP.
+resource apiScmBasicPublishingPolicy 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = {
+  parent: apiApp
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
+resource apiFtpBasicPublishingPolicy 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = {
+  parent: apiApp
+  name: 'ftp'
+  properties: {
+    allow: false
+  }
+}
+
+resource uiScmBasicPublishingPolicy 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = {
+  parent: uiApp
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
+resource uiFtpBasicPublishingPolicy 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = {
+  parent: uiApp
+  name: 'ftp'
+  properties: {
+    allow: false
+  }
+}
+
 output apiHostName string = apiApp.properties.defaultHostName
 output uiHostName string = uiApp.properties.defaultHostName
 output apiPrincipalId string = apiApp.identity.principalId

@@ -1189,6 +1189,11 @@ jobs:
           [[ -f "$PACKAGE_PATH" ]] || { echo "Verified Functions package is unavailable." >&2; exit 1; }
           actual_sha="$(sha256sum "$PACKAGE_PATH" | cut -d ' ' -f1)"
           [[ "$actual_sha" == "$PACKAGE_SHA256" ]] || { echo "Functions package changed after release verification." >&2; exit 1; }
+          azure_cli_version="$(az version --query '"azure-cli"' --output tsv)"
+          node -e 'const v=process.argv[1].split(".").map(Number); if (v[0] < 2 || (v[0] === 2 && (v[1] < 48 || (v[1] === 48 && v[2] < 1)))) process.exit(1)' "$azure_cli_version" || {
+            echo "Azure CLI 2.48.1 or later is required for Entra-authenticated Function App deployment with SCM Basic auth disabled." >&2
+            exit 1
+          }
           az functionapp deployment source config-zip \
             --resource-group "$RESOURCE_GROUP" \
             --name "$FUNCTION_APP" \

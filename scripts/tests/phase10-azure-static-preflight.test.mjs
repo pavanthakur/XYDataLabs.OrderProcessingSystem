@@ -15,9 +15,19 @@ const runtimeTarget = (key, environment) => ({
 
 const valid = {
   functionsProject: '<TargetFramework>net8.0</TargetFramework>',
-  functionsBicep: `resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' resource hostStorageIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' resource hostStorageBlobDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' scope: hostStorage roleDefinitionId: storageBlobDataOwnerRoleId principalId: hostStorageIdentity.properties.principalId allowBlobPublicAccess: false allowSharedKeyAccess: false minimumTlsVersion: 'TLS1_2' supportsHttpsTrafficOnly: true name: 'WEBSITE_RUN_FROM_PACKAGE' value: '1' name: 'FUNCTIONS_EXTENSION_VERSION' value: '~4' name: 'FUNCTIONS_WORKER_RUNTIME' value: 'dotnet-isolated' name: 'ServiceBusConnection' value: serviceBusConnectionString name: 'ServiceBus__ConnectionString' value: serviceBusConnectionString name: 'AzureWebJobsStorage__accountName' value: hostStorage.name name: 'AzureWebJobsStorage__credential' value: 'managedidentity' name: 'AzureWebJobsStorage__clientId' value: hostStorageIdentity.properties.clientId type: 'SystemAssigned, UserAssigned' userAssignedIdentities: hostStorageIdentity.id dependsOn: [ hostStorageBlobDataOwner`,
+  functionsBicep: `resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' resource hostStorageIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' resource hostStorageBlobDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' scope: hostStorage roleDefinitionId: storageBlobDataOwnerRoleId principalId: hostStorageIdentity.properties.principalId allowBlobPublicAccess: false allowSharedKeyAccess: false minimumTlsVersion: 'TLS1_2' supportsHttpsTrafficOnly: true name: 'WEBSITE_RUN_FROM_PACKAGE' value: '1' name: 'FUNCTIONS_EXTENSION_VERSION' value: '~4' name: 'FUNCTIONS_WORKER_RUNTIME' value: 'dotnet-isolated' name: 'ServiceBusConnection' value: serviceBusConnectionString name: 'ServiceBus__ConnectionString' value: serviceBusConnectionString name: 'AzureWebJobsStorage__accountName' value: hostStorage.name name: 'AzureWebJobsStorage__credential' value: 'managedidentity' name: 'AzureWebJobsStorage__clientId' value: hostStorageIdentity.properties.clientId type: 'SystemAssigned, UserAssigned' userAssignedIdentities: hostStorageIdentity.id dependsOn: [ hostStorageBlobDataOwner
+  resource app 'Microsoft.Web/sites@2023-12-01' = { name: 'function-app' }
+  resource appScm 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: app name: 'scm' properties: { allow: false } }
+  resource appFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: app name: 'ftp' properties: { allow: false } }`,
+  hostingBicep: `resource apiApp 'Microsoft.Web/sites@2023-12-01' = { name: 'api-app' }
+  resource uiApp 'Microsoft.Web/sites@2023-12-01' = { name: 'ui-app' }
+  resource apiScm 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: apiApp name: 'scm' properties: { allow: false } }
+  resource apiFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: apiApp name: 'ftp' properties: { allow: false } }
+  resource uiScm 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: uiApp name: 'scm' properties: { allow: false } }
+  resource uiFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = { parent: uiApp name: 'ftp' properties: { allow: false } }`,
+  functionsPackageVerifier: "execFile('az', ['account', 'get-access-token']); authorization: `Bearer \${accessToken}`",
   mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName",
-  infraDeployWorkflow: 'verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list image@sha256:[0-9a-f]{64}',
+  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list image@sha256:[0-9a-f]{64}',
   orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs dryRun: default: true',
   azurePreflightScript: 'phase10-azure-preflight.mjs Microsoft.Authorization/roleAssignments/write',
   parameterFiles: {
@@ -31,6 +41,57 @@ const valid = {
 test('static Azure deployment contract accepts explicit host, transport, immutable release and package settings', () => {
   const result = auditAzureDeployContract(valid);
   assert.equal(result.status, 'PASS', JSON.stringify(result));
+});
+
+test('static Azure contract requires every Functions and App Service endpoint to disable publishing Basic auth', () => {
+  const functionsPolicyEnabled = auditAzureDeployContract({
+    ...valid,
+    functionsBicep: valid.functionsBicep.replace('allow: false', 'allow: true'),
+  });
+  assert.match(functionsPolicyEnabled.failures.join('\n'), /App Service 'app' must explicitly disable SCM basic publishing authentication/);
+
+  const hostingPolicyMissing = auditAzureDeployContract({ ...valid, hostingBicep: valid.hostingBicep.replace(/resource uiFtp[\s\S]*$/, '') });
+  assert.match(hostingPolicyMissing.failures.join('\n'), /App Service 'uiApp' must explicitly disable FTP basic publishing authentication/);
+});
+
+test('Azure preflight applies the passwordless deployment convention to newly added App Service templates', () => {
+  const result = auditAzureDeployContract({
+    ...valid,
+    infraBicepFiles: [
+      { path: 'infra/modules/new-app.bicep', content: "resource futureApp 'Microsoft.Web/sites@2023-12-01' = { name: 'future-app' }" },
+    ],
+  });
+  assert.match(result.failures.join('\n'), /new-app\.bicep: App Service 'futureApp' must explicitly disable SCM basic publishing authentication/);
+  assert.match(result.failures.join('\n'), /new-app\.bicep: App Service 'futureApp' must explicitly disable FTP basic publishing authentication/);
+});
+
+test('Azure preflight requires OIDC for newly added App Service deployment workflows', () => {
+  const result = auditAzureDeployContract({
+    ...valid,
+    deploymentWorkflows: [{
+      path: '.github/workflows/new-webapp.yml',
+      content: 'uses: azure/webapps-deploy@v3 publish-profile',
+    }],
+  });
+  assert.match(result.failures.join('\n'), /new-webapp\.yml: App Service deployment must authenticate with GitHub OIDC/);
+  assert.match(result.failures.join('\n'), /new-webapp\.yml: App Service deployment must not use or retrieve publishing credentials/);
+
+  const oidcWorkflow = auditAzureDeployContract({
+    ...valid,
+    deploymentWorkflows: [{
+      path: '.github/workflows/new-webapp.yml',
+      content: 'permissions: id-token: write uses: azure/login@v3 uses: azure/webapps-deploy@v3',
+    }],
+  });
+  assert.ok(!oidcWorkflow.failures.some((failure) => failure.includes('new-webapp.yml')));
+});
+
+test('static Azure contract rejects a publishing-credential fallback in workflow or verifier', () => {
+  const basicVerifier = auditAzureDeployContract({ ...valid, functionsPackageVerifier: "az functionapp deployment list-publishing-credentials; authorization: `Basic \\${credentials}`" });
+  assert.match(basicVerifier.failures.join('\n'), /Entra Bearer token/);
+
+  const publishProfile = auditAzureDeployContract({ ...valid, infraDeployWorkflow: `${valid.infraDeployWorkflow} publish-profile` });
+  assert.match(publishProfile.failures.join('\n'), /GitHub OIDC and Entra CLI deployment/);
 });
 
 test('static Azure deployment contract blocks missing dedicated host storage or managed-identity grants without promoting it to PASS', () => {
@@ -149,9 +210,11 @@ test('environment catalog keeps the branch, environment, and resource suffix con
 });
 
 test('current repository preflight verifies dedicated Functions host storage wiring structurally', async () => {
-  const [functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
+  const [functionsProject, functionsBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile('XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj', 'utf8'),
     readFile('infra/modules/functions.bicep', 'utf8'),
+    readFile('infra/modules/hosting.bicep', 'utf8'),
+    readFile('scripts/verify-phase10-function-package-runtime.mjs', 'utf8'),
     readFile('infra/main.phase10.bicep', 'utf8'),
     readFile('.github/workflows/infra-deploy.yml', 'utf8'),
     readFile('.github/workflows/phase10-deploy-orchestrator.yml', 'utf8'),
@@ -161,7 +224,10 @@ test('current repository preflight verifies dedicated Functions host storage wir
     readFile('infra/parameters/phase10-prod.json', 'utf8').then(JSON.parse),
     readFile('automation/config/runtime-targets.json', 'utf8').then(JSON.parse),
   ]);
-  const result = auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
+  const result = auditAzureDeployContract({ functionsProject, functionsBicep, hostingBicep, infraBicepFiles: [
+    { path: 'infra/modules/functions.bicep', content: functionsBicep },
+    { path: 'infra/modules/hosting.bicep', content: hostingBicep },
+  ], deploymentWorkflows: [{ path: '.github/workflows/infra-deploy.yml', content: infraDeployWorkflow }], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   assert.equal(result.status, 'PASS');
   assert.deepEqual(result.blocked, []);
 });

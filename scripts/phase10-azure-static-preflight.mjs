@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,7 +40,33 @@ export function validateAzureRuntimeTargets(document) {
   return issues;
 }
 
-export function auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles, runtimeTargets }) {
+function hasDisabledBasicPublishingPolicy(bicep, parentName, endpoint) {
+  const resourceBlocks = String(bicep ?? '').split(/(?=resource\s+\w+\s+'Microsoft\.Web\/sites\/basicPublishingCredentialsPolicies@)/g);
+  const expectedName = "name: '${" + parentName + `}/${endpoint}'`;
+  const parentSymbol = parentName.replace(/\.name$/, '');
+  const matchingPolicies = resourceBlocks.filter((block) => block.startsWith('resource ')
+    && (block.includes(expectedName)
+      || (block.includes(`parent: ${parentSymbol}`) && block.includes(`name: '${endpoint}'`))));
+  return matchingPolicies.length === 1 && /allow:\s*false\b/.test(matchingPolicies[0]);
+}
+
+function validateAppServiceDeploymentWorkflows(workflows = []) {
+  const failures = [];
+  for (const workflow of workflows) {
+    const content = typeof workflow === 'string' ? workflow : workflow.content;
+    const label = typeof workflow === 'string' ? '(unknown workflow)' : workflow.path;
+    if (!/az\s+(?:webapp\s+deploy|functionapp\s+deployment\s+source\s+config-zip)|azure\/(?:webapps-deploy|functions-action)/i.test(content ?? '')) continue;
+    if (!/id-token:\s*write/.test(content ?? '') || !/uses:\s*azure\/login@v\d+/.test(content ?? '')) {
+      failures.push(`${label}: App Service deployment must authenticate with GitHub OIDC through azure/login.`);
+    }
+    if (/publish-profile|list-publishing-credentials|publishing-password|authorization\s*:\s*Basic/i.test(content ?? '')) {
+      failures.push(`${label}: App Service deployment must not use or retrieve publishing credentials.`);
+    }
+  }
+  return failures;
+}
+
+export function auditAzureDeployContract({ functionsProject, functionsBicep, hostingBicep, infraBicepFiles = [], deploymentWorkflows = [], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles, runtimeTargets }) {
   const failures = [];
   const blocked = [];
   if (!/TargetFramework>net8\.0<\/TargetFramework>/.test(functionsProject)) failures.push('Functions project must target the validated .NET 8 isolated-worker runtime.');
@@ -48,6 +74,21 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, mai
   if (!/name:\s*'FUNCTIONS_WORKER_RUNTIME'[\s\S]*?value:\s*'dotnet-isolated'/.test(functionsBicep)) failures.push('Function App must explicitly configure the dotnet-isolated worker.');
   if (!/name:\s*'ServiceBusConnection'[\s\S]*?value:\s*serviceBusConnectionString/.test(functionsBicep)) failures.push('Functions trigger connection name ServiceBusConnection must map to the configured Azure Service Bus connection.');
   if (!/name:\s*'ServiceBus__ConnectionString'[\s\S]*?value:\s*serviceBusConnectionString/.test(functionsBicep)) failures.push('Functions application Service Bus configuration must remain present.');
+  const appServiceTemplates = infraBicepFiles.length ? infraBicepFiles : [
+    { path: 'infra/modules/functions.bicep', content: functionsBicep },
+    { path: 'infra/modules/hosting.bicep', content: hostingBicep },
+  ];
+  for (const template of appServiceTemplates) {
+    const content = typeof template === 'string' ? template : template.content;
+    const label = typeof template === 'string' ? '(unknown template)' : template.path;
+    for (const [, symbol] of String(content ?? '').matchAll(/resource\s+(\w+)\s+'Microsoft\.Web\/sites@/g)) {
+      for (const endpoint of ['scm', 'ftp']) {
+        if (!hasDisabledBasicPublishingPolicy(content, `${symbol}.name`, endpoint)) {
+          failures.push(`${label}: App Service '${symbol}' must explicitly disable ${endpoint.toUpperCase()} basic publishing authentication.`);
+        }
+      }
+    }
+  }
   const storageContractPresent = /resource\s+hostStorage\s+'Microsoft\.Storage\/storageAccounts@/.test(functionsBicep)
     && /resource\s+hostStorageIdentity\s+'Microsoft\.ManagedIdentity\/userAssignedIdentities@/.test(functionsBicep)
     && /resource\s+hostStorageBlobDataOwner\s+'Microsoft\.Authorization\/roleAssignments@/.test(functionsBicep)
@@ -81,6 +122,17 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, mai
   if (!/verify-phase10-release-inputs\.mjs/.test(infraDeployWorkflow) || !/releaseRunAttempt/.test(infraDeployWorkflow) || !/approvedParameterIdentity/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify the named immutable release and parameter identity before cloud authentication.');
   if (!/az functionapp deployment source config-zip/.test(infraDeployWorkflow) || !/FUNCTIONS_PACKAGE_SHA256/.test(infraDeployWorkflow)) failures.push('Reusable deployment must consume the exact hashed Functions package.');
   if (!/verify-phase10-function-package-runtime\.mjs/.test(infraDeployWorkflow) || !/WEBSITE_RUN_FROM_PACKAGE/.test(functionsBicep)) failures.push('Reusable deployment must compare the mounted Functions ZIP bytes with the approved package hash.');
+  if (!/account['\"]?,\s*['\"]get-access-token/.test(functionsPackageVerifier ?? '')
+    || !/Bearer \$\{accessToken\}/.test(functionsPackageVerifier ?? '')
+    || /list-publishing-credentials|Authorization\s*:\s*Basic|authorization:\s*`Basic/i.test(functionsPackageVerifier ?? '')) {
+    failures.push('Functions package verification must use an Entra Bearer token and must not retrieve or send publishing credentials.');
+  }
+  if (!/id-token:\s*write/.test(infraDeployWorkflow) || !/uses:\s*azure\/login@v3/.test(infraDeployWorkflow)
+    || /list-publishing-credentials|publish-profile|publishing-password/i.test(infraDeployWorkflow)
+    || !/Azure CLI 2\.48\.1 or later is required/.test(infraDeployWorkflow)) {
+    failures.push('Azure deployment workflow must use GitHub OIDC and Entra CLI deployment, fail closed on unsupported CLI versions, and contain no publishing-credential fallback.');
+  }
+  failures.push(...validateAppServiceDeploymentWorkflows(deploymentWorkflows));
   if (!/az functionapp function list/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify Functions host indexing after package deployment.');
   if (/:phase10\b|:latest\b/.test(infraDeployWorkflow) || !/@sha256:\[0-9a-f\]\{64\}/.test(infraDeployWorkflow)) failures.push('Reusable deployment must reject mutable image tags and require digest-qualified references.');
   if (!/candidateSha/.test(orchestratorWorkflow) || !/releaseRunId/.test(orchestratorWorkflow) || !/approvedParameterIdentity/.test(orchestratorWorkflow)) failures.push('Orchestrator must require exact candidate, producer run, and reviewed parameter identity.');
@@ -99,9 +151,33 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, mai
 
 async function main() {
   const root = process.cwd();
-  const [functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
+  async function collectBicepFiles(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const files = await Promise.all(entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return collectBicepFiles(entryPath);
+      if (entry.isFile() && entry.name.endsWith('.bicep')) return [{ path: path.relative(root, entryPath), content: await readFile(entryPath, 'utf8') }];
+      return [];
+    }));
+    return files.flat();
+  }
+  async function collectWorkflowFiles(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const files = await Promise.all(entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return collectWorkflowFiles(entryPath);
+      if (entry.isFile() && /\.ya?ml$/i.test(entry.name)) return [{ path: path.relative(root, entryPath), content: await readFile(entryPath, 'utf8') }];
+      return [];
+    }));
+    return files.flat();
+  }
+  const infraBicepFiles = await collectBicepFiles(path.join(root, 'infra'));
+  const deploymentWorkflows = await collectWorkflowFiles(path.join(root, '.github/workflows'));
+  const [functionsProject, functionsBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile(path.join(root, 'XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj'), 'utf8'),
     readFile(path.join(root, 'infra/modules/functions.bicep'), 'utf8'),
+    readFile(path.join(root, 'infra/modules/hosting.bicep'), 'utf8'),
+    readFile(path.join(root, 'scripts/verify-phase10-function-package-runtime.mjs'), 'utf8'),
     readFile(path.join(root, 'infra/main.phase10.bicep'), 'utf8'),
     readFile(path.join(root, '.github/workflows/infra-deploy.yml'), 'utf8'),
     readFile(path.join(root, '.github/workflows/phase10-deploy-orchestrator.yml'), 'utf8'),
@@ -111,7 +187,7 @@ async function main() {
     readFile(path.join(root, 'infra/parameters/phase10-prod.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'automation/config/runtime-targets.json'), 'utf8').then(JSON.parse),
   ]);
-  const result = auditAzureDeployContract({ functionsProject, functionsBicep, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
+  const result = auditAzureDeployContract({ functionsProject, functionsBicep, hostingBicep, infraBicepFiles, deploymentWorkflows, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   for (const failure of result.failures) console.error(`[FAIL] ${failure}`);
   for (const reason of result.blocked) console.error(`[BLOCKED] ${reason}`);
   if (result.status === 'PASS') console.log('[PASS] Azure deployment contract is structurally ready for authorized live preflight.');

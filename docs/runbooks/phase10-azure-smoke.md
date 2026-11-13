@@ -19,6 +19,14 @@ This runbook covers the first live check for the Phase 10 pre-Azure baseline def
 - Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
 - `00 Azure Platform Foundation` registers the Azure resource providers used by the Phase 10 platform and app stacks. `01 Phase 10 Azure Deploy Orchestrator` verifies those providers are already registered and fails early with a clear "run 00 first" message if a clean subscription is missing them.
 
+## Azure App Deployment Identity Standard
+
+Use GitHub Actions OIDC federated to Microsoft Entra as the default deployment identity for every new Azure App Service or Function App. Do not add publishing profiles, SCM passwords, or Basic-auth deployment fallbacks to workflows or verification scripts. IaC must disable both SCM and FTP basic publishing authentication. The deployment identity receives only the app/resource-group permissions required for its job; runtime access uses the service's own managed identity and separately scoped data-plane roles. Application-user sign-in is a separate identity concern.
+
+For Function ZIP deployment, use the OIDC-authenticated Azure CLI and an Entra Bearer token for SCM package verification. Validate the runner's Azure CLI version before deployment; if Entra authentication is unavailable, fail closed. The Azure contract validator and regression tests must reject a new App Service without the disabled Basic-auth policies and reject publishing-credential retrieval or Basic-auth code in the deployment path. A narrow OIDC migration does not authorize broadening role assignments or changing runtime identities.
+
+The previous Functions deployment attempt exposed an app-scoped SCM publishing credential in diagnostic output. Do not reuse it. The target remediation is to deploy the Entra-only path and apply the IaC policies that disable SCM/FTP Basic auth; until those controls are live, treat the old credential as exposed. No separate password-policy document is maintained—this runbook, IaC, validator and tests are the canonical implementation guidance.
+
 ## Phase 10 Operator Checklist
 
 These are the Phase 10 experience improvements that are worth carrying in the active path:
@@ -540,18 +548,27 @@ Portal path for later review: **Cost Management + Billing → select the approve
 
 Keep the dev environment deployed for no more than **35 hours**. Any extension requires an explicit operator decision and a refreshed cost check. Store the scheduled start/teardown time, owner, cleanup approver, and evidence location in the run record. The dev resource group is disposable and cleanup loses trial SQL data. The platform ACR is separate and may continue billing after dev cleanup.
 
-Before the live window, fill and review this run record; blank fields mean the cost-control gate is not ready:
+Live-run record for the approved dev window, updated 13 Nov 2026 after the first application deployment attempt. Resource deployment is partial and Azure runtime acceptance is not yet complete:
 
 | Record | Value before deployment |
 |---|---|
 | Subscription | Approved Pay-As-You-Go subscription ending `980c` |
 | Monthly budget alert | `₹5,000`; monthly subscription budget, 50% actual-cost alert, expires `2028-10-31` |
-| Budget alert recipients | One recipient configured; verify in portal before live run |
-| Test owner | `TBD` |
-| Planned deployment start / teardown time | `TBD` / `TBD` (35-hour maximum window) |
-| Cleanup approver | `TBD` |
-| Evidence location outside dev resource group | `TBD` |
+| Budget alert recipients | One recipient configured and reported read-back verified; budget alert delivery still needs observation |
+| Test owner | Pavan Thakur |
+| Planned deployment start / teardown time | 13 Nov 2026 20:15 IST / 15 Nov 2026 06:57 IST (within the 35-hour maximum window) |
+| Cleanup approver | Pavan Thakur |
+| Evidence location outside dev resource group | `Q:\GIT\TestAppXY_OrderProcessingSystem\TestResults\AzureCost\phase10-dev-20261113\` (local evidence; not in Azure RG) |
 | Protected image policy | Current deployed digest and one verified rollback digest per service |
+| Workflow `00` platform foundation | PASS; run [43445749120](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43445749120), source `f334548f`; platform RG, Basic ACR and pull UAMI read back successfully |
+| Workflow `00a` dev hostname foundation | PASS; run [43446186450](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43446186450), source `f334548f`; dev RG, Log Analytics and ACA environment read back successfully |
+| Entra API/SPA configuration | Registrations, service principals, scope, role, extension and callback configuration passed validation; the current signed-in account has the API `platform-admin` role (verified). Regular-user test assignments/claims remain pending before P6.1. |
+| GitHub OIDC deployment permission | Conditional `Role Based Access Control Administrator` grant exists at `rg-orderprocessing-dev`, restricted to `Storage Blob Data Owner` role assignments for service principals; `01` OIDC/subscription/RBAC preflight passed. |
+| Platform ACR pull permission | `AcrPull` is scoped to the platform ACR for its pull UAMI. The deploy workflow validated the configured registry path; runtime image pull behavior still needs deployed-host verification. |
+| Candidate release | Published from source `f334548f` by build run [43452746987](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43452746987); six immutable images and the Functions package manifest validated. |
+| Application workflow `01` | Run [43455621377](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43455621377) FAILED after incremental resource deployment, SQL migrations and SQL identity grant passed. Functions ZIP deployed; a read-only live package check matched `20261113160231.zip` to the release hash. Workflow verification then failed because its Node fetch path included credential-bearing SCM URL user-info. No cleanup was selected. Runtime app settings/hash, Functions host refresh, provider contract, endpoint smoke, and workflows `02`–`04` remain NOT RUN. |
+| Successful `01` What-If | Run [43454063480](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43454063480): 26 creates, one ACA Log Analytics reference modification, two unchanged, no deletes. Secure Key Vault child details were not expanded in What-If; the Key Vault deployment later succeeded. |
+| Functions verifier and App Service auth remediation | Local implementation now uses Entra Bearer auth for SCM package verification, adds SCM/FTP Basic-auth-disable policies to all existing App Service modules, and makes the Azure preflight inspect all Bicep templates and deployment workflows for future App Services. Focused verifier/static-preflight tests pass 26/26, both affected Bicep modules compile, and static Azure preflight passes. The implementation is uncommitted and not deployed; live Basic-auth disablement and credential invalidation are therefore NOT VERIFIED. |
 
 For each active Phase 10 service, preserve the currently deployed image digest and one verified rollback digest. Retention must use manifest digests, not tag strings: deleting a tag can delete its underlying manifest and all tags on that digest. Keep sanitized evidence outside the disposable dev resource group. Never remove staging/prod-protected digests during dev cleanup.
 

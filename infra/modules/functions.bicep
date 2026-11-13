@@ -226,6 +226,24 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
   ]
 }
 
+// Deployment authentication is Entra/OIDC only. Do not enable publishing
+// credentials for either the SCM/Kudu endpoint or FTP on newly deployed apps.
+resource appScmBasicPublishingPolicy 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = {
+  parent: app
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
+resource appFtpBasicPublishingPolicy 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-09-01' = {
+  parent: app
+  name: 'ftp'
+  properties: {
+    allow: false
+  }
+}
+
 output functionAppName string = app.name
 output functionPrincipalId string = app.identity.principalId
 output hostStorageAccountName string = hostStorage.name
