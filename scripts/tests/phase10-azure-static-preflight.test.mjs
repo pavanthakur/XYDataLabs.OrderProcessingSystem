@@ -238,7 +238,8 @@ test('deployment parameter identity is recorded before the approval comparison f
   const identityComparison = workflow.indexOf('[[ "$calculated" == "$APPROVED_PARAMETER_IDENTITY" ]]');
   assert.notEqual(identityOutput, -1, 'the non-secret calculated identity must appear in the failed job summary');
   assert.ok(identityComparison > identityOutput, 'the calculated identity must be recorded before mismatch can fail the job');
-  assert.match(workflow, /Calculated deployment parameter identity:.*\$calculated/);
+  assert.match(workflow, /echo "Calculated deployment parameter identity: \$calculated"/);
+  assert.match(workflow, /Calculated deployment parameter identity:.*\$calculated.*GITHUB_STEP_SUMMARY/);
 });
 
 test('deploy and Azure acceptance workflows share a per-environment non-cancelling lease', async () => {

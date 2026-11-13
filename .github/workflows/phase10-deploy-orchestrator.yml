@@ -224,6 +224,7 @@ jobs:
             --aliasMode "$ALIAS_MODE" \
             --cleanupInfra "$CLEANUP_INFRA")"
           calculated="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.identitySha256)' "$identity")"
+          echo "Calculated deployment parameter identity: $calculated"
           echo "Calculated deployment parameter identity: \`$calculated\`" >> "$GITHUB_STEP_SUMMARY"
           [[ "$calculated" == "$APPROVED_PARAMETER_IDENTITY" ]] || { echo "Approved deployment parameter identity does not match the selected inputs." >&2; exit 1; }
           node -e 'const fs=require("node:fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const keys={gateway:"gateway_image",orders:"orders_image",payments:"payments_image",inventory:"inventory_image",notifications:"notifications_image",ui:"ui_image"}; let out=`source_sha=${m.sourceSha}\nfunctions_package_sha256=${m.functionsPackage.sha256}\n`; for(const [name,key] of Object.entries(keys)){const image=m.images.find(x=>x.name===name); if(!image) throw new Error(`missing ${name}`); out+=`${key}=${image.image}\n`;} fs.appendFileSync(process.env.GITHUB_OUTPUT,out);' release/release-manifest.json
