@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { calculateDeploymentIdentity } from '../phase10-deployment-identity.mjs';
 
@@ -11,6 +13,47 @@ test('deployment identity is deterministic and binds environment parameters and 
   assert.equal(first.identitySha256, repeated.identitySha256);
   assert.notEqual(first.identitySha256, changedOrigin.identitySha256);
   assert.equal(first.parameterFile, 'infra/parameters/phase10-dev.json');
+  assert.deepEqual(
+    first.infrastructureInputs.map((input) => input.path),
+    [...first.infrastructureInputs.map((input) => input.path)].sort(),
+  );
+});
+
+test('deployment identity is stable across Windows and Linux line endings', async () => {
+  const repositoryRoot = path.resolve('.');
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'phase10-deployment-identity-'));
+  try {
+    await cp(path.join(repositoryRoot, 'infra'), path.join(temporaryRoot, 'infra'), { recursive: true });
+    const policyDirectory = path.join(temporaryRoot, 'Resources', 'Azure-Deployment');
+    await mkdir(policyDirectory, { recursive: true });
+    await cp(path.join(repositoryRoot, 'Resources', 'Azure-Deployment', 'branch-policy.json'), path.join(policyDirectory, 'branch-policy.json'));
+
+    async function convertToLf(directory) {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const entryPath = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          await convertToLf(entryPath);
+        } else if (entry.isFile() && /\.(?:bicep|json)$/.test(entry.name)) {
+          const text = await readFile(entryPath, 'utf8');
+          await writeFile(entryPath, text.replace(/\r\n?/g, '\n'));
+        }
+      }
+    }
+
+    await convertToLf(path.join(temporaryRoot, 'infra'));
+    const parameterFile = path.join(temporaryRoot, 'infra', 'parameters', 'phase10-dev.json');
+    const parameters = await readFile(parameterFile, 'utf8');
+    await writeFile(parameterFile, parameters.replace(/\r\n?/g, '\n'));
+    const branchPolicy = path.join(policyDirectory, 'branch-policy.json');
+    const policy = await readFile(branchPolicy, 'utf8');
+    await writeFile(branchPolicy, policy.replace(/\r\n?/g, '\n'));
+
+    const windowsStyle = await calculateDeploymentIdentity({ repositoryRoot, environment: 'dev', location: 'centralindia' });
+    const linuxStyle = await calculateDeploymentIdentity({ repositoryRoot: temporaryRoot, environment: 'dev', location: 'centralindia' });
+    assert.equal(linuxStyle.identitySha256, windowsStyle.identitySha256);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test('deployment identity rejects invalid environment, region, alias mode, or domain', async () => {

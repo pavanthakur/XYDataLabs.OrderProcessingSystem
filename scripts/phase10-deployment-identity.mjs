@@ -3,7 +3,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const hash = (text) => createHash('sha256').update(text).digest('hex');
+const hash = (content) => createHash('sha256')
+  .update(Buffer.isBuffer(content) ? content.toString('utf8').replace(/\r\n?/g, '\n') : content)
+  .digest('hex');
 
 export async function calculateDeploymentIdentity({ repositoryRoot, environment, location, publicDomain = '', bindAliases = false, aliasMode = 'direct', cleanupInfra = false }) {
   if (!['dev', 'staging', 'prod'].includes(environment)) throw new Error('Unsupported deployment environment.');
@@ -24,7 +26,10 @@ export async function calculateDeploymentIdentity({ repositoryRoot, environment,
     }
   }
   await collectBicep(path.join(repositoryRoot, 'infra'));
-  infrastructureInputs.sort((left, right) => left.path.localeCompare(right.path));
+  // Do not use localeCompare here: deployment identity must hash identically
+  // on Windows operator machines and Linux GitHub runners, independent of ICU
+  // version or process locale.
+  infrastructureInputs.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
   const branchPolicyPath = path.join(repositoryRoot, 'Resources', 'Azure-Deployment', 'branch-policy.json');
   const branchPolicySha256 = hash(await readFile(branchPolicyPath));
   const identity = {
