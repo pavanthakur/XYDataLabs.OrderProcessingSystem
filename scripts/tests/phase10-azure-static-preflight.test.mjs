@@ -232,6 +232,15 @@ test('current repository preflight verifies dedicated Functions host storage wir
   assert.deepEqual(result.blocked, []);
 });
 
+test('deployment parameter identity is recorded before the approval comparison for diagnosable failures', async () => {
+  const workflow = await readFile('.github/workflows/phase10-deploy-orchestrator.yml', 'utf8');
+  const identityOutput = workflow.indexOf('Calculated deployment parameter identity:');
+  const identityComparison = workflow.indexOf('[[ "$calculated" == "$APPROVED_PARAMETER_IDENTITY" ]]');
+  assert.notEqual(identityOutput, -1, 'the non-secret calculated identity must appear in the failed job summary');
+  assert.ok(identityComparison > identityOutput, 'the calculated identity must be recorded before mismatch can fail the job');
+  assert.match(workflow, /Calculated deployment parameter identity:.*\$calculated/);
+});
+
 test('deploy and Azure acceptance workflows share a per-environment non-cancelling lease', async () => {
   const workflowPaths = [
     '.github/workflows/phase10-deploy-orchestrator.yml',
