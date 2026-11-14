@@ -375,6 +375,10 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
   assert.match(runner, /tenantPreflightResults\.push/);
   assert.match(runner, /paymentConfiguration:|paymentProvider: tenantConfiguration\.activeProviderType/);
   assert.match(runner, /localStorage\.getItem\("orderprocessing\.accessToken"\)/);
+  assert.match(runner, /headedOperatorEntra \? \["--start-maximized"\] : \[\]/);
+  assert.match(runner, /viewport: headedOperatorEntra \? null : undefined/);
+  assert.match(runner, /if \(headedOperatorEntra\) await page\.bringToFront\(\)/);
+  assert.match(runner, /Operator Entra sign-in page is in the foreground/);
   assert.match(runner, /Identity-provider sign-out did not complete cleanly/);
   assert.match(runner, /signedOutHeading\.waitFor\(\{ state: "visible", timeout: 10000 \}\)/);
   assert.doesNotMatch(runner, /observedHeading|allTextContents\(\)/);

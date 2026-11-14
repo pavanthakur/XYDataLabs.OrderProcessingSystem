@@ -97,6 +97,9 @@ export class PaymentJourneyRunner {
       && request.reuseEntraSession === true
       && (!request.authPreflightOnly || request.retainOperatorSessionAfterAuthPreflight === true);
     const previousSession = reuseOperatorSession ? this.operatorSession : undefined;
+    const headedOperatorEntra = request.target.runtime === "azure"
+      && request.operatorAssistedEntra === true
+      && request.headless === false;
     if (previousSession && previousSession.baseUrl !== request.target.baseUrl) {
       throw new Error("An operator-assisted Entra browser session cannot be reused across different Azure origins.");
     }
@@ -104,15 +107,22 @@ export class PaymentJourneyRunner {
       this.operatorSession = undefined;
       throw new Error("The operator-assisted Entra browser session closed before all tenant journeys completed; refusing to start a new sign-in or resubmit a payment.");
     }
-    const browser = previousSession?.browser ?? await chromium.launch({ headless: request.headless });
+    const browser = previousSession?.browser ?? await chromium.launch({
+      headless: request.headless,
+      args: headedOperatorEntra ? ["--start-maximized"] : [],
+    });
     let authenticatedEntra = previousSession?.authenticated ?? false;
     const abortBrowser=()=>{void browser.close();};
     request.signal?.addEventListener("abort",abortBrowser,{once:true});
     if(request.signal?.aborted) abortBrowser();
 
     try {
-      const context = previousSession?.context ?? await browser.newContext({ ignoreHTTPSErrors: request.target.ignoreHttpsErrors });
+      const context = previousSession?.context ?? await browser.newContext({
+        ignoreHTTPSErrors: request.target.ignoreHttpsErrors,
+        viewport: headedOperatorEntra ? null : undefined,
+      });
       const page = await context.newPage();
+      if (headedOperatorEntra) await page.bringToFront();
       if (previousSession) {
         await page.addInitScript((storedSession) => {
           for (const [key, value] of Object.entries(storedSession as Record<string, string>)) window.sessionStorage.setItem(key, value);
@@ -174,6 +184,10 @@ export class PaymentJourneyRunner {
 
       log(`Navigating to ${targetUrl}.`);
       await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+      if (headedOperatorEntra) {
+        await page.bringToFront();
+        log("Operator Entra sign-in page is in the foreground; complete normal sign-in/MFA in this window.");
+      }
       await this.completeLocalKeycloakLogin(page, request, log);
       const accessToken = await this.waitForLocalAccessToken(page, request, log);
       if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) authenticatedEntra = true;
