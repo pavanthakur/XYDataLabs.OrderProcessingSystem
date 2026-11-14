@@ -420,7 +420,8 @@ test('Azure all-active-tenant provider fixtures use Entra SQL, exact recovery, a
   assert.match(fixture, /HAS_PERMS_BY_NAME\(N'payments\.PaymentProviders', N'OBJECT', N'UPDATE', N'Use3DSecure', N'COLUMN'\)/);
   assert.match(fixture, /UPDATE dbo\.Tenants SET PaymentProviderCode/);
   assert.match(fixture, /UPDATE payments\.PaymentProviders SET Use3DSecure/);
-  assert.match(fixture, /Wait-AzureFixtureRuntimeRoute/);
+  assert.match(fixture, /\$rows = Invoke-RestMethod -Uri \$endpoint -Method Get -TimeoutSec 10/);
+  assert.doesNotMatch(fixture, /\$rows = @\(Invoke-RestMethod -Uri \$endpoint/);
   assert.match(fixture, /New-Phase10FirewallLease/);
   assert.match(fixture, /Remove-Phase10FirewallLease/);
   assert.doesNotMatch(fixture, /sql-admin-password|SQL admin password|PaymentProviders--.*PrivateKey/);

@@ -257,7 +257,10 @@ function Wait-AzureFixtureRuntimeRoute {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
         try {
-            $rows = @(Invoke-RestMethod -Uri $endpoint -Method Get -TimeoutSec 10)
+            # Invoke-RestMethod can emit a JSON array as one System.Object[] object.
+            # Wrapping the command in @() nests that array and makes Where-Object
+            # compare the tenant fields on the array itself instead of its rows.
+            $rows = Invoke-RestMethod -Uri $endpoint -Method Get -TimeoutSec 10
             $tenant = @($rows | Where-Object { [string]$_.tenantCode -eq $Code })
             if ($tenant.Count -eq 1 -and [string]$tenant[0].paymentProviderCode -eq $ExpectedProvider) { return }
         }

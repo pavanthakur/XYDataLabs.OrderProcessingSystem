@@ -60,9 +60,17 @@ function Invoke-AzureFixtureSql {
     }
     throw 'Unexpected SQL in fixture test.'
 }
-function Wait-AzureFixtureRuntimeRoute {
-    param([string]$Code,[string]$ExpectedProvider)
-    if ($script:fixtureRoute -ne $ExpectedProvider) { throw 'Runtime route mock did not match.' }
+function Invoke-RestMethod {
+    param([string]$Uri,[string]$Method,[int]$TimeoutSec)
+    if ($Uri -notmatch '/api/v1/Info/tenant-registry$' -or $Method -ne 'Get') {
+        throw 'Unexpected runtime verification request in fixture test.'
+    }
+    # Match Invoke-RestMethod's behavior for a JSON array: it returns the array as
+    # one object. An outer @(Invoke-RestMethod ...) would incorrectly nest it.
+    return ,@([pscustomobject]@{tenantCode='Clinic-West-47';paymentProviderCode=$script:fixtureRoute})
+}
+function Start-Sleep {
+    param([int]$Seconds)
 }
 
 try {
