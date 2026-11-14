@@ -374,7 +374,7 @@ internal sealed record SmokeOptions(
             NotificationsSubscriptionName: Get(values, "notifications-subscription", $"notifications-order-created-{suffix}"),
             DeadLetterTopicName: Get(values, "dead-letter-topic", "order-events-dlq"),
             DeadLetterSubscriptionName: Get(values, "dead-letter-subscription", $"dlq-replay-{suffix}"),
-            ConnectionString: GetRequired(values, "connection-string"),
+            ConnectionString: GetRequired(values, "connection-string", "PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING"),
             SqlConnectionString: GetRequired(values, "sql-connection-string", "PHASE10_TRANSPORT_SQL_CONNECTION_STRING"),
             SqlDatabaseName: GetRequired(values, "sql-database"),
             TenantId: int.Parse(GetRequired(values, "tenant-id")),

@@ -9,11 +9,14 @@ param(
     [string]$SqlServerName,
     [string]$ConnectionString,
     [string]$RunId,
+    [string]$RunAttempt = '1',
+    [string]$FirewallLeaseManifestPath,
     [string]$SummaryPath
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'phase10-azure-firewall-lease.ps1')
 
 $resourceSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $brokerSuffix = $Environment
@@ -97,22 +100,10 @@ function Get-PublicIpAddress {
     throw 'Failed to determine the current public IP address for the Azure SQL firewall rule.'
 }
 
-function Ensure-AzureSqlFirewallAccess {
-    $ruleName = "phase10-transport-smoke-$resourceSuffix"
-    $publicIp = Get-PublicIpAddress
-
-    $result = az sql server firewall-rule create `
-        --resource-group $resourceGroup `
-        --server $sqlServerName `
-        --name $ruleName `
-        --start-ip-address $publicIp `
-        --end-ip-address $publicIp 2>&1
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Open Azure SQL firewall access failed. $((@($result | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim())"
-    }
-
-    Write-Host "Opened Azure SQL firewall rule '$ruleName' for $publicIp." -ForegroundColor DarkGray
+function Invoke-AzureCliForFirewallLease {
+    param([string[]]$Arguments)
+    & az @Arguments 2>&1
+    $global:LASTEXITCODE = $LASTEXITCODE
 }
 
 function Resolve-DatabaseNameFromConnectionString {
@@ -298,9 +289,31 @@ $sqlAdminUser = Invoke-AzureCliText -Operation 'Resolve SQL administrator login'
 $sqlAdminPassword = Invoke-AzureCliText -Operation 'Resolve sql-admin-password from Key Vault' -Command {
     az keyvault secret show --vault-name $keyVaultName --name sql-admin-password --query value -o tsv
 }
+$subscriptionId = Invoke-AzureCliText -Operation 'Resolve active Azure subscription' -Command {
+    az account show --query id -o tsv
+}
 
+$previousServiceBusConnectionString = $env:PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING
+$previousSqlConnectionString = $env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING
+$firewallLease = $null
+$transportFailure = $null
+$cleanupError = $null
+$leaseManifestPath = if (-not [string]::IsNullOrWhiteSpace($FirewallLeaseManifestPath)) {
+    $FirewallLeaseManifestPath
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+    Join-Path $env:RUNNER_TEMP "phase10-sql-firewall-lease-transport-$($smokeRunId).json"
+}
+else {
+    Join-Path ([IO.Path]::GetTempPath()) "phase10-sql-firewall-lease-transport-$($smokeRunId).json"
+}
+
+try {
 Write-Step "Opening Azure SQL firewall access"
-Ensure-AzureSqlFirewallAccess
+$publicIp = Get-PublicIpAddress
+$invocationId = if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ID)) { "$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)" } else { [guid]::NewGuid().ToString('N') }
+$firewallLease = New-Phase10FirewallLease -Environment $Environment -SubscriptionId $subscriptionId -ResourceGroup $resourceGroup -Server $sqlServerName -PublicIp $publicIp -RunId $smokeRunId -Attempt $RunAttempt -InvocationId $invocationId -ManifestPath $leaseManifestPath -InvokeAz ${function:Invoke-AzureCliForFirewallLease}
+Write-Host "Opened owned SQL firewall rule '$($firewallLease.RuleName)' for the smoke run." -ForegroundColor DarkGray
 
 Write-Step "Resolving runtime tenant topology and validating tenant/provider contracts"
 $tenantTopology = @(Resolve-ValidatedTenantTopology)
@@ -311,6 +324,7 @@ if ($null -eq $selectedTenant) {
 
 $sqlConnectionString = "Server=tcp:$sqlServerFqdn,1433;Initial Catalog=$($selectedTenant.VerificationDatabaseName);Persist Security Info=False;User ID=$sqlAdminUser;Password=$sqlAdminPassword;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 $env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING = $sqlConnectionString
+$env:PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING = $ConnectionString
 
 if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
     $topologyPath = [System.IO.Path]::ChangeExtension($SummaryPath, '.topology.json')
@@ -329,7 +343,6 @@ $arguments = @(
     '--notifications-subscription', "notifications-order-created-$brokerSuffix",
     '--dead-letter-topic', 'order-events-dlq',
     '--dead-letter-subscription', "dlq-replay-$brokerSuffix",
-    '--connection-string', $ConnectionString,
     '--sql-database', $selectedTenant.VerificationDatabaseName,
     '--tenant-id', $selectedTenant.TenantId,
     '--tenant-code', $selectedTenant.TenantCode,
@@ -352,6 +365,23 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
     $output | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
 }
 
-Remove-Item Env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING -ErrorAction SilentlyContinue
+}
+catch {
+    $transportFailure = $_
+}
+finally {
+    if ($null -ne $firewallLease -or (Test-Path -LiteralPath $leaseManifestPath)) {
+        try { Remove-Phase10FirewallLease -ManifestPath $leaseManifestPath -InvokeAz ${function:Invoke-AzureCliForFirewallLease} }
+        catch { $cleanupError = $_; Write-Warning "Owned SQL firewall cleanup failed; manifest retained at '$leaseManifestPath'." }
+    }
+    $env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING = $previousSqlConnectionString
+    $env:PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING = $previousServiceBusConnectionString
+}
+
+if ($null -ne $transportFailure -and $null -ne $cleanupError) {
+    throw [System.AggregateException]::new('Transport smoke and owned firewall cleanup both failed; inspect the run output and lease manifest.', @($transportFailure.Exception, $cleanupError.Exception))
+}
+if ($null -ne $transportFailure) { throw $transportFailure }
+if ($null -ne $cleanupError) { throw $cleanupError }
 
 exit $exitCode

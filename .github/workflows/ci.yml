@@ -67,6 +67,11 @@ jobs:
         shell: pwsh
         run: Resources/Azure-Deployment/test-phase10-sql-managed-identity-sid.ps1
 
+      - name: Test Azure SQL firewall lease ownership and cleanup
+        id: azure-firewall-lease
+        shell: pwsh
+        run: scripts/test-phase10-azure-firewall-lease.ps1
+
       - name: Set up .NET
         id: setup-dotnet
         uses: actions/setup-dotnet@v5

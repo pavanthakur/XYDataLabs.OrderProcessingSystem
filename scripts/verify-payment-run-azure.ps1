@@ -80,11 +80,43 @@ param(
     [switch] $SkipFirewallOpen,
 
     [Parameter(Mandatory = $false)]
-    [int] $PreQueryDelaySeconds = 0
+    [int] $PreQueryDelaySeconds = 0,
+
+    [Parameter(Mandatory = $false)]
+    [string] $RunAttempt = '1',
+
+    [Parameter(Mandatory = $false)]
+    [string] $FirewallLeaseManifestPath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-azure-firewall-lease.ps1')
+$script:AzureSqlFirewallLease = $null
+$script:AzureSqlFirewallLeaseManifestPath = $null
+
+function Invoke-AzureCliForFirewallLease {
+    param([string[]]$Arguments)
+    & az @Arguments 2>&1
+    $global:LASTEXITCODE = $LASTEXITCODE
+}
+
+function Close-AzureSqlFirewallLease {
+    if ($null -ne $script:AzureSqlFirewallLease) {
+        Remove-Phase10FirewallLease -ManifestPath $script:AzureSqlFirewallLease.ManifestPath -InvokeAz ${function:Invoke-AzureCliForFirewallLease}
+        $script:AzureSqlFirewallLease = $null
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($script:AzureSqlFirewallLeaseManifestPath) -and (Test-Path -LiteralPath $script:AzureSqlFirewallLeaseManifestPath)) {
+        Remove-Phase10FirewallLease -ManifestPath $script:AzureSqlFirewallLeaseManifestPath -InvokeAz ${function:Invoke-AzureCliForFirewallLease}
+    }
+}
+
+trap {
+    $primaryError = $_
+    try { Close-AzureSqlFirewallLease }
+    catch { Write-Warning 'SQL firewall lease cleanup failed; inspect the sanitized lease manifest for recovery.' }
+    throw $primaryError
+}
 
 $resourceEnvironment = switch ($Environment) {
     'staging' { 'stg' }
@@ -400,17 +432,16 @@ function ConvertTo-SqlStringLiteral {
 }
 
 function Ensure-AzureSqlFirewallAccess {
-    $ruleName = "$Environment-machine"
     $publicIp = Get-PublicIpAddress
-
-    az sql server firewall-rule create `
-        --resource-group $resourceGroup `
-        --server $sqlServerName `
-        --name $ruleName `
-        --start-ip-address $publicIp `
-        --end-ip-address $publicIp | Out-Null
-
-    Write-Host "Azure SQL firewall open for $publicIp via rule $ruleName." -ForegroundColor Green
+    $subscriptionId = Invoke-AzureCliText -Operation 'Resolve active Azure subscription' -Command {
+        az account show --query id -o tsv
+    }
+    $attempt = if (-not [string]::IsNullOrWhiteSpace($env:PHASE10_FIREWALL_RUN_ATTEMPT)) { $env:PHASE10_FIREWALL_RUN_ATTEMPT } elseif (-not [string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ATTEMPT)) { $env:GITHUB_RUN_ATTEMPT } else { $RunAttempt }
+    $runIdentity = if (-not [string]::IsNullOrWhiteSpace($env:PHASE10_FIREWALL_RUN_ID)) { $env:PHASE10_FIREWALL_RUN_ID } elseif (-not [string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ID)) { $env:GITHUB_RUN_ID } else { "local-$([guid]::NewGuid().ToString('N'))" }
+    $manifestPath = if (-not [string]::IsNullOrWhiteSpace($FirewallLeaseManifestPath)) { $FirewallLeaseManifestPath } elseif (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { Join-Path $env:RUNNER_TEMP "phase10-sql-firewall-lease-payment-$runIdentity-$attempt-$([guid]::NewGuid().ToString('N')).json" } else { Join-Path ([IO.Path]::GetTempPath()) "phase10-sql-firewall-lease-payment-$runIdentity-$attempt-$([guid]::NewGuid().ToString('N')).json" }
+    $script:AzureSqlFirewallLeaseManifestPath = $manifestPath
+    $script:AzureSqlFirewallLease = New-Phase10FirewallLease -Environment $resourceEnvironment -SubscriptionId $subscriptionId -ResourceGroup $resourceGroup -Server $sqlServerName -PublicIp $publicIp -RunId $runIdentity -Attempt $attempt -InvocationId ([guid]::NewGuid().ToString('N')) -ManifestPath $manifestPath -InvokeAz ${function:Invoke-AzureCliForFirewallLease}
+    Write-Host "Azure SQL firewall lease opened for this verifier invocation. Manifest: $manifestPath" -ForegroundColor Green
 }
 
 function Get-MinimumTimeDeltaSeconds {
@@ -1628,6 +1659,8 @@ $report = [PSCustomObject] @{
     Checks = [PSCustomObject] $checks
     ChargeCorrelation = @($chargeCorrelation)
 }
+
+Close-AzureSqlFirewallLease
 
 if ($OutputFormat -eq 'Json') {
     $report | ConvertTo-Json -Depth 8

@@ -235,6 +235,8 @@ jobs:
       - name: Run all tenants with assigned payment providers
         shell: bash
         env:
+          PHASE10_FIREWALL_RUN_ID: ${{ github.run_id }}
+          PHASE10_FIREWALL_RUN_ATTEMPT: ${{ github.run_attempt }}
           XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
           XYDATALABS_RUNTIME_TARGET_AZURE_DEV_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
           XYDATALABS_RUNTIME_TARGET_AZURE_STG_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
@@ -314,6 +316,15 @@ jobs:
             }
           }
 
+      - name: Ensure payment verifier firewall leases are cleaned
+        if: always()
+        shell: pwsh
+        run: |
+          & pwsh -NoProfile -File scripts/cleanup-phase10-azure-firewall-lease.ps1 `
+            -ManifestDirectory $env:RUNNER_TEMP `
+            -ExpectedRunId '${{ github.run_id }}'
+          if ($LASTEXITCODE -ne 0) { throw 'Payment matrix firewall lease cleanup could not be verified.' }
+
       - name: Upload Azure payment matrix run packet
         if: always()
         uses: actions/upload-artifact@v6
@@ -321,5 +332,6 @@ jobs:
           name: phase10-azure-payment-matrix-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             TestResults/Playwright/azure-https/**
+            ${{ runner.temp }}/phase10-sql-firewall-lease-payment-${{ github.run_id }}-*.json
           if-no-files-found: warn
           retention-days: 14

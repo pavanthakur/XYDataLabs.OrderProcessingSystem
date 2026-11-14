@@ -157,6 +157,8 @@ jobs:
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-transport-smoke.md'
           $runId = "phase10-transport-${{ steps.topology.outputs.envSuffix }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          $leasePath = Join-Path $env:RUNNER_TEMP "phase10-sql-firewall-lease-transport-${{ github.run_id }}-${{ github.run_attempt }}.json"
+          "firewallLeaseManifest=$leasePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transport-smoke.ps1 `
             -Environment '${{ inputs.environment }}' `
@@ -166,6 +168,8 @@ jobs:
             -KeyVaultName '${{ steps.topology.outputs.keyVaultName }}' `
             -SqlServerName '${{ steps.topology.outputs.sqlServer }}' `
             -RunId $runId `
+            -RunAttempt '${{ github.run_attempt }}' `
+            -FirewallLeaseManifestPath $leasePath `
             -SummaryPath $summaryPath
 
           $smokeExitCode = $LASTEXITCODE
@@ -177,6 +181,16 @@ jobs:
             throw "Phase 10 Azure transport smoke failed with exit code $smokeExitCode."
           }
 
+      - name: Ensure transport firewall lease cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          $leasePath = Join-Path $env:RUNNER_TEMP "phase10-sql-firewall-lease-transport-${{ github.run_id }}-${{ github.run_attempt }}.json"
+          if (Test-Path -LiteralPath $leasePath) {
+            & pwsh -NoProfile -File scripts/cleanup-phase10-azure-firewall-lease.ps1 -ManifestPath $leasePath
+            if ($LASTEXITCODE -ne 0) { throw 'Transport firewall cleanup could not be verified.' }
+          }
+
       - name: Upload transport smoke summary
         if: always()
         uses: actions/upload-artifact@v6
@@ -185,5 +199,6 @@ jobs:
           path: |
             ${{ runner.temp }}/phase10-azure-transport-smoke.md
             ${{ runner.temp }}/phase10-azure-transport-smoke.topology.json
+            ${{ runner.temp }}/phase10-sql-firewall-lease-transport-${{ github.run_id }}-${{ github.run_attempt }}.json
           if-no-files-found: ignore
           retention-days: 14

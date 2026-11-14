@@ -1128,6 +1128,21 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transpor
 
 The local command requires Azure CLI login and access to the `phase10-transport` Service Bus auth rule.
 
+### SQL firewall lease and interrupted-run recovery
+
+Transport and payment verification use a single-run Azure SQL firewall lease. Each lease has a unique name and a sanitized manifest under the GitHub runner temporary directory. The workflow attempts script-level cleanup and an `if: always()` cleanup step, then uploads the manifest with the run evidence. The verifier's `-SkipFirewallOpen` option performs no firewall mutation.
+
+Abrupt runner loss can prevent both cleanup layers from running. Do not delete rules by name prefix. Review the exact failed run's manifest artifact, then confirm its subscription, resource group, SQL server, rule name, and IP against Azure before recovery. Only an exact manifest showing that run's creation intent/confirmed lease authorizes cleanup. Use the read-only rule lookup first; if Azure state cannot be queried, treat cleanup as UNKNOWN and stop.
+
+After verifying ownership, an operator may run:
+
+```powershell
+pwsh -NoProfile -File scripts/cleanup-phase10-azure-firewall-lease.ps1 `
+  -ManifestPath '<reviewed-manifest-file>'
+```
+
+This command contacts Azure and deletes only the exact rule in the reviewed manifest after checking its IP values. It is an explicit recovery mutation, not a scheduled cleanup command. Verify the rule is absent afterward and retain the updated manifest with the run evidence. Never use it against an unreviewed or ambiguous manifest.
+
 ### 9. Broker and Functions Intake Smoke
 
 The automated transport smoke proves the broker and deployed intake path through `tools/Phase10.TransportSmoke`:
