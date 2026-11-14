@@ -107,3 +107,8 @@ try {
 finally {
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# The negative-path mocks intentionally leave a non-zero native exit code.
+# Clear it after all assertions pass so PowerShell CI runners do not mistake
+# that simulated Azure failure for the test process result.
+$global:LASTEXITCODE = 0
