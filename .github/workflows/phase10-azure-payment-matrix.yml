@@ -35,7 +35,9 @@ concurrency:
 jobs:
   azure_payment_matrix:
     name: 04 Phase 10 Azure Payment Matrix
-    runs-on: ubuntu-latest
+    # Playwright's pinned Chromium build does not yet support Ubuntu 26 runners.
+    # Keep the browser-dependent acceptance job on the supported 24.04 image.
+    runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
     timeout-minutes: 60
     steps:

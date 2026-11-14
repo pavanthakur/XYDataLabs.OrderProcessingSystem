@@ -307,6 +307,13 @@ test('Azure transport smoke never competes with the deployed Functions intake su
   assert.match(source, /does not prove approved Functions replay/);
 });
 
+test('Azure payment matrix uses a Playwright-supported hosted runner image', async () => {
+  const workflow = await readFile('.github/workflows/phase10-azure-payment-matrix.yml', 'utf8');
+  const parsed = yaml.load(workflow, { schema: yaml.JSON_SCHEMA, maxAliasCount: 0 });
+  assert.equal(parsed.jobs.azure_payment_matrix['runs-on'], 'ubuntu-24.04');
+  assert.match(workflow, /Playwright's pinned Chromium build does not yet support Ubuntu 26 runners\./);
+});
+
 test('deployment parameter identity is recorded before the approval comparison for diagnosable failures', async () => {
   const workflow = await readFile('.github/workflows/phase10-deploy-orchestrator.yml', 'utf8');
   const identityOutput = workflow.indexOf('Calculated deployment parameter identity:');
