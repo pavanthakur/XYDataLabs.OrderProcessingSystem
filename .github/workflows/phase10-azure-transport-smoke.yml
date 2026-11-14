@@ -99,6 +99,7 @@ jobs:
           echo "sqlServer=${SQL_SERVER}" >> "$GITHUB_OUTPUT"
           echo "keyVaultName=${KEY_VAULT_NAME}" >> "$GITHUB_OUTPUT"
           echo "gatewayApp=${GATEWAY_APP}" >> "$GITHUB_OUTPUT"
+          echo "functionApp=$(read_target_field azureFunctionAppName)" >> "$GITHUB_OUTPUT"
           echo "targetKey=${TARGET_KEY}" >> "$GITHUB_OUTPUT"
           echo "resourceGroupUrl=${RESOURCE_GROUP_URL}" >> "$GITHUB_OUTPUT"
           echo "serviceBusUrl=${SERVICE_BUS_URL}" >> "$GITHUB_OUTPUT"
@@ -141,6 +142,7 @@ jobs:
           DLQ_TOPIC="${{ steps.topology.outputs.deadLetterTopic }}"
           DLQ_REPLAY_SUB="${{ steps.topology.outputs.deadLetterSubscription }}"
           REPLAY_REQUEST_QUEUE="${{ steps.topology.outputs.replayRequestQueue }}"
+          FUNCTION_APP="${{ steps.topology.outputs.functionApp }}"
 
           az servicebus namespace show --resource-group "$RG_NAME" --name "$SB_NAMESPACE" --only-show-errors 1>/dev/null
           az servicebus topic show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$TOPIC_NAME" --only-show-errors 1>/dev/null
@@ -149,6 +151,9 @@ jobs:
           az servicebus topic show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$DLQ_TOPIC" --only-show-errors 1>/dev/null
           az servicebus topic subscription show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --topic-name "$DLQ_TOPIC" --name "$DLQ_REPLAY_SUB" --only-show-errors 1>/dev/null
           az servicebus queue show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$REPLAY_REQUEST_QUEUE" --only-show-errors 1>/dev/null
+
+          always_on="$(az functionapp config show --resource-group "$RG_NAME" --name "$FUNCTION_APP" --query alwaysOn --output tsv)"
+          [[ "$always_on" == "true" ]] || { echo "Function App ${FUNCTION_APP} is not always-on; refusing to publish transport test messages because Service Bus trigger processing is not guaranteed." >&2; exit 1; }
 
           echo "✅ Service Bus topology exists." >> "$GITHUB_STEP_SUMMARY"
 

@@ -74,6 +74,7 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
   if (!/TargetFramework>net8\.0<\/TargetFramework>/.test(functionsProject)) failures.push('Functions project must target the validated .NET 8 isolated-worker runtime.');
   if (!/name:\s*'FUNCTIONS_EXTENSION_VERSION'[\s\S]*?value:\s*'~4'/.test(functionsBicep)) failures.push('Function App must explicitly configure Functions host version ~4.');
   if (!/name:\s*'FUNCTIONS_WORKER_RUNTIME'[\s\S]*?value:\s*'dotnet-isolated'/.test(functionsBicep)) failures.push('Function App must explicitly configure the dotnet-isolated worker.');
+  if (!/resource\s+app\s+'Microsoft\.Web\/sites@[^']+'[\s\S]*?siteConfig:\s*\{[\s\S]*?alwaysOn:\s*true\b/.test(functionsBicep)) failures.push('Function App on the dedicated App Service plan must set siteConfig.alwaysOn=true so background triggers remain active.');
   if (!/name:\s*'ServiceBusConnection'[\s\S]*?value:\s*serviceBusConnectionString/.test(functionsBicep)) failures.push('Functions trigger connection name ServiceBusConnection must map to the configured Azure Service Bus connection.');
   if (!/name:\s*'ServiceBus__ConnectionString'[\s\S]*?value:\s*serviceBusConnectionString/.test(functionsBicep)) failures.push('Functions application Service Bus configuration must remain present.');
   for (const [name, value] of [
@@ -188,7 +189,10 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
     failures.push('Azure deployment workflow must use GitHub OIDC and Entra CLI deployment, fail closed on unsupported CLI versions, and contain no publishing-credential fallback.');
   }
   failures.push(...validateAppServiceDeploymentWorkflows(deploymentWorkflows));
+  const transportWorkflow = deploymentWorkflows.find((workflow) => /phase10-azure-transport-smoke\.yml$/i.test(workflow.path))?.content ?? '';
+  if (!/az functionapp config show[\s\S]*?--query alwaysOn[\s\S]*?refusing to publish transport test messages/.test(transportWorkflow)) failures.push('Azure transport smoke must fail before publishing messages when the Functions host is not always-on.');
   if (!/az functionapp function list/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify Functions host indexing after package deployment.');
+  if (!/az functionapp config show[\s\S]*?--query alwaysOn[\s\S]*?alwaysOn must be true/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify the Function App always-on setting before accepting the deployed package.');
   if (!/azureOperationsDatabaseName/.test(infraDeployWorkflow)
     || !/azureSqlServerName/.test(infraDeployWorkflow)
     || !/--parameters existingFunctionsSqlServerName=/.test(infraDeployWorkflow)

@@ -260,6 +260,9 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: plan.id
     httpsOnly: true
     siteConfig: {
+      // Keep the dedicated-plan host awake so non-HTTP Service Bus triggers
+      // continue polling while the app has no HTTP traffic.
+      alwaysOn: true
       appSettings: appSettings
     }
   }

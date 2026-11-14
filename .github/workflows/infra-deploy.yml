@@ -1254,6 +1254,12 @@ jobs:
             --name "$FUNCTION_APP" \
             --settings "ORDERPROCESSING_FUNCTIONS_PACKAGE_SHA256=$PACKAGE_SHA256" "ORDERPROCESSING_FUNCTIONS_SOURCE_SHA=$SOURCE_SHA" \
             --only-show-errors 1>/dev/null
+          always_on="$(az functionapp config show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$FUNCTION_APP" \
+            --query alwaysOn \
+            --output tsv)"
+          [[ "$always_on" == "true" ]] || { echo "Function App alwaysOn must be true on its dedicated plan so Service Bus triggers stay active." >&2; exit 1; }
           expected_count="$(unzip -p "$PACKAGE_PATH" functions.metadata | jq 'length')"
           [[ "$expected_count" =~ ^[1-9][0-9]*$ ]] || { echo "Functions package has no indexed function metadata." >&2; exit 1; }
           indexed_count=0
@@ -1272,6 +1278,7 @@ jobs:
             echo "| Source SHA | ${SOURCE_SHA} |"
             echo "| Package SHA-256 | ${PACKAGE_SHA256} |"
             echo "| Indexed functions | ${indexed_count} |"
+            echo "| Dedicated-plan always-on | ${always_on} |"
             echo "| Invocation evidence | pending Phase 10 transport workflow 03 |"
           } >> "$GITHUB_STEP_SUMMARY"
 
