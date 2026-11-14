@@ -247,6 +247,16 @@ test('dev hostname bootstrap is manual, dry-run by default, and shares the full-
   assert.doesNotMatch(catalogText, /azurecontainerapps\.io/);
 });
 
+test('all Phase 10 Container Apps keep traffic on the latest revision during redeploys', async () => {
+  const containerApps = await readFile('infra/modules/containerapps.bicep', 'utf8');
+  const ingressBlocks = [...containerApps.matchAll(/ingress:\s*\{([\s\S]*?)\n\s{6}\}/g)];
+  assert.equal(ingressBlocks.length, 6, 'expected the six public/internal Phase 10 Container Apps');
+  for (const [, ingress] of ingressBlocks) {
+    assert.match(ingress, /traffic:\s*\[[\s\S]*?latestRevision:\s*true[\s\S]*?weight:\s*100[\s\S]*?\]/,
+      'each ingress must explicitly route 100% to the latest revision');
+  }
+});
+
 test('environment catalog keeps the branch, environment, and resource suffix contract aligned', async () => {
   const policy = JSON.parse(await readFile('Resources/Azure-Deployment/branch-policy.json', 'utf8'));
   assert.deepEqual(Object.fromEntries(Object.entries(policy).map(([key, value]) => [key, [value.branch, value.environment, value.resourceSuffix]])), {

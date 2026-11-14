@@ -275,6 +275,12 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: false
         targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
     }
     template: {
@@ -309,6 +315,12 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: false
         targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
     }
     template: {
@@ -343,6 +355,12 @@ resource paymentsApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: false
         targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
     }
     template: {
@@ -377,6 +395,12 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: false
         targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
     }
     template: {
@@ -411,6 +435,12 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: true
         targetPort: 5022
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
     }
     template: {
@@ -451,6 +481,12 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: true
         targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
     }
     template: {
