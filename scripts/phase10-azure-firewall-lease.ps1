@@ -129,7 +129,7 @@ function Remove-Phase10FirewallLease {
         if ($existing.startIpAddress -ne $manifest.publicIp -or $existing.endIpAddress -ne $manifest.publicIp) {
             throw "Firewall rule '$($manifest.ruleName)' no longer matches this lease; refusing deletion."
         }
-        $null = & $InvokeAz @('sql','server','firewall-rule','delete','--resource-group',$manifest.resourceGroup,'--server',$manifest.sqlServer,'--name',$manifest.ruleName,'--yes','--only-show-errors')
+        $null = & $InvokeAz @('sql','server','firewall-rule','delete','--resource-group',$manifest.resourceGroup,'--server',$manifest.sqlServer,'--name',$manifest.ruleName,'--only-show-errors')
         if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds ([Math]::Min($attempt, 3)); continue }
     }
 

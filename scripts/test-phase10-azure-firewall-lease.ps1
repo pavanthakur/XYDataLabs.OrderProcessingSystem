@@ -25,6 +25,7 @@ function Invoke-MockAz {
             return 'created'
         }
         'delete' {
+            if ($Arguments -contains '--yes') { throw 'Firewall delete passed an unsupported confirmation argument.' }
             if ($script:deleteMode -eq 'fail') { $global:LASTEXITCODE = 1; return 'simulated delete failure' }
             $script:rules.Remove($name) | Out-Null
             $global:LASTEXITCODE = 0
