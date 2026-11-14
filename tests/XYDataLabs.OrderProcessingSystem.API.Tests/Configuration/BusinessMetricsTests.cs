@@ -23,15 +23,18 @@ public class BusinessMetricsTests
     [Fact]
     public void RecordProblemResponse_EmitsCounterMeasurement()
     {
+        const string expectedProblemType = "urn:xydatalabs:problem:business-metrics-test";
         var measurements = CaptureMeasurements(() =>
-            BusinessMetrics.RecordProblemResponse(400, "urn:xydatalabs:problem:validation-failed"));
+            BusinessMetrics.RecordProblemResponse(400, expectedProblemType));
 
         var measurement = measurements.Should().ContainSingle(m =>
-            m.InstrumentName == "orderprocessing.api.problem_responses").Subject;
+            m.InstrumentName == "orderprocessing.api.problem_responses" &&
+            m.Tags.ContainsKey("status_code") && m.Tags["status_code"] == "400" &&
+            m.Tags.ContainsKey("problem_type") && m.Tags["problem_type"] == expectedProblemType).Subject;
 
         measurement.Value.Should().Be(1);
         measurement.Tags.Should().ContainKey("status_code").WhoseValue.Should().Be("400");
-        measurement.Tags.Should().ContainKey("problem_type").WhoseValue.Should().Be("urn:xydatalabs:problem:validation-failed");
+        measurement.Tags.Should().ContainKey("problem_type").WhoseValue.Should().Be(expectedProblemType);
     }
 
     [Fact]
