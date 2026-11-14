@@ -17,7 +17,7 @@
 
 .PARAMETER RunPrefix
     Optional logical run prefix such as OR-1-2ndApr. If omitted and exactly one
-    prefix is found in today's API traces, that prefix is used automatically.
+    prefix is found in the selected telemetry window, that prefix is used automatically.
 
 .PARAMETER CustomerOrderId
     Optional persisted customer order ID for an individual automation journey.
@@ -59,6 +59,12 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string] $RunPrefix,
+
+    [Parameter(Mandatory = $false)]
+    [datetimeoffset] $StartedUtc,
+
+    [Parameter(Mandatory = $false)]
+    [datetimeoffset] $FinishedUtc,
 
     [Parameter(Mandatory = $false)]
     [string] $CustomerOrderId,
@@ -103,6 +109,20 @@ param(
 )
 
 $requestedTenantCode = $TenantCode
+if (($PSBoundParameters.ContainsKey('StartedUtc')) -xor ($PSBoundParameters.ContainsKey('FinishedUtc'))) {
+    throw 'StartedUtc and FinishedUtc must be supplied together.'
+}
+if ($PSBoundParameters.ContainsKey('StartedUtc') -and $FinishedUtc -le $StartedUtc) {
+    throw 'FinishedUtc must be later than StartedUtc.'
+}
+if ($PSBoundParameters.ContainsKey('StartedUtc')) {
+    $telemetryWindowStartUtc = $StartedUtc.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffffffZ', [Globalization.CultureInfo]::InvariantCulture)
+    $telemetryWindowEndUtc = $FinishedUtc.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffffffZ', [Globalization.CultureInfo]::InvariantCulture)
+    $script:TelemetryTimeFilter = "timestamp between (datetime($telemetryWindowStartUtc) .. datetime($telemetryWindowEndUtc))"
+}
+else {
+    $script:TelemetryTimeFilter = 'timestamp >= ago(7d)'
+}
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-azure-firewall-lease.ps1')
@@ -907,7 +927,7 @@ $apiQuery = @"
 union isfuzzy=true
 (
 customEvents
-| where timestamp >= startofday(now() + 330m) - 330m
+| where $($script:TelemetryTimeFilter)
 | where name in ('payment_validation_attempt_created',
                  'payment_validation_charge_created',
                  'payment_validation_callback_reconciled')
@@ -926,7 +946,7 @@ customEvents
 ),
 (
 traces
-| where timestamp >= startofday(now() + 330m) - 330m
+| where $($script:TelemetryTimeFilter)
 | where message has_any('Generated payment attempt order id',
                         'Charge created with ID',
                         'Payment callback reconciliation completed',
@@ -1017,17 +1037,17 @@ if ([string]::IsNullOrWhiteSpace($selectedRunPrefix)) {
         throw "Multiple run prefixes were found. Re-run with -RunPrefix.`n$prefixList"
     }
     else {
-        throw "No payment run prefixes were found in today's API telemetry for $Environment. Re-run with -RunPrefix to force a DB-only verification pass."
+        throw "No payment run prefixes were found in the selected API telemetry window for $Environment. Re-run with -RunPrefix to force a DB-backed verification pass."
     }
 }
 
 if ((Get-CollectionCount -Value $availableRunPrefixes) -gt 0 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
     if ([string]::IsNullOrWhiteSpace($RunPrefix)) {
         $prefixList = ($availableRunPrefixes | ForEach-Object { "- $_" }) -join "`n"
-        throw "Run prefix '$selectedRunPrefix' was not found in today's API telemetry.`n$prefixList"
+        throw "Run prefix '$selectedRunPrefix' was not found in the selected API telemetry window.`n$prefixList"
     }
 
-    $appInsightsWarnings += "Run prefix '$selectedRunPrefix' was not found in today's API telemetry yet; continuing with DB-backed verification."
+    $appInsightsWarnings += "Run prefix '$selectedRunPrefix' was not found in the selected API telemetry window yet; continuing with DB-backed verification."
     $appInsightsAvailable = $false
 }
 
@@ -1052,7 +1072,7 @@ $uiQuery = @"
 union isfuzzy=true
 (
 customEvents
-| where timestamp >= startofday(now() + 330m) - 330m
+| where $($script:TelemetryTimeFilter)
 | where name in ('ui_payment_callback_received',
                  'ui_payment_callback_reconciled',
                  'ui_payment_callback_pending_retry_scheduled',
@@ -1072,7 +1092,7 @@ customEvents
 ),
 (
 traces
-| where timestamp >= startofday(now() + 330m) - 330m
+| where $($script:TelemetryTimeFilter)
 | where message has_any('OpenPay callback received',
                         'payment/callback responded',
                         'ui_payment_callback_received',
@@ -1305,7 +1325,7 @@ if ((Get-CollectionCount -Value $providerCorrelationIds) -gt 0) {
 union isfuzzy=true
 (
 requests
-| where timestamp >= ago(7d)
+| where $($script:TelemetryTimeFilter)
 | extend telemetryType = 'request'
 | extend detail = strcat(name, ' ', url)
 | where detail has_any ($providerChargeIdList)
@@ -1314,7 +1334,7 @@ requests
 ),
 (
 dependencies
-| where timestamp >= ago(7d)
+| where $($script:TelemetryTimeFilter)
 | extend telemetryType = 'dependency'
 | extend detail = strcat(name, ' ', data, ' ', target)
 | where detail has_any ($providerChargeIdList)
@@ -1383,7 +1403,7 @@ if ((Get-CollectionCount -Value $providerOperationIds) -gt 0) {
     $providerIdList = Get-KqlQuotedValues -Values $providerCorrelationIds
     $operationApiQuery = @"
 customEvents
-| where timestamp >= ago(7d)
+| where $($script:TelemetryTimeFilter)
 | where operation_Id in ($operationIdList)
 | where name in ('payment_validation_attempt_created', 'payment_validation_charge_created', 'payment_validation_callback_reconciled')
 | extend application = tostring(customDimensions['Application'])
@@ -1429,7 +1449,7 @@ customEvents
         if ((Get-CollectionCount -Value $operationApiEvents) -eq 0) {
             $providerApiFallbackQuery = @"
 customEvents
-| where timestamp >= ago(7d)
+| where $($script:TelemetryTimeFilter)
 | where name in ('payment_validation_attempt_created', 'payment_validation_charge_created', 'payment_validation_callback_reconciled')
 | extend application = tostring(customDimensions['Application'])
 | extend tenant = tostring(customDimensions['TenantCode'])
@@ -1584,7 +1604,7 @@ if ((Get-CollectionCount -Value @($apiChargeEvents)) -eq 0 -and (Get-CollectionC
     union isfuzzy=true
     (
     customEvents
-| where timestamp >= ago(7d)
+| where $($script:TelemetryTimeFilter)
     | where name in ('payment_validation_attempt_created',
              'payment_validation_charge_created',
              'payment_validation_callback_reconciled')
@@ -1604,7 +1624,7 @@ if ((Get-CollectionCount -Value @($apiChargeEvents)) -eq 0 -and (Get-CollectionC
     ),
     (
     traces
-    | where timestamp >= ago(7d)
+    | where $($script:TelemetryTimeFilter)
     | where message has_any('Generated payment attempt order id',
                 'Charge created with ID',
                 'Payment callback reconciliation completed',
@@ -1731,7 +1751,7 @@ if ((Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
     union isfuzzy=true
     (
     customEvents
-| where timestamp >= ago(7d)
+| where $($script:TelemetryTimeFilter)
     | where name in ('ui_payment_callback_received',
              'ui_payment_callback_reconciled',
              'ui_payment_callback_pending_retry_scheduled',
@@ -1753,7 +1773,7 @@ if ((Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
     ),
     (
     traces
-    | where timestamp >= ago(7d)
+    | where $($script:TelemetryTimeFilter)
     | where message has_any('OpenPay callback received',
                 'payment/callback responded',
             'ui_payment_callback_received',
@@ -2070,6 +2090,11 @@ $report = [PSCustomObject] @{
     Environment = $Environment
     Runtime = 'azure'
     RunPrefix = $selectedRunPrefix
+    TelemetryWindow = [PSCustomObject]@{
+        StartUtc = if ($PSBoundParameters.ContainsKey('StartedUtc')) { $telemetryWindowStartUtc } else { 'rolling-7d' }
+        EndUtc = if ($PSBoundParameters.ContainsKey('FinishedUtc')) { $telemetryWindowEndUtc } else { [DateTimeOffset]::UtcNow.ToString('o') }
+        Explicit = [bool]$PSBoundParameters.ContainsKey('StartedUtc')
+    }
     AppInsightsAvailable = $appInsightsAvailable
     Warnings = @($appInsightsWarnings)
     AppInsights = [PSCustomObject] @{

@@ -36,3 +36,12 @@ test('provider payment ID fallback can recover the persisted order from API cust
   assert.match(script, /Where-Object Tenant -eq \$requestedTenantCode\.Trim\(\)/);
   assert.match(script, /Follow the provider-correlated[\s\S]*?tenant\/order key to read the matching shared or dedicated SQL row/);
 });
+
+test('Azure verifier accepts paired explicit UTC run windows and applies one window to all telemetry queries', async () => {
+  const script = await readRepoFile('scripts/verify-payment-run-azure.ps1');
+  assert.match(script, /StartedUtc and FinishedUtc must be supplied together/);
+  assert.match(script, /FinishedUtc must be later than StartedUtc/);
+  assert.match(script, /TelemetryTimeFilter = "timestamp between \(datetime\(\$telemetryWindowStartUtc\) \.\. datetime\(\$telemetryWindowEndUtc\)\)"/);
+  assert.doesNotMatch(script, /startofday\(now\(\) \+ 330m\)/);
+  assert.equal((script.match(/where \$\(\$script:TelemetryTimeFilter\)/g) ?? []).length, 12);
+});

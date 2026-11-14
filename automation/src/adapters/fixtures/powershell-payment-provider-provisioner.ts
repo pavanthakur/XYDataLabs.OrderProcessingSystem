@@ -41,6 +41,38 @@ export class PowerShellPaymentProviderProvisioner implements PaymentFixtureProvi
         "-ThreeDs",this.options.threeDs === undefined ? "unchanged" : String(this.options.threeDs)]);
       return {fixtureIds:[manifestPath],baselineName:"exact-local-snapshot"};
     }
+    if (this.options.target.runtime === "azure") {
+      if (this.options.target.environment !== "dev") throw new Error("Azure payment fixture mutation is restricted to dev.");
+      if (!this.options.target.apiBaseUrl) throw new Error("Azure payment fixture requires the resolved API origin for runtime-route verification.");
+      const manifestPath = path.join(repoRoot, "TestResults", "Playwright", "azure-https", "payment-fixtures", `${randomUUID()}.json`);
+      try {
+        await this.invokePowerShell([
+          "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repoRoot,"scripts/phase10-azure-payment-test-state.ps1"),
+          "-Action", "Prepare", "-Environment", "dev", "-TenantCode", tenantCode,
+          "-ProviderType", this.options.requestedProvider,
+          "-ThreeDs", String(this.options.threeDs ?? false),
+          "-ManifestPath", manifestPath,
+          "-ApiBaseUrl", this.options.target.apiBaseUrl
+        ]);
+      }
+      catch (prepareError) {
+        const lockPath = path.join(repoRoot, "TestResults", "Playwright", "azure-https", "payment-fixtures", "azure-payment-fixture.lock");
+        if (await this.fileExists(lockPath)) {
+          try {
+            await this.invokePowerShell([
+              "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repoRoot,"scripts/phase10-azure-payment-test-state.ps1"),
+              "-Action", "Restore", "-Environment", "dev", "-ManifestPath", manifestPath,
+              "-ApiBaseUrl", this.options.target.apiBaseUrl
+            ]);
+          }
+          catch {
+            throw new Error(`Azure fixture preparation failed and recovery could not be proven. Preserve the owned recovery manifest at ${manifestPath}; stop the matrix before any charge. ${prepareError instanceof Error ? prepareError.message : ""}`);
+          }
+        }
+        throw prepareError;
+      }
+      return {fixtureIds:[manifestPath],baselineName:"exact-azure-dev-entra-snapshot"};
+    }
     if (this.options.threeDs !== undefined) throw new Error("3DS fixture overrides are supported only on verified local Docker dev.");
     const result = await this.activateProvider(tenantCode, this.options.requestedProvider);
     this.logger(
@@ -58,6 +90,17 @@ export class PowerShellPaymentProviderProvisioner implements PaymentFixtureProvi
       if (!fixtureIds[0]) throw new Error("Missing local recovery manifest. Manual review required.");
       await this.invokePowerShell(["-NoProfile","-File",path.join(repoRoot,"scripts/local-payment-test-state.ps1"),
         "-Action","Restore","-ManifestPath",fixtureIds[0]]);
+      return {outcome:"reset",residualIds:[]};
+    }
+    if (this.options.target.runtime === "azure") {
+      if (this.options.target.environment !== "dev") throw new Error("Azure payment fixture restoration is restricted to dev.");
+      if (!fixtureIds[0]) throw new Error("Missing Azure recovery manifest. Manual review required; do not continue the payment matrix.");
+      if (!this.options.target.apiBaseUrl) throw new Error("Azure fixture restoration requires the resolved API origin for route verification.");
+      await this.invokePowerShell([
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repoRoot,"scripts/phase10-azure-payment-test-state.ps1"),
+        "-Action", "Restore", "-Environment", "dev", "-ManifestPath", fixtureIds[0],
+        "-ApiBaseUrl", this.options.target.apiBaseUrl
+      ]);
       return {outcome:"reset",residualIds:[]};
     }
     const previousProvider = fixtureIds[0];
@@ -137,6 +180,12 @@ export class PowerShellPaymentProviderProvisioner implements PaymentFixtureProvi
         reject(new Error(stderr.trim() || `Provider override PowerShell exited with code ${exitCode}.`));
       });
     });
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    const { access } = await import("node:fs/promises");
+    try { await access(filePath); return true; }
+    catch { return false; }
   }
 
   private parseJsonPayload(stdout: string): unknown {

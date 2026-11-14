@@ -56,6 +56,7 @@ export interface PaymentJourneyRequest {
   operatorAssistedEntra?: boolean;
   reuseEntraSession?: boolean;
   authPreflightOnly?: boolean;
+  retainOperatorSessionAfterAuthPreflight?: boolean;
   manualEntry?: boolean;
   diagnosticsDirectory?: string;
   logger?: (message: string) => void;
@@ -93,7 +94,8 @@ export class PaymentJourneyRunner {
     const log = (message:string) => request.logger?.(safePaymentDiagnostic(message));
     log(`Launching browser for ${request.tenantCode} on ${request.target.key}.`);
     const reuseOperatorSession = request.target.runtime === "azure" && request.operatorAssistedEntra === true
-      && request.reuseEntraSession === true && !request.authPreflightOnly;
+      && request.reuseEntraSession === true
+      && (!request.authPreflightOnly || request.retainOperatorSessionAfterAuthPreflight === true);
     const previousSession = reuseOperatorSession ? this.operatorSession : undefined;
     if (previousSession && previousSession.baseUrl !== request.target.baseUrl) {
       throw new Error("An operator-assisted Entra browser session cannot be reused across different Azure origins.");
@@ -222,22 +224,26 @@ export class PaymentJourneyRunner {
           if (await tenantPicker.inputValue() !== tenantCode) throw new Error(`Tenant selector did not retain ${tenantCode} after the change.`);
         }
         log(`Admin UI tenant-switch cycle passed across ${activeTenantCodes.length} active tenants and returned to ${activeTenantCodes[0]}. Provider sandbox routes verified for all active tenants.`);
-        const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
-        await signOutButton.waitFor({ state: "visible", timeout: 10000 });
-        await signOutButton.click();
-        await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin && url.pathname === "/signed-out", { timeout: 60000 });
-        const applicationTokenRemains = await page.evaluate(() => Boolean(localStorage.getItem("orderprocessing.accessToken")));
-        if (applicationTokenRemains) throw new Error("Application sign-out did not clear the browser API token.");
-        const signedOutHeading = page.getByRole("heading", { name: /Signed out of the application/i });
-        try {
-          await signedOutHeading.waitFor({ state: "visible", timeout: 10000 });
-        } catch {
-          throw new Error("Identity-provider sign-out did not render the signed-out state; no payment was submitted.");
+        if (request.retainOperatorSessionAfterAuthPreflight !== true) {
+          const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
+          await signOutButton.waitFor({ state: "visible", timeout: 10000 });
+          await signOutButton.click();
+          await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin && url.pathname === "/signed-out", { timeout: 60000 });
+          const applicationTokenRemains = await page.evaluate(() => Boolean(localStorage.getItem("orderprocessing.accessToken")));
+          if (applicationTokenRemains) throw new Error("Application sign-out did not clear the browser API token.");
+          const signedOutHeading = page.getByRole("heading", { name: /Signed out of the application/i });
+          try {
+            await signedOutHeading.waitFor({ state: "visible", timeout: 10000 });
+          } catch {
+            throw new Error("Identity-provider sign-out did not render the signed-out state; no payment was submitted.");
+          }
+          if (!(await signedOutHeading.isVisible().catch(() => false))) {
+            throw new Error("Identity-provider sign-out did not complete cleanly; no payment was submitted.");
+          }
+          log("Authenticated tenant access, sandbox configuration, and application sign-out verified. No customer, order, or payment was created.");
+        } else {
+          log("No-charge Entra access and tenant-switch preflight passed; preserving this in-memory session for the serial payment matrix.");
         }
-        if (!(await signedOutHeading.isVisible().catch(() => false))) {
-          throw new Error("Identity-provider sign-out did not complete cleanly; no payment was submitted.");
-        }
-        log("Authenticated tenant access, sandbox configuration, and application sign-out verified. No customer, order, or payment was created.");
         return {
           journeyOutcome: "auth-preflight-passed",
           challengeOutcome: "not-applicable",
@@ -249,7 +255,7 @@ export class PaymentJourneyRunner {
           orderAmount: 0,
           orderCurrencyCode: "not-applicable",
           finalUrl: (() => { const url = new URL(page.url()); return `${url.origin}${url.pathname}`; })(),
-          statusMessage: `Entra access, tenant switching, sandbox configuration and application sign-out passed; providers=${tenantPreflightResults.map((item) => `${item.tenantCode}:${item.paymentProvider}/${item.adapterMode}`).join(",")}; no payment was attempted.`,
+          statusMessage: `Entra access and tenant switching passed; providers=${tenantPreflightResults.map((item) => `${item.tenantCode}:${item.paymentProvider}/${item.adapterMode}`).join(",")}; no payment was attempted.${request.retainOperatorSessionAfterAuthPreflight === true ? " In-memory session retained for this run." : " Application sign-out verified."}`,
           adapterMode: paymentConfiguration.adapterMode,
           collectionMode: paymentConfiguration.collectionMode,
           observedChallenge: "not-applicable",

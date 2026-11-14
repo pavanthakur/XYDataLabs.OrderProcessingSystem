@@ -23,6 +23,7 @@ interface AzureMatrixOptions {
   operatorAssistedEntra: boolean;
   authPreflightOnly: boolean;
   servicePreflightOnly: boolean;
+  allActiveTenants: boolean;
 }
 
 interface AzureMatrixOutput {
@@ -40,6 +41,7 @@ interface AzureMatrixOutput {
   targets: string[];
   servicePreflights: Array<{ target: string; status: string; reportPath: string }>;
   targetRuns: PaymentAutomationRunOutput[];
+  providerFixtureCoverage?: { status: "PASS" | "FAIL"; expectedCount: number; actualCount: number; findings: string[] };
 }
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -90,13 +92,21 @@ async function main(): Promise<void> {
   const progressLogPath = path.join(reportDirectory, "progress.log");
   const currentStepPath = path.join(reportDirectory, "current-step.txt");
   const normalizedProviders = normalizeRequestedProviders(options.requestedProviders);
-  if (normalizedProviders.length > 0) {
-    throw new Error(
-      "Azure payment automation follows each tenant's authoritative provider assignment. " +
-      "Provider overrides are not supported by the promotion workflow; update the runtime target/deployment configuration instead."
-    );
+  const isAzureDevFixtureMatrix = normalizedProviders.length > 0
+    && options.targets.length === 1 && options.targets[0] === "azure-dev"
+    && options.operatorAssistedEntra && !options.authPreflightOnly && !options.servicePreflightOnly
+    && !options.headless && !options.dryRun && options.verify && !options.allowPartialExecution
+    && options.allActiveTenants && options.tenantCodes.length === 0 && options.tenantLimit === null
+    && normalizedProviders.length === 2
+    && normalizedProviders.some((provider) => provider.toLowerCase() === "razorpay")
+    && normalizedProviders.some((provider) => provider.toLowerCase() === "openpay");
+  if (normalizedProviders.length > 0 && !isAzureDevFixtureMatrix) {
+    throw new Error("Provider fixtures are permitted only for a verified, headed Azure-dev run covering all active tenants and both providers, with Entra session reuse, sandbox verification, no partial mode, and no tenant limit.");
   }
-  const effectiveProviders: string[] = [];
+  if (options.allActiveTenants && !isAzureDevFixtureMatrix) {
+    throw new Error("--all-active-tenants is reserved for the complete Azure-dev two-provider fixture matrix.");
+  }
+  const effectiveProviders: string[] = normalizedProviders;
   const matrixOutput: AzureMatrixOutput = {
     matrixRunId,
     reportDirectory,
@@ -120,12 +130,13 @@ async function main(): Promise<void> {
   await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(runPlanPath, [
     options.servicePreflightOnly ? "Azure service access preflight run" : options.authPreflightOnly ? "Azure Entra authorization preflight run" : "Azure payment automation matrix run",
-    "Goal: confirm Azure target discovery and browser automation flow for every active tenant using the provider resolved from runtime configuration.",
+    `Goal: ${isAzureDevFixtureMatrix ? "verify every active Azure-dev tenant against both sandbox providers with exact settings restoration" : "confirm Azure target discovery and browser automation flow using the provider resolved from runtime configuration"}.`,
     `Environment: ${environmentKey}`,
     "Runtime target config: automation/config/runtime-targets.json",
     `Targets: ${options.targets.join(", ")}`,
-    "Provider selection: runtime configuration -> tenant registry API (no override)",
+    `Provider selection: ${isAzureDevFixtureMatrix ? "per-tenant Razorpay/OpenPay fixture, with exact route and setting restoration" : "runtime configuration -> tenant registry API"}`,
     `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
+    `All-active-tenant two-provider fixture matrix: ${isAzureDevFixtureMatrix ? "yes" : "no"}`,
     `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
     `Execution mode: ${options.servicePreflightOnly ? "service access preflight only (no browser, order, or payment mutations)" : options.authPreflightOnly ? "Entra authorization preflight only (no order/payment mutations)" : "payment matrix"}`,
@@ -142,7 +153,7 @@ async function main(): Promise<void> {
     `environment=${environmentKey}`,
     "runtimeTargetConfig=automation/config/runtime-targets.json",
     `targets=${options.targets.join(",")}`,
-    "providerSelection=runtime-configuration-tenant-registry",
+    `providerSelection=${isAzureDevFixtureMatrix ? "azure-dev-two-provider-fixture" : "runtime-configuration-tenant-registry"}`,
     `tenantCodes=${options.tenantCodes.length > 0 ? options.tenantCodes.join(",") : "runtime default"}`,
     `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
@@ -224,7 +235,8 @@ async function main(): Promise<void> {
       runPrefix: targetRunPrefix,
       logger: (message) => {
         void writeRunMessage(startupLogPath, progressLogPath, `[${target}] ${message}`).catch(() => undefined);
-      }
+      },
+      threeDs: normalizedProviders.length > 0 ? false : undefined
     });
 
     targetRuns.push(run);
@@ -233,15 +245,43 @@ async function main(): Promise<void> {
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
-  const hasFailures = targetRuns.some((targetRun) =>
-    targetRun.rows.some((row) => {
+  let hasFailures = targetRuns.some((targetRun) =>
+    targetRun.operatorAuthPreflight?.status === "FAIL" || targetRun.rows.some((row) => {
       const journeyFailed = options.authPreflightOnly
         ? row.journeyOutcome !== "auth-preflight-passed"
         : !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
       const verificationFailed = !options.authPreflightOnly && options.verify && !options.dryRun && row.verificationOutcome !== "passed";
-      return journeyFailed || verificationFailed;
+      const restorationFailed = options.requestedProviders.length > 0 && !options.authPreflightOnly && row.cleanupOutcome !== "reset";
+      return journeyFailed || verificationFailed || restorationFailed;
     })
   );
+  const fixtureCoverageFindings: string[] = [];
+  let fixtureExpectedCount = 0;
+  let fixtureActualCount = 0;
+  if (isAzureDevFixtureMatrix) {
+    for (const targetRun of targetRuns) {
+      const topologyPath = path.join(targetRun.reportDirectory, "tenant-topology.json");
+      const topology = JSON.parse(await readFile(topologyPath, "utf8")) as Array<{ tenantCode?: string; active?: boolean }>;
+      const expected = new Set(topology.filter((tenant) => tenant.active !== false && tenant.tenantCode)
+        .flatMap((tenant) => normalizedProviders.map((provider) => `${tenant.tenantCode!.toLowerCase()}|${provider.toLowerCase()}`)));
+      const actual = targetRun.rows.map((row) => `${row.tenantCode.toLowerCase()}|${String(row.paymentProvider ?? "").toLowerCase()}`);
+      const duplicates = actual.filter((key, index) => actual.indexOf(key) !== index);
+      const missing = [...expected].filter((key) => !actual.includes(key));
+      const unexpected = actual.filter((key) => !expected.has(key));
+      fixtureExpectedCount += expected.size;
+      fixtureActualCount += actual.length;
+      if (duplicates.length || missing.length || unexpected.length || actual.length !== expected.size) {
+        fixtureCoverageFindings.push(`expected=${expected.size}, actual=${actual.length}, missing=${missing.length}, duplicate=${duplicates.length}, unexpected=${unexpected.length}`);
+      }
+    }
+    if (fixtureCoverageFindings.length) hasFailures = true;
+    matrixOutput.providerFixtureCoverage = {
+      status: fixtureCoverageFindings.length ? "FAIL" : "PASS",
+      expectedCount: fixtureExpectedCount,
+      actualCount: fixtureActualCount,
+      findings: fixtureCoverageFindings
+    };
+  }
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
   matrixOutput.currentStep = "completed";
@@ -254,6 +294,12 @@ async function main(): Promise<void> {
     const runtimeTarget = targetRun.rows[0]?.runtimeTarget ?? "unknown";
     targetSections.push(`### ${runtimeTarget} (prefix: ${targetRun.runPrefix})`);
     targetSections.push("");
+    if (targetRun.operatorAuthPreflight) {
+      targetSections.push(`Entra no-charge preflight: ${targetRun.operatorAuthPreflight.status}`);
+      targetSections.push(`Evidence: ${targetRun.operatorAuthPreflight.evidence}`);
+      if (targetRun.operatorAuthPreflight.error) targetSections.push(`Error: ${targetRun.operatorAuthPreflight.error}`);
+      targetSections.push("");
+    }
     targetSections.push("| Tenant | Provider | Journey | Challenge | Verification | Cleanup |");
     targetSections.push("|---|---|---|---|---|---|");
     for (const row of targetRun.rows) {
@@ -287,6 +333,10 @@ async function main(): Promise<void> {
       `Started IST: ${matrixOutput.startedIst}`,
       `Finished IST: ${matrixOutput.finishedIst}`,
       `Status: ${matrixOutput.status}`,
+      ...(matrixOutput.providerFixtureCoverage ? [
+        `Provider fixture coverage: ${matrixOutput.providerFixtureCoverage.status} (${matrixOutput.providerFixtureCoverage.actualCount}/${matrixOutput.providerFixtureCoverage.expectedCount})`,
+        ...matrixOutput.providerFixtureCoverage.findings.map((finding) => `Coverage detail: ${finding}`)
+      ] : []),
       "",
       "## Verification service preflights",
       "",
@@ -418,6 +468,7 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   let operatorAssistedEntra = false;
   let authPreflightOnly = false;
   let servicePreflightOnly = false;
+  let allActiveTenants = false;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -460,6 +511,9 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
       case "--service-preflight-only":
         servicePreflightOnly = true;
         break;
+      case "--all-active-tenants":
+        allActiveTenants = true;
+        break;
       case "--skip-verification":
         verify = false;
         break;
@@ -488,14 +542,23 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
       "azure-prod"
     ];
 
-  if (operatorAssistedEntra && (headless || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || (authPreflightOnly ? tenantCodes.length > 1 : tenantCodes.length < 1))) {
-    throw new Error("--operator-assisted-entra requires --headed and exactly --target azure-dev; payment mode requires one or more explicit --tenant values, while auth-preflight-only accepts zero or one. It cannot run against staging or production.");
+  const normalizedProviders = normalizeRequestedProviders(requestedProviders);
+  const providerFixtureMatrixRequested = normalizedProviders.length > 0;
+  const allTenantMatrix = providerFixtureMatrixRequested && allActiveTenants && tenantCodes.length === 0;
+  if (operatorAssistedEntra && (headless || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || (authPreflightOnly ? tenantCodes.length > 1 || allActiveTenants : tenantCodes.length < 1 && !allTenantMatrix))) {
+    throw new Error("--operator-assisted-entra requires --headed and exactly --target azure-dev; payment mode requires an explicit tenant or the complete --all-active-tenants two-provider fixture matrix, while auth-preflight-only accepts zero or one tenant. It cannot run against staging or production.");
   }
   if (operatorAssistedEntra && new Set(tenantCodes.map((code) => code.toLowerCase())).size !== tenantCodes.length) {
     throw new Error("--operator-assisted-entra does not accept duplicate --tenant values.");
   }
   if (authPreflightOnly && !operatorAssistedEntra) {
     throw new Error("--auth-preflight-only requires --operator-assisted-entra; it never creates an order or submits a payment.");
+  }
+  if (allActiveTenants && (!providerFixtureMatrixRequested || !operatorAssistedEntra || tenantCodes.length > 0 || tenantLimit !== null || allowPartialExecution || dryRun || !verify || headless || normalizedProviders.length !== 2 || !normalizedProviders.some((provider) => provider.toLowerCase() === "razorpay") || !normalizedProviders.some((provider) => provider.toLowerCase() === "openpay"))) {
+    throw new Error("--all-active-tenants requires a complete headed Azure-dev Entra matrix with both Razorpay and OpenPay, verification enabled, no partial mode, no dry-run, and no tenant limit.");
+  }
+  if (providerFixtureMatrixRequested && (!operatorAssistedEntra || authPreflightOnly || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev")) {
+    throw new Error("Azure provider overrides are dev-only, require one headed operator-assisted Entra session, and cannot be used by auth-preflight-only or service-preflight-only modes.");
   }
   if (servicePreflightOnly && (operatorAssistedEntra || authPreflightOnly || dryRun || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || tenantCodes.length > 0 || requestedProviders.length > 0)) {
     throw new Error("--service-preflight-only is a hosted, no-payment dependency check that may create and remove a temporary SQL firewall lease; use exactly --target azure-dev without tenant/provider filters, dry-run, or operator-assisted browser authentication.");
@@ -515,7 +578,8 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
     tenantLimit,
     operatorAssistedEntra,
     authPreflightOnly,
-    servicePreflightOnly
+    servicePreflightOnly,
+    allActiveTenants
   };
 }
 

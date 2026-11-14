@@ -11,6 +11,8 @@ export interface VerificationRequest {
   customerOrderId?: string;
   orderReferenceId?: string;
   providerPaymentId?: string;
+  startedUtc?: string;
+  finishedUtc?: string;
   sqlAuthenticationMode?: "entra" | "key-vault";
 }
 

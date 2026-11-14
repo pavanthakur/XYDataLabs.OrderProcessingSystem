@@ -215,14 +215,16 @@ jobs:
         run: |
           $artifactRoot = Join-Path $PWD 'TestResults/Playwright/azure-https'
           $summaryPath = Join-Path $artifactRoot 'topology-preflight-${{ inputs.environment }}-${{ github.run_id }}.md'
-
           $verifyError = $null
           try {
-            & scripts/verify-phase10-azure-tenant-topology.ps1 `
-              -Environment '${{ inputs.environment }}' `
-              -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
-              -GatewayBaseUrl '${{ steps.topology.outputs.gatewayBaseUrl }}' `
-              -SummaryPath $summaryPath
+            $topologyArgs = @(
+              '-Environment', '${{ inputs.environment }}',
+              '-ResourceGroupName', '${{ steps.topology.outputs.resourceGroup }}',
+              '-GatewayBaseUrl', '${{ steps.topology.outputs.gatewayBaseUrl }}',
+              '-SummaryPath', $summaryPath
+            )
+            if ('${{ inputs.environment }}' -eq 'dev') { $topologyArgs += @('-RequiredProviderCodes', 'Razorpay', 'OpenPay') }
+            & scripts/verify-phase10-azure-tenant-topology.ps1 @topologyArgs
           }
           catch {
             $verifyError = $_

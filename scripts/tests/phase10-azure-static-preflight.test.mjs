@@ -68,6 +68,7 @@ test('Azure payment workflow runs service-access preflight before the browser pa
   assert.match(matrixRunnerSource, /"-PreflightOnly"/);
   assert.match(matrixRunnerSource, /No browser journey or payment was started/);
   assert.match(paymentWorkflowSource, /EXPECTED_AZURE_SUBSCRIPTION_ID: \$\{\{ secrets\.AZUREAPPSERVICE_SUBSCRIPTIONID \}\}/);
+  assert.match(paymentWorkflowSource, /if \('\$\{\{ inputs\.environment \}\}' -eq 'dev'\) \{ \$topologyArgs \+= @\('-RequiredProviderCodes', 'Razorpay', 'OpenPay'\) \}/);
 });
 
 test('hosted service-preflight-only mode is dev-only and cannot reach payment automation', () => {
@@ -349,7 +350,8 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
     readFile('automation/src/browser/payment-journey-runner.ts', 'utf8'),
   ]);
   assert.match(cli, /--operator-assisted-entra/);
-  assert.match(cli, /headless \|\| normalizedTargets\.length !== 1 \|\| normalizedTargets\[0\] !== "azure-dev" \|\| \(authPreflightOnly \? tenantCodes\.length > 1 : tenantCodes\.length < 1\)/);
+  assert.match(cli, /payment mode requires an explicit tenant or the complete --all-active-tenants two-provider fixture matrix/);
+  assert.match(cli, /providerFixtureMatrixRequested && \(!operatorAssistedEntra \|\| authPreflightOnly \|\| normalizedTargets\.length !== 1 \|\| normalizedTargets\[0\] !== "azure-dev"\)/);
   assert.match(cli, /new Set\(tenantCodes\.map\(\(code\) => code\.toLowerCase\(\)\)\)\.size !== tenantCodes\.length/);
   assert.match(cli, /if \(operatorAssistedEntra\) tenantTimeoutMs = Math\.max\(tenantTimeoutMs, 420000\)/);
   assert.match(cli, /if \(authPreflightOnly && !operatorAssistedEntra\)/);
@@ -389,6 +391,42 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
   assert.match(executor, /reuseEntraSession: options\.operatorAssistedEntra/);
   assert.match(executor, /await paymentJourneyRunner\.closeOperatorAssistedSession\(log\)/);
   assert.match(executor, /required provider\/SQL verification failed, so no further tenant payment will be submitted/);
+});
+
+test('Azure all-active-tenant provider fixtures use Entra SQL, exact recovery, and remain dev-only', async () => {
+  const [cli, provisioner, fixture, localRunner, workflow, journey, executor] = await Promise.all([
+    readFile('automation/src/cli/run-azure-matrix.ts', 'utf8'),
+    readFile('automation/src/adapters/fixtures/powershell-payment-provider-provisioner.ts', 'utf8'),
+    readFile('scripts/phase10-azure-payment-test-state.ps1', 'utf8'),
+    readFile('scripts/run-phase10-azure-dev-operator-matrix.ps1', 'utf8'),
+    readFile('.github/workflows/phase10-azure-payment-matrix.yml', 'utf8'),
+    readFile('automation/src/browser/payment-journey-runner.ts', 'utf8'),
+    readFile('automation/src/orchestrator/payment-automation-executor.ts', 'utf8'),
+  ]);
+  assert.match(cli, /--all-active-tenants requires a complete headed Azure-dev Entra matrix with both Razorpay and OpenPay/);
+  assert.match(cli, /providerFixtureCoverage = \{/);
+  assert.match(cli, /restorationFailed = options\.requestedProviders\.length > 0/);
+  assert.match(provisioner, /phase10-azure-payment-test-state\.ps1/);
+  assert.match(provisioner, /exact-azure-dev-entra-snapshot/);
+  assert.match(provisioner, /stop the matrix before any charge/);
+  assert.match(fixture, /'account','get-access-token','--resource','https:\/\/database\.windows\.net\//);
+  assert.match(fixture, /HAS_PERMS_BY_NAME\(N'dbo\.Tenants', N'OBJECT', N'UPDATE', N'PaymentProviderCode', N'COLUMN'\)/);
+  assert.match(fixture, /HAS_PERMS_BY_NAME\(N'payments\.PaymentProviders', N'OBJECT', N'UPDATE', N'Use3DSecure', N'COLUMN'\)/);
+  assert.match(fixture, /UPDATE dbo\.Tenants SET PaymentProviderCode/);
+  assert.match(fixture, /UPDATE payments\.PaymentProviders SET Use3DSecure/);
+  assert.match(fixture, /Wait-AzureFixtureRuntimeRoute/);
+  assert.match(fixture, /New-Phase10FirewallLease/);
+  assert.match(fixture, /Remove-Phase10FirewallLease/);
+  assert.doesNotMatch(fixture, /sql-admin-password|SQL admin password|PaymentProviders--.*PrivateKey/);
+  assert.match(localRunner, /Could not resolve the live Azure Container Apps environment domain/);
+  assert.match(localRunner, /AuthPreflight/);
+  assert.match(localRunner, /--provider','Razorpay','--provider','OpenPay/);
+  assert.doesNotMatch(workflow, /--provider Razorpay|--provider OpenPay/);
+  assert.match(journey, /retainOperatorSessionAfterAuthPreflight/);
+  assert.match(journey, /No-charge Entra access and tenant-switch preflight passed; preserving this in-memory session/);
+  assert.match(executor, /requiresSingleSessionPreflight/);
+  assert.match(executor, /retainOperatorSessionAfterAuthPreflight: true/);
+  assert.ok(executor.indexOf('if (requiresSingleSessionPreflight)') < executor.indexOf('for (const executionItem of runnableExecutionItems)'), 'Entra no-charge preflight must precede every provider fixture and payment case');
 });
 
 test('deployment parameter identity is recorded before the approval comparison for diagnosable failures', async () => {

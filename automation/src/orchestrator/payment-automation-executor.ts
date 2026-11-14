@@ -50,6 +50,7 @@ export interface PaymentAutomationRunOutput {
   reportDirectory: string;
   rows: ExecutiveSummaryRow[];
   verificationSummary: string;
+  operatorAuthPreflight?: { status: "PASS" | "FAIL"; startedUtc: string; finishedUtc: string; evidence: string; error?: string };
 }
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -147,7 +148,55 @@ export async function executePaymentAutomationRun(
   const rows: ExecutiveSummaryRow[] = [];
   const verificationSummaries: string[] = [];
 
-  for (const executionItem of executionItems) {
+  let operatorAuthPreflight: PaymentAutomationRunOutput["operatorAuthPreflight"];
+  const providersForRun = normalizeRequestedProviders(options.requestedProviders ?? []);
+  const requiresSingleSessionPreflight = target.runtime === "azure" && target.environment === "dev"
+    && options.operatorAssistedEntra === true && !options.authPreflightOnly
+    && providersForRun.length === 2
+    && providersForRun.some((provider) => provider.toLowerCase() === "razorpay")
+    && providersForRun.some((provider) => provider.toLowerCase() === "openpay");
+  if (requiresSingleSessionPreflight) {
+    const preflightStartedUtc = new Date().toISOString();
+    const preflightTenant = executionItems[0]?.tenantCode;
+    try {
+      if (!preflightTenant) throw new Error("No active tenant was available for the Entra preflight.");
+      const preflightResult = await paymentJourneyRunner.execute({
+        tenantCode: preflightTenant,
+        target,
+        customerOrderId: "not-created",
+        sandboxOtpCode: options.sandboxOtpCode,
+        headless: false,
+        expectedAdapterMode: "sandbox",
+        operatorAssistedEntra: true,
+        reuseEntraSession: true,
+        authPreflightOnly: true,
+        retainOperatorSessionAfterAuthPreflight: true,
+        logger: (message) => log(`[Entra no-charge preflight] ${message}`)
+      });
+      if (preflightResult.journeyOutcome !== "auth-preflight-passed") {
+        throw new Error("The authenticated tenant/access preflight did not return its required PASS outcome.");
+      }
+      operatorAuthPreflight = {
+        status: "PASS",
+        startedUtc: preflightStartedUtc,
+        finishedUtc: new Date().toISOString(),
+        evidence: safePaymentDiagnostic(preflightResult.statusMessage)
+      };
+    } catch (error) {
+      operatorAuthPreflight = {
+        status: "FAIL",
+        startedUtc: preflightStartedUtc,
+        finishedUtc: new Date().toISOString(),
+        evidence: "No order or payment was attempted; the complete provider matrix was blocked before fixture mutation.",
+        error: safePaymentDiagnostic(error instanceof Error ? error.message : "Entra no-charge preflight failed.")
+      };
+      log(`[Entra no-charge preflight] Failed; all payment cases are blocked: ${operatorAuthPreflight.error}`);
+    }
+    await writeFile(path.join(reportDirectory, "operator-auth-preflight.json"), JSON.stringify(operatorAuthPreflight, null, 2), "utf8");
+  }
+
+  const runnableExecutionItems = operatorAuthPreflight?.status === "FAIL" ? [] : executionItems;
+  for (const executionItem of runnableExecutionItems) {
     const tenantStartedAt = new Date();
     log(`Starting tenant ${executionItem.tenantCode} (${executionItem.tenantTier}${executionItem.paymentProviderCode ? `, provider ${executionItem.paymentProviderCode}` : ""}).`);
     const syntheticCustomerOrderId = buildCustomerOrderId(
@@ -173,7 +222,7 @@ export async function executePaymentAutomationRun(
     let paymentEvidence: Partial<ExecutiveSummaryRow> = {};
     let paymentProvider = executionItem.paymentProviderCode ?? "unresolved";
     let verificationOutcome = options.authPreflightOnly ? "not-applicable" : options.verify && !options.dryRun ? "pending" : "skipped";
-    let cleanupOutcome: CleanupOutcome = options.authPreflightOnly ? "not-applicable" : resolveCleanupOutcome();
+    let cleanupOutcome: CleanupOutcome = "not-applicable";
     let evidenceReference = options.authPreflightOnly
       ? "Auth preflight only; no customer, order, or payment mutation was attempted."
       : `customerOrderId:${syntheticCustomerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
@@ -196,6 +245,7 @@ export async function executePaymentAutomationRun(
 
         const fixturePrepareResult = await provisioner.prepare(executionItem.tenantCode);
         fixtureIds = fixturePrepareResult.fixtureIds;
+        if (fixtureIds.length > 0) cleanupOutcome = "manual-review";
         evidenceReference = `${evidenceReference} | baseline:${fixturePrepareResult.baselineName}`;
       }
 
@@ -219,6 +269,7 @@ export async function executePaymentAutomationRun(
             operatorAssistedEntra: options.operatorAssistedEntra,
             reuseEntraSession: options.operatorAssistedEntra,
             authPreflightOnly: options.authPreflightOnly,
+            retainOperatorSessionAfterAuthPreflight: false,
             manualEntry: options.manualEntry,
             expectedOutcome: options.expectedOutcome,
             signal:journeyAbort.signal,
@@ -263,6 +314,8 @@ export async function executePaymentAutomationRun(
               customerOrderId,
               orderReferenceId,
               providerPaymentId,
+              startedUtc: tenantStartedAt.toISOString(),
+              finishedUtc: new Date().toISOString(),
               sqlAuthenticationMode: options.operatorAssistedEntra ? "entra" : "key-vault"
             });
 
@@ -304,15 +357,17 @@ export async function executePaymentAutomationRun(
       }
     }
     finally {
-      if (provisioner) {
+      if (provisioner && fixtureIds.length > 0) {
         try {
           const fixtureCleanupResult = await provisioner.cleanup(executionItem.tenantCode, fixtureIds);
           cleanupOutcome = fixtureCleanupResult.outcome;
         }
         catch (error) {
           cleanupOutcome = "manual-review";
+          stopAfterCurrentItem = true;
           const cleanupMessage = error instanceof Error ? error.message : "Cleanup failed.";
           evidenceReference = `${evidenceReference} | cleanup:${cleanupMessage}`;
+          log(`[${executionItem.tenantCode}/${executionItem.paymentProviderCode}] Fixture restoration failed; the provider matrix is stopping immediately.`);
         }
       }
 
@@ -360,6 +415,10 @@ export async function executePaymentAutomationRun(
         lastRow.journeyOutcome = `failed: ${message}`;
         lastRow.errorDetail = [lastRow.errorDetail, message].filter(Boolean).join(" | ");
       }
+      if (operatorAuthPreflight) {
+        operatorAuthPreflight.status = "FAIL";
+        operatorAuthPreflight.error = [operatorAuthPreflight.error, message].filter(Boolean).join(" | ");
+      }
       log(`Operator-assisted Entra sign-out verification failed: ${message}`);
     }
   }
@@ -374,7 +433,8 @@ export async function executePaymentAutomationRun(
     runPrefix,
     reportDirectory,
     rows,
-    verificationSummary
+    verificationSummary,
+    ...(operatorAuthPreflight ? { operatorAuthPreflight } : {})
   };
 
   await writeFile(path.join(reportDirectory, "summary.md"), markdownSummary, "utf8");
@@ -417,10 +477,6 @@ function applyTenantLimit(
   const skippedTenantCodes = tenants.slice(normalizedLimit).map((tenant) => tenant.tenantCode);
   log(`Tenant limit applied: using ${limitedTenants.length} of ${tenants.length} tenant(s). Skipped: ${skippedTenantCodes.join(", ")}.`);
   return limitedTenants;
-}
-
-function resolveCleanupOutcome(): CleanupOutcome {
-  return "reset";
 }
 
 function buildExecutionItems(
