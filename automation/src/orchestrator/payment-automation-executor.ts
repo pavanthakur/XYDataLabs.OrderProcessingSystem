@@ -37,6 +37,8 @@ export interface ExecutePaymentAutomationRunOptions {
   expectedAdapterMode?: "sandbox" | "deterministic";
   threeDs?: boolean;
   loginUsername?: string;
+  operatorAssistedEntra?: boolean;
+  authPreflightOnly?: boolean;
   manualEntry?: boolean;
   challengeRequired?: boolean;
   expectedOutcome?: "failure" | "cancelled";
@@ -99,12 +101,13 @@ export async function executePaymentAutomationRun(
   const runId = `payment-automation-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
   const runPrefix = options.runPrefix ?? buildRunPrefix(startedAt);
   const reportDirectory = path.join(options.reportDirectoryRoot ?? path.join(automationRoot, "reports"), runId);
-  const executionItems = buildExecutionItems(
+  const allExecutionItems = buildExecutionItems(
     resolvedTenants,
     normalizeRequestedProviders(options.requestedProviders ?? []),
     startedAt,
     runPrefix
   );
+  const executionItems = options.authPreflightOnly ? allExecutionItems.slice(0, 1) : allExecutionItems;
 
   await mkdir(reportDirectory, { recursive: true });
   const tenantTopology = await buildTenantTopologyArtifact(target.runtime, target.environment, tenantPlan.resolvedTenants);
@@ -154,11 +157,11 @@ export async function executePaymentAutomationRun(
       target.runtime,
       executionItem.paymentProviderCode ?? undefined
     );
-    let customerOrderId = syntheticCustomerOrderId;
+    let customerOrderId = options.authPreflightOnly ? "not-created" : syntheticCustomerOrderId;
     let orderId = 0;
-    let orderReferenceId = "not-available";
+    let orderReferenceId = options.authPreflightOnly ? "not-created" : "not-available";
     let orderAmount = 0;
-    let orderCurrencyCode = "unknown";
+    let orderCurrencyCode = options.authPreflightOnly ? "not-applicable" : "unknown";
     const tenantDiagnosticsDirectory = path.join(
       reportDirectory,
       executionItem.tenantCode,
@@ -169,9 +172,11 @@ export async function executePaymentAutomationRun(
     let threeDsSetting: ExecutiveSummaryRow["threeDsSetting"] = "unknown";
     let paymentEvidence: Partial<ExecutiveSummaryRow> = {};
     let paymentProvider = executionItem.paymentProviderCode ?? "unresolved";
-    let verificationOutcome = options.verify && !options.dryRun ? "pending" : "skipped";
-    let cleanupOutcome = resolveCleanupOutcome();
-    let evidenceReference = `customerOrderId:${syntheticCustomerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
+    let verificationOutcome = options.authPreflightOnly ? "not-applicable" : options.verify && !options.dryRun ? "pending" : "skipped";
+    let cleanupOutcome: CleanupOutcome = options.authPreflightOnly ? "not-applicable" : resolveCleanupOutcome();
+    let evidenceReference = options.authPreflightOnly
+      ? "Auth preflight only; no customer, order, or payment mutation was attempted."
+      : `customerOrderId:${syntheticCustomerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
     let outcomeMessage = "";
     let errorDetail = "";
     let fixtureIds: string[] = [];
@@ -211,6 +216,9 @@ export async function executePaymentAutomationRun(
             challengeRequired: options.challengeRequired,
             expectedThreeDs: options.threeDs,
             loginUsername: options.loginUsername,
+            operatorAssistedEntra: options.operatorAssistedEntra,
+            reuseEntraSession: options.operatorAssistedEntra,
+            authPreflightOnly: options.authPreflightOnly,
             manualEntry: options.manualEntry,
             expectedOutcome: options.expectedOutcome,
             signal:journeyAbort.signal,
@@ -227,7 +235,8 @@ export async function executePaymentAutomationRun(
         challengeOutcome = journeyResult.challengeOutcome;
         threeDsSetting = journeyResult.threeDsSetting;
         paymentEvidence = {adapterMode:journeyResult.adapterMode,collectionMode:journeyResult.collectionMode,
-          observedChallenge:journeyResult.observedChallenge,providerVerification:journeyResult.providerVerification};
+          observedChallenge:journeyResult.observedChallenge,providerVerification:journeyResult.providerVerification,
+          tenantPreflightResults:journeyResult.tenantPreflightResults};
         paymentProvider = journeyResult.paymentProvider;
         customerOrderId = journeyResult.customerOrderId;
         orderId = journeyResult.orderId;
@@ -239,7 +248,7 @@ export async function executePaymentAutomationRun(
         const providerPaymentId = extractProviderPaymentId(journeyResult.finalUrl);
 
         if(options.expectedOutcome) verificationOutcome="passed"; // Runner verifies provider failure/cancellation and authoritative unpaid order independently.
-        if (options.verify && !options.expectedOutcome) {
+        if (options.verify && !options.expectedOutcome && !options.authPreflightOnly) {
           try {
             log(
               `[${executionItem.tenantCode}] Verification anchor customerOrderId=${customerOrderId} runPrefix=${executionItem.executionRunPrefix}.`
@@ -253,7 +262,8 @@ export async function executePaymentAutomationRun(
               tenantCode: executionItem.tenantCode,
               customerOrderId,
               orderReferenceId,
-              providerPaymentId
+              providerPaymentId,
+              sqlAuthenticationMode: options.operatorAssistedEntra ? "entra" : "key-vault"
             });
 
             verificationOutcome = verificationResult.outcome;
@@ -276,6 +286,10 @@ export async function executePaymentAutomationRun(
             const verificationMessage = error instanceof Error ? error.message : "Verification failed.";
             verificationSummaries.push(`Verification failed for ${executionItem.tenantCode}: ${verificationMessage}`);
             log(`[${executionItem.tenantCode}] Verification failed: ${verificationMessage}`);
+            if (!options.allowPartialExecution) {
+              stopAfterCurrentItem = true;
+              log(`Stopping the payment matrix after ${executionItem.tenantCode}; required provider/SQL verification failed, so no further tenant payment will be submitted.`);
+            }
           }
         }
       }
@@ -284,7 +298,7 @@ export async function executePaymentAutomationRun(
       const errorMessage = safePaymentDiagnostic(error instanceof Error ? error.message : "Unknown error.");
       journeyOutcome = `failed: ${errorMessage}`;
       errorDetail = errorMessage;
-      verificationOutcome = "skipped";
+      verificationOutcome = options.authPreflightOnly ? "not-applicable" : "skipped";
       if (!options.allowPartialExecution) {
         stopAfterCurrentItem = true;
       }
@@ -333,6 +347,20 @@ export async function executePaymentAutomationRun(
     if (stopAfterCurrentItem) {
       log(`Stopping after tenant ${executionItem.tenantCode} due to failure and partial execution disabled.`);
       break;
+    }
+  }
+
+  if (options.operatorAssistedEntra && !options.authPreflightOnly) {
+    try {
+      await paymentJourneyRunner.closeOperatorAssistedSession(log);
+    } catch (error) {
+      const message = safePaymentDiagnostic(error instanceof Error ? error.message : "Entra sign-out verification failed.");
+      const lastRow = rows.at(-1);
+      if (lastRow) {
+        lastRow.journeyOutcome = `failed: ${message}`;
+        lastRow.errorDetail = [lastRow.errorDetail, message].filter(Boolean).join(" | ");
+      }
+      log(`Operator-assisted Entra sign-out verification failed: ${message}`);
     }
   }
 

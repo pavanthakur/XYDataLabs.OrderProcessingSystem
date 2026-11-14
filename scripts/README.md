@@ -230,6 +230,9 @@ Deterministic Azure payment verification for the `verify-db-logs` workflow.
 # Auto-resolve the only run prefix found today
 .\scripts\verify-payment-run-azure.ps1 -Environment dev
 
+# Use Entra SQL token auth; the verifier opens and cleans up its owned firewall lease
+.\scripts\verify-payment-run-azure.ps1 -Environment dev -RunPrefix OR-1-2ndApr -SqlAuthenticationMode Entra
+
 # Verify a specific logical run prefix
 .\scripts\verify-payment-run-azure.ps1 -Environment dev -RunPrefix OR-1-2ndApr
 
@@ -241,12 +244,18 @@ Deterministic Azure payment verification for the `verify-db-logs` workflow.
 - `Environment` (optional): `dev`, `stg`, or `prod` (default: `dev`)
 - `RunPrefix` (optional): logical run prefix such as `OR-1-2ndApr`
 - `OutputFormat` (optional): `Table` or `Json` (default: `Table`)
-- `SkipFirewallOpen` (switch): skip the Azure SQL firewall helper call
+- `SqlAuthenticationMode` (optional): `KeyVault` (default; existing hosted verifier path) or `Entra` (Azure CLI SQL access token; no SQL password retrieval)
+- `PreflightOnly` (switch): run a no-order/no-charge service and tenant-topology preflight, emit JSON/Markdown under `TestResults`, and stop before payment telemetry reconciliation
+- `ExpectedSubscriptionId` (preflight): required approved subscription ID; can also be supplied by `EXPECTED_AZURE_SUBSCRIPTION_ID`
+- `SkipFirewallOpen` (switch): skip the owned firewall lease; use only from an already-allowed network
 
 **Prerequisites**:
 - `az login` completed
-- Key Vault access to `sql-admin-password`
-- Local machine allowed through Azure SQL firewall, or allow the script to open it automatically
+- `KeyVault` mode: Key Vault read access to `sql-admin-password` and tenant/provider contract secrets
+- `Entra` mode: a contained least-privilege SQL verifier identity, Azure SQL database-resource read access for dedicated database discovery, and permission to create/delete the single-run SQL firewall rule (or use an already-allowed network)
+- `run-azure-matrix.ts` runs this preflight automatically for each selected Azure target before it starts browser journeys and stores JSON/Markdown next to the matrix report. For a standalone no-charge check, use `-PreflightOnly -SqlAuthenticationMode Entra -ExpectedSubscriptionId <approved-id>` to verify App Insights Logs access, read-only SQL access to the shared and every resolved dedicated database, and exact SQL firewall-lease cleanup. `KeyVault` mode additionally exercises configured Key Vault secret reads without printing secret values.
+- The SQL firewall lease is an owned, temporary network-rule automation. Key Vault RBAC and App Insights Logs access are identity/data-plane permissions, not per-run firewall rules; preflight detects missing access and reports it but never grants roles, changes policies, or creates credentials.
+- Correct active Azure subscription; do not use the legacy fixed-name `open-local-sql-firewall.ps1` helper for payment verification
 
 **Notes**:
 - This script is Azure-only. Docker/local verification still uses the physical log flow documented in `docs/runbooks/payment-db-verification.md` and the `/XYDataLabs-verify-db-logs` prompt.

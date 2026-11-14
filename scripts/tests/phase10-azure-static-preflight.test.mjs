@@ -6,6 +6,9 @@ import { auditAzureDeployContract, validateAzureRuntimeTargets } from '../phase1
 
 const requireAutomation = createRequire(new URL('../../automation/package.json', import.meta.url));
 const yaml = requireAutomation('js-yaml');
+const verifierSource = await readFile(new URL('../verify-payment-run-azure.ps1', import.meta.url), 'utf8');
+const paymentWorkflowSource = await readFile(new URL('../../.github/workflows/phase10-azure-payment-matrix.yml', import.meta.url), 'utf8');
+const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-azure-matrix.ts', import.meta.url), 'utf8');
 
 const runtimeTarget = (key, environment) => ({
   key, runtime: 'azure', verificationMode: 'azure', browserMode: 'azure', allowGeneratedAzureUrlFallback: false,
@@ -50,6 +53,32 @@ valid.mainBicep += " var sqlConnectionString = deploySql ? 'Server=tcp:sql.datab
 test('static Azure deployment contract accepts explicit host, transport, immutable release and package settings', () => {
   const result = auditAzureDeployContract(valid);
   assert.equal(result.status, 'PASS', JSON.stringify(result));
+});
+
+test('Azure payment verifier treats dedicated tenants generically instead of hardcoding TenantC', () => {
+  assert.doesNotMatch(verifierSource, /q[25]TenantC|preflightTenantC|tenantCDbChargeIds/);
+  assert.match(verifierSource, /foreach \(\$tenant in \$dedicatedTenants\)/);
+  assert.match(verifierSource, /DedicatedDatabaseName = \$dedicatedDatabaseName/);
+});
+
+test('Azure payment workflow runs service-access preflight before the browser payment matrix', () => {
+  const preflightIndex = matrixRunnerSource.indexOf('runAzureVerificationServicePreflight({');
+  const paymentIndex = matrixRunnerSource.indexOf('executePaymentAutomationRun({');
+  assert.ok(preflightIndex >= 0 && paymentIndex > preflightIndex, 'service preflight must precede browser payment execution');
+  assert.match(matrixRunnerSource, /"-PreflightOnly"/);
+  assert.match(matrixRunnerSource, /No browser journey or payment was started/);
+  assert.match(paymentWorkflowSource, /EXPECTED_AZURE_SUBSCRIPTION_ID: \$\{\{ secrets\.AZUREAPPSERVICE_SUBSCRIPTIONID \}\}/);
+});
+
+test('hosted service-preflight-only mode is dev-only and cannot reach payment automation', () => {
+  const preflightGuard = matrixRunnerSource.indexOf('if (options.servicePreflightOnly) {');
+  const paymentExecution = matrixRunnerSource.indexOf('executePaymentAutomationRun({');
+  assert.match(paymentWorkflowSource, /servicePreflightOnly:[\s\S]*?default: false/);
+  assert.match(paymentWorkflowSource, /temporary SQL firewall lease/);
+  assert.ok(paymentWorkflowSource.includes('if [ "${{ inputs.servicePreflightOnly }}" = "true" ] && [ "${{ inputs.environment }}" != "dev" ]'));
+  assert.ok(preflightGuard >= 0 && paymentExecution > preflightGuard, 'service-only mode must continue past the target without invoking browser payment automation');
+  assert.match(matrixRunnerSource, /--service-preflight-only/);
+  assert.match(matrixRunnerSource, /runId: process\.env\.GITHUB_RUN_ID \?\? matrixRunId/);
 });
 
 test('Azure Functions keep-alive is required in IaC, deployment verification, and transport preflight', () => {
@@ -312,6 +341,54 @@ test('Azure payment matrix uses a Playwright-supported hosted runner image', asy
   const parsed = yaml.load(workflow, { schema: yaml.JSON_SCHEMA, maxAliasCount: 0 });
   assert.equal(parsed.jobs.azure_payment_matrix['runs-on'], 'ubuntu-24.04');
   assert.match(workflow, /Playwright's pinned Chromium build does not yet support Ubuntu 26 runners\./);
+});
+
+test('operator-assisted Azure Entra mode fails closed before mutations and is dev-only', async () => {
+  const [cli, runner] = await Promise.all([
+    readFile('automation/src/cli/run-azure-matrix.ts', 'utf8'),
+    readFile('automation/src/browser/payment-journey-runner.ts', 'utf8'),
+  ]);
+  assert.match(cli, /--operator-assisted-entra/);
+  assert.match(cli, /headless \|\| normalizedTargets\.length !== 1 \|\| normalizedTargets\[0\] !== "azure-dev" \|\| \(authPreflightOnly \? tenantCodes\.length > 1 : tenantCodes\.length < 1\)/);
+  assert.match(cli, /new Set\(tenantCodes\.map\(\(code\) => code\.toLowerCase\(\)\)\)\.size !== tenantCodes\.length/);
+  assert.match(cli, /if \(operatorAssistedEntra\) tenantTimeoutMs = Math\.max\(tenantTimeoutMs, 420000\)/);
+  assert.match(cli, /if \(authPreflightOnly && !operatorAssistedEntra\)/);
+  assert.match(cli, /\(options\.authPreflightOnly \|\| options\.servicePreflightOnly\) \? "preflight-passed"/);
+  assert.match(cli, /executionMode: options\.servicePreflightOnly \? "service-preflight-only" : options\.authPreflightOnly \? "auth-preflight-only"/);
+  const authPreflight = runner.indexOf('const accessProbe = await apiContext.get("/api/v1/Customer/GetAllCustomers"');
+  const configurationPreflight = runner.indexOf('const paymentConfiguration = await this.resolvePaymentConfiguration');
+  const mutation = runner.indexOf('const authoritativeOrder = request.manualEntry ? await this.createOrderThroughUi');
+  assert.ok(authPreflight >= 0 && configurationPreflight >= 0 && mutation > configurationPreflight,
+    'Entra scope/tenant authorization and sandbox configuration must be verified before order creation');
+  const authOnly = runner.indexOf('if (request.authPreflightOnly)');
+  const orderCreation = runner.indexOf('const authoritativeOrder = request.manualEntry ? await this.createOrderThroughUi');
+  assert.ok(authOnly > configurationPreflight && authOnly < orderCreation,
+    'auth-only mode must stop after authenticated configuration checks and before any order creation');
+  assert.match(runner, /journeyOutcome: "auth-preflight-passed"/);
+  assert.match(runner, /customerOrderId: "not-created"/);
+  assert.match(runner, /Admin UI tenant-switch cycle passed/);
+  assert.match(runner, /tenantPicker\.selectOption\(tenantCode\)/);
+  assert.match(runner, /tenantPreflightResults\.push/);
+  assert.match(runner, /paymentConfiguration:|paymentProvider: tenantConfiguration\.activeProviderType/);
+  assert.match(runner, /localStorage\.getItem\("orderprocessing\.accessToken"\)/);
+  assert.match(runner, /Identity-provider sign-out did not complete cleanly/);
+  assert.match(runner, /signedOutHeading\.waitFor\(\{ state: "visible", timeout: 10000 \}\)/);
+  assert.doesNotMatch(runner, /observedHeading|allTextContents\(\)/);
+  assert.match(runner, /return `\$\{url\.origin\}\$\{url\.pathname\}`/);
+  assert.match(runner, /No credentials or browser state will be saved/);
+  assert.match(runner, /request\.diagnosticsDirectory && !request\.operatorAssistedEntra/);
+  assert.match(runner, /No Entra application access token became available within the sign-in window/);
+  assert.match(runner, /configuredApiOrigin !== null && configuredApiOrigin !== expectedUiOrigin && configuredApiOrigin !== expectedApiOrigin/);
+  assert.match(runner, /Entra sign-in returned OAuth error code/);
+  assert.doesNotMatch(runner, /authResult\.error.*error_description/s);
+  assert.match(runner, /MFA is completed by the operator, never bypassed by automation/);
+  assert.match(runner, /reuseEntraSession === true/);
+  assert.match(runner, /Reusing the in-memory Entra browser session/);
+  assert.match(runner, /closeOperatorAssistedSession/);
+  const executor = await readFile('automation/src/orchestrator/payment-automation-executor.ts', 'utf8');
+  assert.match(executor, /reuseEntraSession: options\.operatorAssistedEntra/);
+  assert.match(executor, /await paymentJourneyRunner\.closeOperatorAssistedSession\(log\)/);
+  assert.match(executor, /required provider\/SQL verification failed, so no further tenant payment will be submitted/);
 });
 
 test('deployment parameter identity is recorded before the approval comparison for diagnosable failures', async () => {

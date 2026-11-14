@@ -16,8 +16,9 @@ export interface ExecutiveSummaryRow {
   threeDsSetting: ThreeDsSetting;
   adapterMode?: "sandbox" | "deterministic" | "live" | "unknown";
   collectionMode?: string;
-  observedChallenge?: "presented" | "not-presented" | "unknown";
+  observedChallenge?: "presented" | "not-presented" | "not-applicable" | "unknown";
   providerVerification?: string;
+  tenantPreflightResults?: Array<{ tenantCode: string; paymentProvider: string; adapterMode: string; collectionMode: string; threeDsSetting: ThreeDsSetting }>;
   journeyOutcome: string;
   challengeOutcome: ChallengeOutcome;
   verificationOutcome: string;

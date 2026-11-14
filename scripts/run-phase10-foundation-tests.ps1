@@ -291,7 +291,7 @@ try{
     Run-Test 'frontend-typecheck' 'npm' @('--prefix','frontend','run','typecheck')
     Push-Location (Join-Path $root 'automation')
     try{Run-Test 'automation-typecheck' 'npx' @('tsc','--noEmit','-p','tsconfig.json')}finally{Pop-Location}
-    foreach($suite in @('test:payment-evidence','test:acceptance-coverage','test:verification-polling','test:callbacks','test:callbacks:browser','test:provider-challenges:browser')){
+    foreach($suite in @('test:payment-evidence','test:razorpay-contact:browser','test:acceptance-coverage','test:verification-polling','test:callbacks','test:callbacks:browser','test:provider-challenges:browser')){
         $suiteId=$suite.Replace(':','-')
         Run-Test $suiteId 'npm' @('--prefix','automation','run',$suite)
         Write-AutomationTestResults $suiteId (Join-Path $artifact "$suiteId.log") $results[-1].exitCode

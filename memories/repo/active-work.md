@@ -1,40 +1,41 @@
 # Active Work
 
-Session navigation only—not proof. Verify current Git, code, evidence and runtime state before acting.
+Session navigation, not proof. Verify Git, runtime and referenced evidence before acting.
 
-## Checkpoint — 12 November 2026
+## Historical local acceptance — 12 November 2026
 
-- Historical acceptance candidate: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`), clean at E2E/NFR start and finish. Current work is on a later `dev` candidate and does not inherit the historical Docker acceptance; verify Git state.
 - Review revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
 - Worktree state: `UNKNOWN`
-- Verify Git state before continuing.
+- Evidence status: `HISTORICAL`
 - Evidence revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
 - Evidence environment: `LOCAL DOCKER DESKTOP ON G:`
-- Evidence scope: `bounded non-Azure local Docker acceptance; not full Phase 10 or Azure acceptance`
+- Evidence scope: bounded non-Azure local Docker acceptance; not full Phase 10 or Azure acceptance
 - Evidence reference: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`
-- Evidence status: `HISTORICAL`
-- The pinned candidate's recorded verdict is **PASS, bounded non-Azure local acceptance**. Do not describe this as full Phase 10 closure or Azure acceptance.
-- E2E: `phase10-docker-http-20261111-230915653`; NFR: `phase10-docker-nfr-20261111-234505649`; the v4 reconciler returned PASS with all 13 image identities equal. Sanitized tracked summary: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`.
-- E2E passed cold build, foundations, smoke, isolated integration, identity, deterministic and sandbox journeys (TenantA/B/C × Razorpay/OpenPay), messaging/Functions, persistence after Docker restart, and settings restoration. Six positives per payment mode; six Razorpay failure/cancellation cases passed.
-- NFR passed all categories: 100/100 messages/effects at 2.273 s P95; replay visibility 1.080 s; outage recovery 26.201 s, zero lost/duplicate effects; retained Inventory rollback and restore passed. L5-R HTML had no issues and measured backend, frontend, and integration coverage.
-- L6 A passed on this candidate (42 architecture-invariant tests + 1 Gateway topology test). L6 B passed with bounded local evidence. L6 C passed under DW-028 Option A: Drift Scanner, AI Customization Windows/Linux, and Documentation Links passed on this SHA; workflow `99` hosted parity is excluded. See the checklist for action links and limits.
-- L6 C is closed/PASS for `494ab4fd` under Option A; no corrective rerun is required for that candidate. Azure and the separate combined `l6-ci-parity-and-azure` report gate remain NOT-RUN; that combined gate is not non-Azure L6 C. Checkpoint A CI improvements do not reopen the accepted verdict or certify later candidates. DW-023/DW-024 remain Phase 11 deferrals. Fulfillment, installments, unresolved-payment recovery, visible OpenPay 3DS, Razorpay S2S, and ACA revision rollback remain uncertified.
+- Candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`) passed bounded non-Azure Docker acceptance; this does not certify later candidates, full Phase 10 or Azure.
+- Evidence: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`; E2E `phase10-docker-http-20261111-230915653`, NFR `phase10-docker-nfr-20261111-234505649`.
+- Recorded scope included all A/B/C × Razorpay/OpenPay deterministic and sandbox journeys, isolated integration, identity, messaging/Functions, persistence, settings restoration and NFR recovery/rollback. L6 A/B passed; L6 C passed under DW-028 Option A (workflow 99 local-only). See Phase 10 checklist for run links and limits.
+- DW-023/DW-024 and payment/order continuation capabilities remain Phase 11 deferrals. Visible OpenPay 3DS, Razorpay S2S and ACA revision rollback are not certified by this historical packet.
 
-## Current implementation checkpoint — 14 November 2026
+## Current Azure dev checkpoint — 14 November 2026
 
-- Phase 10 Azure dev is partially deployed, not accepted. Workflow `01` run `43455621377` deployed SQL/identity and a Functions package but failed its SCM Basic-auth verifier. Later run `43485246975` uploaded Functions and passed ARM/SQL setup, but the host indexed 0/2 because the local validator rejected Azure managed-identity storage settings. Live runtime/configuration state has not been rechecked in this turn.
-- Local, uncommitted remediation accepts local or Azure managed-identity Functions storage, configures Functions and Container Apps SQL access with managed identity, adds explicit SQL-disabled what-if targets, wires DLQ/replay settings and the replay queue, and pauses Functions triggers until SQL grants and exact package/index checks pass. Workflow 03 polls quarantine SQL read-only rather than competing with the deployed intake trigger. The local SQL-firewall helper no longer prints the Key Vault admin password. Approved Functions replay is explicitly not proven by workflow 03. Base revision: `823b96f3e7c1055524c580c5d69a1e369bd65ba7`.
-- Local checks: static-preflight suite 22/22, environment-contract 204/204, focused .NET contract tests 12/12, TransportSmoke build succeeded with a NuGet vulnerability-feed connectivity warning, and Bicep compiled with no template diagnostics. No cloud deployment or live Function invocation occurred. See `docs/internal/phase10-implementation-checklist.md` for the exact checkpoint.
-- Current dirty-candidate OIDC/deployment changes and first Azure deployment are still unverified. Azure redeploy, Function indexing/invocation/quarantine/replay, provider contract, endpoint smoke and workflows `02`–`04` remain pending. Named regular-user Entra accounts are still needed before P6.1. Phase 10 remains open; historical Docker/L6 evidence is bound only to `494ab4fd`.
+The current review is based on `c0e6ad1cfceb316cab637fa77fdf83974a9b89a6` plus a dirty worktree. Current-candidate evidence revision is `UNKNOWN`; Azure acceptance remains PARTIAL and unbound to a commit/image. See the evidence paths below.
+- Azure dev is partially deployed, not accepted. Workflows `43455621377` and `43485246975` exposed Functions publishing-auth and Functions host-indexing issues. Local IaC/workflow fixes exist but have not been redeployed or verified against the live runtime. Azure work remains Phase 10 and must follow its approval-gated runbook.
+- A one-login, no-charge Entra preflight passed for TenantA/B/C, assigned providers (A/B Razorpay; C OpenPay), UI switching A→B→C→A, and logout. Evidence: `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-14T12-29-52-606Z/summary.json`. It does not prove regular-user isolation, session expiry, payments, replay or image identity.
+- A headed test created/continued sandbox activity before stopping: TenantA Razorpay order 1 (INR 200) was provider-confirmed and its existing callback correlated; TenantB order 2 reached provider contact details but has no verified final result. TenantC was not run. Do not retry either order until authoritative status is checked. Preserve partial report `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-14T12-59-46-515Z/operator-stop-note.md`.
+- Key Vault access-policy `secrets/get` is Forbidden to the signed-in operator. Do not grant broad user access. This does not verify GitHub OIDC or workload managed identities. SQL Entra operator reads require the scoped firewall lease; its helper test passes and the latest temporary rule was confirmed absent.
+- Read-only TenantA verification correlated existing browser reference `OR-1794661186-14Nov-TenantA-https-rz` through provider ID to persisted `ORDER-1`; telemetry, provider dependency/request, SQL history/transaction and tenant isolation checks passed. No payment was created or retried. Evidence: `TestResults/Playwright/azure-https/appinsight-verification-20261114/TenantA-provider-id-fallback-readonly.{json,md,txt}`. Azure dev service preflight (App Insights, shared/TenantC dedicated SQL reads and topology) also passed: `TestResults/Playwright/azure-https/preflight-dev-20261114-current-check/`.
+- Local changes now include the PowerShell case-insensitive tenant-variable fix, provider-ID fallback correlation, Razorpay sandbox contact-step handling, and a dev-only hosted `servicePreflightOnly` workflow mode. The latter must stop after service access checks and never start browser/order/payment automation. No hosted run has verified that mode yet.
+- Current base revision: `c0e6ad1cfceb316cab637fa77fdf83974a9b89a6`; worktree is dirty and uncommitted. Live deployment/image identity is not bound to this candidate. No commit, push, redeploy, Functions replay or new payment occurred in this checkpoint.
 
 ## Next action
 
-Finish local workflow/static review, then obtain explicit authorization before committing or pushing. Only after hosted checks pass and the cost window is rechecked should a separate approval start additive workflow `01` with cleanup disabled. Verify Functions indexing and deployed quarantine; approved replay remains a separate gate. Then run `02`, `03`, and `04` in order. Cleanup remains destructive and requires immediate per-operation confirmation.
+Review the complete dirty diff and finish local checks for the dev-only service-preflight-only workflow. Do not commit/push or dispatch hosted workflows without explicit authorization. After reviewed changes are on the approved branch, run that no-charge workflow mode and verify its artifact reports `preflight-passed`, has no target payment journeys, and records firewall-lease cleanup. Only then plan the separately approved assigned-provider payment matrix: TenantA/Razorpay, TenantB/Razorpay, TenantC/OpenPay. TenantB's prior order remains ambiguous; TenantC payment is untested. Both providers for every tenant require a separate snapshot/switch/restore design and explicit sandbox-charge approval.
 
-## Safety / navigation
+The legacy `Resources/Azure-Deployment/open-local-sql-firewall.ps1` is still referenced for manual SSMS use; retain it until references are safely replaced and removal is reviewed. Hosted workflow `04`, Functions replay, regular-user Entra isolation, session expiry and deployed image identity remain open. Azure acceptance is NOT COMPLETE.
 
-- Local Docker SQL is loopback `14330`; native Windows SQL is `1433` and must remain untouched. Verify project ownership/physical SQL identity before separately approved DB work.
-- The owner deleted `F:\DockerRetained\DockerDesktopWSL-before-G`; it is not a recovery backup. Do not touch unrelated F: backups.
-- Preserve Docker volumes, provider settings and payment history. No resets, global prune, VHDX compaction, charges/refunds, Azure/directory writes or Git writes without explicit scoped approval.
-- For older payment-history/currency and continuation limits, consult the existing runbook and Phase 11 deferral record; never infer old order state, force Paid, or retry/refund to resolve uncertainty.
-- Canonical Phase 10 details: `docs/internal/phase10-implementation-checklist.md`; architecture and gate definitions: `docs/internal/phase10-preazure-lld.md`.
+## Safety and navigation
+
+- Local Docker SQL uses loopback `14330`; native Windows SQL `1433` is out of scope. Verify physical identity before any DB work.
+- The owner deleted `F:\DockerRetained\DockerDesktopWSL-before-G`; it is not recoverable from that location. Do not touch unrelated F: backups.
+- Preserve Docker volumes, provider settings and payment history. No reset, global prune, VHDX compaction, charge/refund, Azure/directory mutation or Git write without explicit scoped approval. Never resolve uncertain payment state by forcing status or resubmitting.
+- Phase 10 source of truth: `docs/internal/phase10-implementation-checklist.md`; design/gates: `docs/internal/phase10-preazure-lld.md`; Azure sequence: `docs/runbooks/phase10-azure-smoke.md`.

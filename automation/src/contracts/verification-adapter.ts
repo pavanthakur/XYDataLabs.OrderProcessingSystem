@@ -11,6 +11,7 @@ export interface VerificationRequest {
   customerOrderId?: string;
   orderReferenceId?: string;
   providerPaymentId?: string;
+  sqlAuthenticationMode?: "entra" | "key-vault";
 }
 
 export interface VerificationResult {

@@ -13,6 +13,7 @@
     "test:payment-currency:browser": "tsx --test src/browser/payment-currency.browser.test.ts",
     "test:order-continuation:browser": "tsx --test src/browser/order-payment-continuation.browser.test.ts",
     "test:payment-evidence": "tsx --test src/browser/payment-evidence.test.ts",
+    "test:razorpay-contact:browser": "tsx --test src/browser/razorpay-contact-details.browser.test.ts",
     "test:tenant-catalog": "tsx --test src/catalog/api-tenant-execution-catalog.test.ts",
     "test:runtime-target-catalog": "tsx --test src/catalog/json-runtime-target-catalog.test.ts",
     "test:acceptance-coverage": "tsx --test src/cli/payment-acceptance-coverage.test.ts",

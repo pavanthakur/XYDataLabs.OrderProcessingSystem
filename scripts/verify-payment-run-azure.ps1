@@ -86,14 +86,30 @@ param(
     [string] $RunAttempt = '1',
 
     [Parameter(Mandatory = $false)]
-    [string] $FirewallLeaseManifestPath
+    [string] $FirewallLeaseManifestPath,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('KeyVault', 'Entra')]
+    [string] $SqlAuthenticationMode = 'KeyVault',
+
+    [Parameter(Mandatory = $false)]
+    [switch] $PreflightOnly,
+
+    [Parameter(Mandatory = $false)]
+    [string] $PreflightReportPath,
+
+    [Parameter(Mandatory = $false)]
+    [string] $ExpectedSubscriptionId
 )
 
+$requestedTenantCode = $TenantCode
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-azure-firewall-lease.ps1')
+. (Join-Path $PSScriptRoot 'phase10-appinsights-query.ps1')
 $script:AzureSqlFirewallLease = $null
 $script:AzureSqlFirewallLeaseManifestPath = $null
+$script:AppInsightsQueryOutcomes = [System.Collections.Generic.List[object]]::new()
 
 function Invoke-AzureCliForFirewallLease {
     param([string[]]$Arguments)
@@ -140,6 +156,11 @@ $sharedDbName = switch ($logicalEnvironment) {
     'staging' { 'OrderProcessingSystem_Staging' }
     'prod' { 'OrderProcessingSystem_Prod' }
 }
+$script:SqlAuthenticationMode = $SqlAuthenticationMode
+$script:SqlAdminUser = $null
+$script:SqlAdminPassword = $null
+$script:SqlAccessToken = $null
+$script:DedicatedDatabaseByTenant = @{}
 
 function Assert-AzureRuntimeDbContract {
     param(
@@ -231,31 +252,16 @@ function Get-RegexValue {
 
 function Convert-AppInsightsRows {
     param([Parameter(Mandatory = $true)] [object] $Response)
-
-    if ($null -eq $Response.tables -or (Get-CollectionCount -Value $Response.tables) -eq 0) {
-        return @()
-    }
-
-    $table = $Response.tables[0]
-    $columnNames = @($table.columns | ForEach-Object { [string] $_.name })
-    $rows = @()
-
-    foreach ($row in $table.rows) {
-        $item = [ordered] @{}
-        for ($index = 0; $index -lt (Get-CollectionCount -Value $columnNames); $index++) {
-            $item[$columnNames[$index]] = if ($index -lt (Get-CollectionCount -Value $row)) { $row[$index] } else { $null }
-        }
-
-        $rows += [PSCustomObject] $item
-    }
-
-    return $rows
+    return ConvertTo-Phase10AppInsightsRows -Response $Response
 }
 
 function Invoke-AppInsightsQuery {
     param(
         [Parameter(Mandatory = $true)]
         [string] $Query,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Purpose,
 
         [Parameter(Mandatory = $false)]
         [int] $MaxAttempts = 3
@@ -274,20 +280,20 @@ function Invoke-AppInsightsQuery {
                 --analytics-query $normalizedQuery `
                 --offset 7d `
                 --output json `
-                --only-show-errors
-
-            if (-not $raw) {
-                throw "App Insights query returned no response."
-            }
-
-            return $raw | ConvertFrom-Json
+                --only-show-errors 2>&1
+            $exitCode = $LASTEXITCODE
+            $response = ConvertFrom-Phase10AppInsightsCliResult -Output @($raw) -ExitCode $exitCode -Operation $Purpose
+            $rowCount = (Get-CollectionCount -Value (ConvertTo-Phase10AppInsightsRows -Response $response))
+            $script:AppInsightsQueryOutcomes.Add([PSCustomObject]@{ purpose = $Purpose; status = 'PASS'; rowCount = $rowCount })
+            return $response
         }
         catch {
             if ($attempt -ge $MaxAttempts) {
+                $script:AppInsightsQueryOutcomes.Add([PSCustomObject]@{ purpose = $Purpose; status = 'FAIL'; failure = [string]$_.Exception.Message })
                 throw
             }
 
-            Write-Host "App Insights query attempt $attempt of $MaxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "App Insights query '$Purpose' attempt $attempt of $MaxAttempts failed." -ForegroundColor Yellow
             Start-Sleep -Seconds $attempt
         }
     }
@@ -342,17 +348,35 @@ function Invoke-AzureSqlQuery {
         [Parameter(Mandatory = $true)]
         [string] $Query,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string] $UserName,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string] $Password
     )
 
-    $connectionString = "Server=tcp:$sqlServerFqdn,1433;Initial Catalog=$Database;Persist Security Info=False;User ID=$UserName;Password=$Password;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+    if ($Database -notmatch '^[A-Za-z0-9_]+$') {
+        throw 'SQL database name contains unsupported characters.'
+    }
 
+    $connectionString = "Server=tcp:$sqlServerFqdn,1433;Initial Catalog=$Database;Persist Security Info=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
     try {
+        if ($script:SqlAuthenticationMode -eq 'Entra') {
+            if ([string]::IsNullOrWhiteSpace($script:SqlAccessToken)) {
+                throw 'Entra SQL authentication was selected but no access token is available.'
+            }
+            $connection.AccessToken = $script:SqlAccessToken
+        }
+        else {
+            $effectiveUserName = if ([string]::IsNullOrWhiteSpace($UserName)) { $script:SqlAdminUser } else { $UserName }
+            $effectivePassword = if ([string]::IsNullOrWhiteSpace($Password)) { $script:SqlAdminPassword } else { $Password }
+            if ([string]::IsNullOrWhiteSpace($effectiveUserName) -or [string]::IsNullOrWhiteSpace($effectivePassword)) {
+                throw 'Key Vault SQL authentication requires the SQL administrator credentials.'
+            }
+            $connection.ConnectionString = "$connectionString User ID=$effectiveUserName;Password=$effectivePassword;"
+        }
+
         $connection.Open()
         $command = $connection.CreateCommand()
         $command.CommandText = $Query
@@ -557,12 +581,9 @@ function Convert-HashtableToObject {
 }
 
 function Get-AzureTenantTopology {
-    param(
-        [Parameter(Mandatory = $true)][string]$SqlAdminUser,
-        [Parameter(Mandatory = $true)][string]$SqlAdminPassword
-    )
+    param()
 
-    $registryRows = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $SqlAdminUser -Password $SqlAdminPassword -Query @"
+    $registryRows = @(Invoke-AzureSqlQuery -Database $sharedDbName -Query @"
 SELECT
     [Id] AS TenantId,
     [Code] AS TenantCode,
@@ -618,24 +639,35 @@ ORDER BY [Code];
         $dedicatedDatabaseName = $null
         if ($tenantTier -eq 'Dedicated') {
             $dedicatedSecretName = "DedicatedTenantConnectionStrings--$tenantCode"
-            $dedicatedConnectionString = Invoke-AzureCliText -Operation "Resolve $dedicatedSecretName from Key Vault" -Command {
-                az keyvault secret show --vault-name $keyVaultName --name $dedicatedSecretName --query value -o tsv
+            if ($script:SqlAuthenticationMode -eq 'Entra') {
+                $databaseMatches = @($script:DedicatedDatabaseByTenant[$tenantCode.ToLowerInvariant()])
+                if ($databaseMatches.Count -ne 1) {
+                    throw "Tenant registry contract failure: dedicated tenant '$tenantCode' must map to exactly one Azure SQL database tagged with tenant='$tenantCode'."
+                }
+                $dedicatedDatabaseName = [string]$databaseMatches[0]
             }
+            else {
+                $dedicatedConnectionString = Invoke-AzureCliText -Operation "Resolve $dedicatedSecretName from Key Vault" -Command {
+                    az keyvault secret show --vault-name $keyVaultName --name $dedicatedSecretName --query value -o tsv
+                }
 
-            if ([string]::IsNullOrWhiteSpace($dedicatedConnectionString)) {
-                throw "Tenant registry contract failure: dedicated tenant '$tenantCode' is missing Key Vault secret '$dedicatedSecretName'."
+                if ([string]::IsNullOrWhiteSpace($dedicatedConnectionString)) {
+                    throw "Tenant registry contract failure: dedicated tenant '$tenantCode' is missing Key Vault secret '$dedicatedSecretName'."
+                }
+
+                $dedicatedDatabaseName = Resolve-DatabaseNameFromConnectionString -ConnectionString $dedicatedConnectionString
             }
-
-            $dedicatedDatabaseName = Resolve-DatabaseNameFromConnectionString -ConnectionString $dedicatedConnectionString
         }
 
         $providerPrivateKeyAlias = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
-        $providerPrivateKeyValue = Invoke-AzureCliText -Operation "Resolve $providerPrivateKeyAlias from Key Vault" -Command {
-            az keyvault secret show --vault-name $keyVaultName --name $providerPrivateKeyAlias --query value -o tsv
-        }
+        if ($script:SqlAuthenticationMode -eq 'KeyVault') {
+            $providerPrivateKeyValue = Invoke-AzureCliText -Operation "Resolve $providerPrivateKeyAlias from Key Vault" -Command {
+                az keyvault secret show --vault-name $keyVaultName --name $providerPrivateKeyAlias --query value -o tsv
+            }
 
-        if ([string]::IsNullOrWhiteSpace($providerPrivateKeyValue)) {
-            throw "Tenant registry contract failure: active tenant/provider mapping '$tenantCode/$providerCode' is missing Key Vault secret '$providerPrivateKeyAlias'."
+            if ([string]::IsNullOrWhiteSpace($providerPrivateKeyValue)) {
+                throw "Tenant registry contract failure: active tenant/provider mapping '$tenantCode/$providerCode' is missing Key Vault secret '$providerPrivateKeyAlias'."
+            }
         }
 
         $topology.Add([PSCustomObject]@{
@@ -647,7 +679,7 @@ ORDER BY [Code];
                 DedicatedDatabaseName = $dedicatedDatabaseName
                 DedicatedConnectionSecret = $dedicatedSecretName
                 ProviderPrivateKeyAlias = $providerPrivateKeyAlias
-                ContractStatus = 'validated'
+                ContractStatus = if ($script:SqlAuthenticationMode -eq 'Entra') { 'sql-topology-validated-provider-secret-presence-not-checked' } else { 'validated' }
             })
     }
 
@@ -655,21 +687,43 @@ ORDER BY [Code];
 }
 
 Write-Step "Resolving Azure resources and credentials for $Environment"
-$sqlAdminUser = Invoke-AzureCliText -Operation 'Resolve SQL administrator login' -Command {
-    az sql server show --name $sqlServerName --resource-group $resourceGroup --query administratorLogin -o tsv
+if ($SqlAuthenticationMode -eq 'Entra') {
+    $script:SqlAccessToken = Invoke-AzureCliText -Operation 'Acquire Azure SQL access token' -Command {
+        az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
+    }
+    $databaseResourcesJson = Invoke-AzureCliText -Operation 'Discover tagged Azure SQL databases' -Command {
+        az sql db list --server $sqlServerName --resource-group $resourceGroup --query '[].{name:name,tags:tags}' -o json
+    }
+    $databaseResources = @($databaseResourcesJson | ConvertFrom-Json)
+    foreach ($databaseResource in $databaseResources) {
+        $taggedTenant = [string](Get-ObjectPropertyValue -Object $databaseResource.tags -PropertyName 'tenant')
+        $databaseName = [string]$databaseResource.name
+        if (-not [string]::IsNullOrWhiteSpace($taggedTenant) -and $databaseName -match '^[A-Za-z0-9_]+$') {
+            $key = $taggedTenant.ToLowerInvariant()
+            if (-not $script:DedicatedDatabaseByTenant.ContainsKey($key)) { $script:DedicatedDatabaseByTenant[$key] = @() }
+            $script:DedicatedDatabaseByTenant[$key] += $databaseName
+        }
+    }
 }
+else {
+    $script:SqlAdminUser = Invoke-AzureCliText -Operation 'Resolve SQL administrator login' -Command {
+        az sql server show --name $sqlServerName --resource-group $resourceGroup --query administratorLogin -o tsv
+    }
 
-$sqlAdminPassword = Invoke-AzureCliText -Operation 'Resolve sql-admin-password from Key Vault' -Command {
-    az keyvault secret show --vault-name $keyVaultName --name sql-admin-password --query value -o tsv
-}
+    $script:SqlAdminPassword = Invoke-AzureCliText -Operation 'Resolve sql-admin-password from Key Vault' -Command {
+        az keyvault secret show --vault-name $keyVaultName --name sql-admin-password --query value -o tsv
+    }
 
-if ([string]::IsNullOrWhiteSpace($sqlAdminUser)) {
-    throw "Failed to resolve SQL administrator login for $sqlServerName."
-}
+    if ([string]::IsNullOrWhiteSpace($script:SqlAdminUser)) {
+        throw "Failed to resolve SQL administrator login for $sqlServerName."
+    }
 
-if ([string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
-    throw "Failed to resolve sql-admin-password from $keyVaultName."
+    if ([string]::IsNullOrWhiteSpace($script:SqlAdminPassword)) {
+        throw "Failed to resolve sql-admin-password from $keyVaultName."
+    }
 }
+$sqlAdminUser = [string]$script:SqlAdminUser
+$sqlAdminPassword = [string]$script:SqlAdminPassword
 
 if (-not $SkipFirewallOpen) {
     Write-Step "Opening Azure SQL firewall access"
@@ -681,11 +735,172 @@ if ($PreQueryDelaySeconds -gt 0) {
     Start-Sleep -Seconds $PreQueryDelaySeconds
 }
 
-$tenantTopology = @(Get-AzureTenantTopology -SqlAdminUser $sqlAdminUser -SqlAdminPassword $sqlAdminPassword)
+$tenantTopology = @(Get-AzureTenantTopology)
 $sharedTenants = @($tenantTopology | Where-Object TenantTier -eq 'SharedPool')
 $dedicatedTenants = @($tenantTopology | Where-Object TenantTier -eq 'Dedicated')
 $sharedTenantCodes = @($sharedTenants | ForEach-Object { $_.TenantCode })
 $dedicatedTenantCodes = @($dedicatedTenants | ForEach-Object { $_.TenantCode })
+
+if ($PreflightOnly) {
+    $preflightStartedUtc = [DateTime]::UtcNow.ToString('o')
+    $preflightChecks = [System.Collections.Generic.List[object]]::new()
+    $preflightFailure = $false
+    $subscriptionId = ''
+    $expectedSubscription = if (-not [string]::IsNullOrWhiteSpace($ExpectedSubscriptionId)) { $ExpectedSubscriptionId.Trim() } elseif (-not [string]::IsNullOrWhiteSpace($env:EXPECTED_AZURE_SUBSCRIPTION_ID)) { $env:EXPECTED_AZURE_SUBSCRIPTION_ID.Trim() } elseif (-not [string]::IsNullOrWhiteSpace($env:AZUREAPPSERVICE_SUBSCRIPTIONID)) { $env:AZUREAPPSERVICE_SUBSCRIPTIONID.Trim() } else { '' }
+    $sqlDatabaseChecks = @()
+    try {
+        $subscriptionId = Invoke-AzureCliText -Operation 'Resolve active Azure subscription' -Command {
+            az account show --query id -o tsv
+        }
+        if ([string]::IsNullOrWhiteSpace($expectedSubscription)) {
+            $preflightFailure = $true
+            $preflightChecks.Add([PSCustomObject]@{ service = 'Azure subscription'; status = 'FAIL'; detail = 'Expected subscription ID is not configured; supply it explicitly so the target can be verified before testing.' })
+        }
+        elseif ($subscriptionId -ne $expectedSubscription) {
+            $preflightFailure = $true
+            $preflightChecks.Add([PSCustomObject]@{ service = 'Azure subscription'; status = 'FAIL'; detail = 'Active subscription does not match the approved expected subscription.' })
+        }
+        else {
+            $preflightChecks.Add([PSCustomObject]@{ service = 'Azure subscription'; status = 'PASS'; detail = 'Active subscription matches the approved expected subscription.' })
+        }
+    }
+    catch {
+        $preflightFailure = $true
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Azure subscription'; status = 'FAIL'; detail = 'Could not resolve the active subscription context; run az login/account set and verify the target.' })
+    }
+
+    if ($SqlAuthenticationMode -eq 'KeyVault') {
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Key Vault'; status = 'PASS'; detail = 'Configured verifier secret reads for SQL and active tenant/provider contracts succeeded without emitting values.' })
+    }
+    else {
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Key Vault'; status = 'NOT_REQUIRED'; detail = 'Operator Entra verification does not need Key Vault secret-read access; deployed workload identity access is covered by deployment/runtime checks.' })
+    }
+
+    try {
+        $healthRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Purpose 'access-preflight' -Query 'print Result=1 | project Result'))
+        if ($healthRows.Count -ne 1 -or [string]$healthRows[0].Result -ne '1') {
+            throw 'App Insights access preflight did not return its expected one-row result.'
+        }
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Application Insights'; status = 'PASS'; detail = 'Resource query endpoint and Logs read access verified with a non-sensitive one-row query.' })
+    }
+    catch {
+        $preflightFailure = $true
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Application Insights'; status = 'FAIL'; detail = 'Resource query or Logs read access failed; no role or resource was changed.' })
+    }
+
+    try {
+        $databases = @($sharedDbName) + @($dedicatedTenants | ForEach-Object DedicatedDatabaseName | Sort-Object -Unique)
+        foreach ($databaseName in $databases) {
+            if ([string]::IsNullOrWhiteSpace($databaseName)) {
+                $sqlDatabaseChecks += [PSCustomObject]@{ database = 'UNKNOWN'; status = 'FAIL'; detail = 'No unique database mapping was resolved for an active dedicated tenant.' }
+                $preflightFailure = $true
+                continue
+            }
+            try {
+                $dbRows = @(Invoke-AzureSqlQuery -Database $databaseName -Query @'
+SELECT DB_NAME() AS DatabaseName, CAST(1 AS int) AS Ready
+WHERE NOT EXISTS (SELECT TOP (0) ProviderType FROM payments.PaymentProviders)
+  AND NOT EXISTS (SELECT TOP (0) TransactionId FROM payments.CardTransactions)
+  AND NOT EXISTS (SELECT TOP (0) TransactionId FROM payments.TransactionStatusHistories);
+'@)
+                if ($dbRows.Count -ne 1 -or [string]$dbRows[0].DatabaseName -ne $databaseName -or [int]$dbRows[0].Ready -ne 1) {
+                    throw 'SQL database identity/result mismatch.'
+                }
+                $sqlDatabaseChecks += [PSCustomObject]@{ database = $databaseName; status = 'PASS' }
+            }
+            catch {
+                $sqlDatabaseChecks += [PSCustomObject]@{ database = $databaseName; status = 'FAIL'; detail = 'Read-only SQL connection failed; check the Entra SQL user, SELECT grant, and firewall lease.' }
+                $preflightFailure = $true
+            }
+        }
+    }
+    catch {
+        $preflightFailure = $true
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Azure SQL'; status = 'FAIL'; detail = 'SQL preflight could not enumerate target databases.' })
+    }
+
+    if (@($sqlDatabaseChecks | Where-Object status -ne 'PASS').Count -eq 0 -and $sqlDatabaseChecks.Count -gt 0) {
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Azure SQL'; status = 'PASS'; detail = "Read-only identity verified for $($sqlDatabaseChecks.Count) resolved database(s)." })
+    }
+    $preflightChecks.Add([PSCustomObject]@{ service = 'Tenant/provider topology'; status = $(if ($tenantTopology.Count -gt 0) { 'PASS' } else { 'FAIL' }); detail = "Discovered $($tenantTopology.Count) active tenant(s); dedicated tenants are resolved from configuration references and Azure SQL resource tags, not tenant-name conventions." })
+    if ($tenantTopology.Count -eq 0) { $preflightFailure = $true }
+    try { Close-AzureSqlFirewallLease }
+    catch {
+        $preflightFailure = $true
+        $preflightChecks.Add([PSCustomObject]@{ service = 'Azure SQL firewall lease'; status = 'FAIL'; detail = 'Owned SQL firewall lease cleanup failed; inspect its recovery manifest before retrying.' })
+    }
+    if (-not [string]::IsNullOrWhiteSpace($script:AzureSqlFirewallLeaseManifestPath) -and (Test-Path -LiteralPath $script:AzureSqlFirewallLeaseManifestPath)) {
+        try {
+            $leaseState = (Get-Content -LiteralPath $script:AzureSqlFirewallLeaseManifestPath -Raw | ConvertFrom-Json -ErrorAction Stop).state
+            if ($leaseState -ne 'removed') { throw 'unverified lease state' }
+            $preflightChecks.Add([PSCustomObject]@{ service = 'Azure SQL firewall lease'; status = 'PASS'; detail = 'Owned temporary firewall rule removal was verified.' })
+        }
+        catch {
+            $preflightFailure = $true
+            $preflightChecks.Add([PSCustomObject]@{ service = 'Azure SQL firewall lease'; status = 'FAIL'; detail = 'Temporary firewall rule removal could not be proven; preserve the manifest and resolve it before retrying.' })
+        }
+    }
+
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $revision = (& git -C $repoRoot rev-parse HEAD 2>$null | Out-String).Trim()
+    $dirty = [bool](& git -C $repoRoot status --porcelain 2>$null)
+    $report = [PSCustomObject]@{
+        schemaVersion = 'phase10-azure-verification-preflight-v1'
+        status = if (-not $preflightFailure -and @($preflightChecks | Where-Object { $_.status -notin @('PASS', 'NOT_REQUIRED') }).Count -eq 0) { 'PASS' } else { 'FAIL' }
+        environment = $logicalEnvironment
+        startedUtc = $preflightStartedUtc
+        finishedUtc = [DateTime]::UtcNow.ToString('o')
+        subscriptionId = $subscriptionId
+        expectedSubscriptionId = if ([string]::IsNullOrWhiteSpace($expectedSubscription)) { 'UNKNOWN' } else { $expectedSubscription }
+        resourceGroup = $resourceGroup
+        sqlAuthenticationMode = $SqlAuthenticationMode
+        sourceRevision = if ($revision -match '^[a-f0-9]{40}$') { $revision } else { 'UNKNOWN' }
+        sourceDirty = $dirty
+        tenantCount = $tenantTopology.Count
+        tenants = @($tenantTopology | Select-Object TenantCode, TenantTier, PaymentProviderCode)
+        checks = @($preflightChecks.ToArray())
+        sqlDatabases = @($sqlDatabaseChecks)
+        appInsightsQueries = @($script:AppInsightsQueryOutcomes.ToArray())
+        firewallLeaseManifest = $script:AzureSqlFirewallLeaseManifestPath
+    }
+    $jsonReport = $report | ConvertTo-Json -Depth 8
+    if ([string]::IsNullOrWhiteSpace($PreflightReportPath)) {
+        $reportDirectory = Join-Path $repoRoot ('TestResults/Playwright/azure-https/preflight-{0}-{1}' -f $logicalEnvironment, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        $PreflightReportPath = Join-Path $reportDirectory 'verification-preflight.json'
+    }
+    $fullReportPath = [IO.Path]::GetFullPath($PreflightReportPath)
+    $testResultsRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'TestResults')).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    if (-not $fullReportPath.StartsWith($testResultsRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Preflight report path must remain under repository TestResults.'
+    }
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $fullReportPath))
+    Set-Content -LiteralPath $fullReportPath -Value $jsonReport -Encoding utf8
+    $markdownPath = [IO.Path]::ChangeExtension($fullReportPath, '.md')
+    $markdown = @(
+        '# Azure Verification Preflight'
+        ''
+        "- Status: **$($report.status)**"
+        "- Environment: $logicalEnvironment"
+        "- Subscription: $subscriptionId"
+        "- SQL authentication: $SqlAuthenticationMode"
+        "- Source: $($report.sourceRevision) (dirty=$($report.sourceDirty))"
+        "- Active tenants discovered: $($tenantTopology.Count)"
+        ''
+        '| Service/check | Status | Detail |'
+        '|---|---|---|'
+        @($preflightChecks | ForEach-Object { "| $($_.service) | $($_.status) | $($_.detail -replace '\|','/') |" })
+        ''
+        '| SQL database | Status |'
+        '|---|---|'
+        @($sqlDatabaseChecks | ForEach-Object { "| $($_.database) | $($_.status) |" })
+        ''
+        "JSON evidence: $([IO.Path]::GetFileName($fullReportPath))"
+    ) -join [Environment]::NewLine
+    Set-Content -LiteralPath $markdownPath -Value $markdown -Encoding utf8
+    if ($OutputFormat -eq 'Json') { Write-Output $jsonReport } else { Write-Host $jsonReport }
+    if ($report.status -ne 'PASS') { exit 1 }
+    return
+}
 
 Write-Step "Querying App Insights API telemetry"
 $apiQuery = @"
@@ -734,7 +949,7 @@ $apiQueryFailed = $false
 $uiQueryFailed = $false
 
 try {
-    $apiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $apiQuery)
+    $apiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $apiQuery -Purpose 'api-payment-telemetry')
 }
 catch {
     $apiQueryFailed = $true
@@ -880,7 +1095,7 @@ traces
 "@
 
 try {
-    $uiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $uiQuery)
+    $uiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $uiQuery -Purpose 'ui-callback-telemetry')
 }
 catch {
     $uiQueryFailed = $true
@@ -913,7 +1128,7 @@ WHERE pp.ProviderType = t.PaymentProviderCode
 ORDER BY pp.TenantId;
 "@)
 
-$preflightTenantC = @(
+$preflightDedicated = @(
     foreach ($tenant in $dedicatedTenants) {
         $assignedProviderCode = ConvertTo-SqlStringLiteral -Value $tenant.PaymentProviderCode
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
@@ -966,7 +1181,7 @@ ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 
 $q8Shared = @()
 
-$q2TenantC = @(
+$q2Dedicated = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
@@ -980,7 +1195,7 @@ ORDER BY ct.CustomerOrderId, ct.Id;
     }
 )
 
-$q5TenantC = @(
+$q5Dedicated = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
@@ -1009,12 +1224,12 @@ $q8Shared = @(
         }
 )
 
-if (-not [string]::IsNullOrWhiteSpace($TenantCode)) {
-    $scopedTenantCode = $TenantCode.Trim()
+if (-not [string]::IsNullOrWhiteSpace($requestedTenantCode)) {
+    $scopedTenantCode = $requestedTenantCode.Trim()
     $q2Shared = @($q2Shared | Where-Object Tenant -eq $scopedTenantCode)
     $q5Shared = @($q5Shared | Where-Object Tenant -eq $scopedTenantCode)
-    $q2TenantC = @($q2TenantC | Where-Object Tenant -eq $scopedTenantCode)
-    $q5TenantC = @($q5TenantC | Where-Object Tenant -eq $scopedTenantCode)
+    $q2Dedicated = @($q2Dedicated | Where-Object Tenant -eq $scopedTenantCode)
+    $q5Dedicated = @($q5Dedicated | Where-Object Tenant -eq $scopedTenantCode)
 }
 
 $threeDsByTenant = @{}
@@ -1029,7 +1244,7 @@ foreach ($row in $preflightShared) {
     $threeDsByTenant[$tenantCode] = [int] $threeDsValue
 }
 
-foreach ($tenantRow in $preflightTenantC) {
+foreach ($tenantRow in $preflightDedicated) {
     $tenantCode = [string](Get-ObjectPropertyValue -Object $tenantRow -PropertyName 'Tenant')
     $threeDsValue = Get-ObjectPropertyValue -Object $tenantRow -PropertyName 'ThreeDSEnabled'
     if ([string]::IsNullOrWhiteSpace($tenantCode) -or $null -eq $threeDsValue) {
@@ -1056,15 +1271,15 @@ if ((Get-CollectionCount -Value $expectedOrdersByTenant.Keys) -eq 0) {
         $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
     }
 
-    foreach ($tenantGroup in ($q2TenantC | Group-Object Tenant)) {
+    foreach ($tenantGroup in ($q2Dedicated | Group-Object Tenant)) {
         $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
     }
 }
 
 $sharedDbChargeIds = @($q2Shared | Select-Object -ExpandProperty ChargeId)
-$tenantCDbChargeIds = @($q2TenantC | Select-Object -ExpandProperty ChargeId)
-$allDbChargeIds = @($sharedDbChargeIds + $tenantCDbChargeIds)
-$allDbChargeRows = @(@($q2Shared) + @($q2TenantC))
+$dedicatedDbChargeIds = @($q2Dedicated | Select-Object -ExpandProperty ChargeId)
+$allDbChargeIds = @($sharedDbChargeIds + $dedicatedDbChargeIds)
+$allDbChargeRows = @(@($q2Shared) + @($q2Dedicated))
 $providerDbChargeRows = @(
     $allDbChargeRows |
         Where-Object {
@@ -1110,7 +1325,7 @@ dependencies
 "@
 
     try {
-        $transportRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $transportQuery))
+        $transportRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $transportQuery -Purpose 'provider-request-dependency-correlation'))
         $transportEvidence = @(
             foreach ($providerChargeId in $providerCorrelationIds) {
                 $matchingRows = @(
@@ -1151,6 +1366,207 @@ dependencies
         Write-Host 'App Insights request/dependency correlation query failed.' -ForegroundColor Yellow
     }
 }
+
+# Provider IDs can be different from the internal transaction ID and from the
+# browser-generated customer-order reference. Follow the provider-correlated
+# operation IDs back to the API custom event, then use its authoritative
+# tenant/order key to read the matching shared or dedicated SQL row.
+$providerOperationIds = @(
+    $transportEvidence |
+        Where-Object Correlated |
+        ForEach-Object { @($_.CorrelatedOperationIds) } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+        Sort-Object -Unique
+)
+if ((Get-CollectionCount -Value $providerOperationIds) -gt 0) {
+    $operationIdList = Get-KqlQuotedValues -Values $providerOperationIds
+    $providerIdList = Get-KqlQuotedValues -Values $providerCorrelationIds
+    $operationApiQuery = @"
+customEvents
+| where timestamp >= ago(7d)
+| where operation_Id in ($operationIdList)
+| where name in ('payment_validation_attempt_created', 'payment_validation_charge_created', 'payment_validation_callback_reconciled')
+| extend application = tostring(customDimensions['Application'])
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend chargeId = tostring(customDimensions['PaymentId'])
+| extend message = case(
+    name == 'payment_validation_attempt_created', strcat('Payment attempt created for customer order ', customerOrderId),
+    name == 'payment_validation_charge_created', strcat('Charge created with ID: ', chargeId),
+    name == 'payment_validation_callback_reconciled', strcat('Payment callback reconciliation completed for payment ', chargeId),
+    name)
+| where (application == 'API' or cloud_RoleName has 'api')
+| where chargeId in ($providerIdList)
+| project timestamp, tenant, customerOrderId, chargeId, message
+| order by timestamp asc
+"@
+
+    try {
+        $operationApiRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $operationApiQuery -Purpose 'provider-operation-api-event-correlation'))
+        $operationApiEvents = @(
+            foreach ($row in $operationApiRows) {
+                [PSCustomObject]@{
+                    Timestamp = [datetimeoffset]$row.timestamp
+                    Tenant = [string]$row.tenant
+                    CustomerOrderId = [string]$row.customerOrderId
+                    ResolvedCustomerOrderId = [string]$row.customerOrderId
+                    RunPrefix = $selectedRunPrefix
+                    ResolvedRunPrefix = $selectedRunPrefix
+                    ChargeId = [string]$row.chargeId
+                    Message = [string]$row.message
+                }
+            }
+        )
+        if (-not [string]::IsNullOrWhiteSpace($requestedTenantCode)) {
+            $operationApiEvents = @($operationApiEvents | Where-Object Tenant -eq $requestedTenantCode.Trim())
+        }
+
+        # Some SDK paths return API custom events for the correlated provider
+        # payment ID but with an operation_Id that differs from the request /
+        # dependency span. Only fall back after checking the operation-based
+        # results against the requested tenant; then SQL validates the event's
+        # persisted order key in that tenant's authoritative database.
+        if ((Get-CollectionCount -Value $operationApiEvents) -eq 0) {
+            $providerApiFallbackQuery = @"
+customEvents
+| where timestamp >= ago(7d)
+| where name in ('payment_validation_attempt_created', 'payment_validation_charge_created', 'payment_validation_callback_reconciled')
+| extend application = tostring(customDimensions['Application'])
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend chargeId = tostring(customDimensions['PaymentId'])
+| extend message = case(
+    name == 'payment_validation_attempt_created', strcat('Payment attempt created for customer order ', customerOrderId),
+    name == 'payment_validation_charge_created', strcat('Charge created with ID: ', chargeId),
+    name == 'payment_validation_callback_reconciled', strcat('Payment callback reconciliation completed for payment ', chargeId),
+    name)
+| where (application == 'API' or cloud_RoleName has 'api')
+| where chargeId in ($providerIdList)
+| project timestamp, operation_Id, tenant, customerOrderId, chargeId, message
+| order by timestamp asc
+"@
+            $providerApiFallbackRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $providerApiFallbackQuery -Purpose 'provider-payment-id-api-event-fallback'))
+            $operationApiEvents = @(
+                foreach ($row in $providerApiFallbackRows) {
+                    [PSCustomObject]@{
+                        Timestamp = [datetimeoffset]$row.timestamp
+                        Tenant = [string]$row.tenant
+                        CustomerOrderId = [string]$row.customerOrderId
+                        ResolvedCustomerOrderId = [string]$row.customerOrderId
+                        RunPrefix = $selectedRunPrefix
+                        ResolvedRunPrefix = $selectedRunPrefix
+                        ChargeId = [string]$row.chargeId
+                        Message = [string]$row.message
+                    }
+                }
+            )
+            if (-not [string]::IsNullOrWhiteSpace($requestedTenantCode)) {
+                $operationApiEvents = @($operationApiEvents | Where-Object Tenant -eq $requestedTenantCode.Trim())
+            }
+        }
+
+        if ((Get-CollectionCount -Value $operationApiEvents) -gt 0) {
+            foreach ($operationEvent in $operationApiEvents) {
+                if ([string]::IsNullOrWhiteSpace($operationEvent.Tenant) -or [string]::IsNullOrWhiteSpace($operationEvent.CustomerOrderId)) { continue }
+                $knownOrders = @($expectedOrdersByTenant[$operationEvent.Tenant])
+                $expectedOrdersByTenant[$operationEvent.Tenant] = @($knownOrders + $operationEvent.CustomerOrderId | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Sort-Object -Unique)
+            }
+            $selectedApiEvents = @($selectedApiEvents + $operationApiEvents | Sort-Object Timestamp)
+            $apiChargeEvents = @(
+                $apiChargeEvents + @(
+                    $operationApiEvents |
+                        Where-Object { -not [string]::IsNullOrWhiteSpace($_.ChargeId) } |
+                        Group-Object ChargeId |
+                        ForEach-Object { $_.Group | Select-Object -First 1 }
+                ) | Sort-Object Timestamp
+            )
+            $appInsightsAvailable = $true
+
+            foreach ($operationEvent in $operationApiEvents) {
+                if ([string]::IsNullOrWhiteSpace($operationEvent.Tenant) -or [string]::IsNullOrWhiteSpace($operationEvent.CustomerOrderId)) { continue }
+                $resolvedTenant = $tenantTopology | Where-Object TenantCode -eq $operationEvent.Tenant | Select-Object -First 1
+                if ($null -eq $resolvedTenant) { continue }
+                $sqlOrderId = ConvertTo-SqlStringLiteral -Value $operationEvent.CustomerOrderId
+                $sqlTenant = ConvertTo-SqlStringLiteral -Value $operationEvent.Tenant
+                if ($resolvedTenant.TenantTier -eq 'SharedPool') {
+                    $mappedTransactions = @(Invoke-AzureSqlQuery -Database $sharedDbName -Query @"
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+       ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
+       ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
+       ct.IsTransactionSuccess AS OK, ct.CreatedDate
+FROM payments.CardTransactions ct
+JOIN dbo.Tenants t ON t.Id = ct.TenantId
+WHERE t.Code = N'$sqlTenant' AND ct.CustomerOrderId = N'$sqlOrderId'
+ORDER BY ct.Id;
+"@)
+                    $mappedHistories = @(Invoke-AzureSqlQuery -Database $sharedDbName -Query @"
+SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
+       tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
+       tsh.TransactionReferenceId AS Ref
+FROM payments.TransactionStatusHistories tsh
+JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
+JOIN dbo.Tenants t ON t.Id = ct.TenantId
+WHERE t.Code = N'$sqlTenant' AND ct.CustomerOrderId = N'$sqlOrderId'
+ORDER BY ct.Id, tsh.Id;
+"@)
+                    $q2Shared = @($q2Shared + $mappedTransactions | Sort-Object Tenant, CustomerOrderId, ChargeId -Unique)
+                    $q5Shared = @($q5Shared + $mappedHistories)
+                }
+                else {
+                    $mappedTransactions = @(Invoke-AzureSqlQuery -Database $resolvedTenant.DedicatedDatabaseName -Query @"
+SELECT '$sqlTenant' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+       ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
+       ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
+       ct.IsTransactionSuccess AS OK, ct.CreatedDate
+FROM payments.CardTransactions ct
+WHERE ct.CustomerOrderId = N'$sqlOrderId'
+ORDER BY ct.Id;
+"@)
+                    $mappedHistories = @(Invoke-AzureSqlQuery -Database $resolvedTenant.DedicatedDatabaseName -Query @"
+SELECT '$sqlTenant' AS Tenant, ct.CustomerOrderId, tsh.Status,
+       tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
+       tsh.TransactionReferenceId AS Ref
+FROM payments.TransactionStatusHistories tsh
+JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
+WHERE ct.CustomerOrderId = N'$sqlOrderId'
+ORDER BY ct.Id, tsh.Id;
+"@)
+                    $q2Dedicated = @($q2Dedicated + $mappedTransactions | Sort-Object Tenant, CustomerOrderId, ChargeId -Unique)
+                    $q5Dedicated = @($q5Dedicated + $mappedHistories)
+                }
+            }
+
+            $q8Shared = @(
+                $q2Shared | Where-Object {
+                    $tenantCode = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'Tenant')
+                    (Get-CollectionCount -Value $sharedTenantCodes) -gt 0 -and ($sharedTenantCodes -notcontains $tenantCode)
+                }
+            )
+            $q9Shared = @(
+                $q2Shared | Where-Object {
+                    $tenantCode = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'Tenant')
+                    $dedicatedTenantCodes -contains $tenantCode
+                }
+            )
+            $sharedDbChargeIds = @($q2Shared | Select-Object -ExpandProperty ChargeId)
+            $dedicatedDbChargeIds = @($q2Dedicated | Select-Object -ExpandProperty ChargeId)
+            $allDbChargeIds = @($sharedDbChargeIds + $dedicatedDbChargeIds)
+            $allDbChargeRows = @(@($q2Shared) + @($q2Dedicated))
+            $providerDbChargeRows = @(
+                $allDbChargeRows |
+                    Where-Object {
+                        $chargeId = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'ChargeId')
+                        $transactionType = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'TransactionType')
+                        -not [string]::IsNullOrWhiteSpace($chargeId) -and $transactionType -eq 'charge'
+                    }
+            )
+        }
+    }
+    catch {
+        $appInsightsWarnings += "Provider-correlated API event recovery failed: $($_.Exception.Message)"
+    }
+}
+
 $expectedUiTenants = @($expectedOrdersByTenant.Keys | Sort-Object -Unique)
 $expectedUiCustomerOrders = @(
     foreach ($tenantName in $expectedOrdersByTenant.Keys) {
@@ -1205,7 +1621,13 @@ if ((Get-CollectionCount -Value @($apiChargeEvents)) -eq 0 -and (Get-CollectionC
 | order by timestamp asc
 "@
 
-        $fallbackApiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $fallbackApiQuery)
+        try {
+            $fallbackApiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $fallbackApiQuery -Purpose 'api-provider-id-fallback')
+        }
+        catch {
+            $appInsightsWarnings += "API provider-ID fallback query failed: $($_.Exception.Message)"
+            $fallbackApiRows = @()
+        }
         $fallbackApiEvents = @(
             foreach ($row in $fallbackApiRows) {
                 [PSCustomObject] @{
@@ -1355,7 +1777,13 @@ if ((Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
 | order by timestamp asc
 "@ -f (Get-KqlQuotedValues -Values $expectedUiTenants)
 
-        $fallbackUiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $fallbackUiQuery)
+        try {
+            $fallbackUiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $fallbackUiQuery -Purpose 'ui-provider-id-fallback')
+        }
+        catch {
+            $appInsightsWarnings += "UI provider-ID fallback query failed: $($_.Exception.Message)"
+            $fallbackUiRows = @()
+        }
         $fallbackUiEvents = @(
             foreach ($row in $fallbackUiRows) {
                 [PSCustomObject] @{
@@ -1459,7 +1887,7 @@ foreach ($chargeEvent in $apiChargeEvents) {
         $uiStatusCodes = $globalUiStatusCodes
     }
 
-    $dbCandidates = @($q2Shared) + @($q2TenantC)
+    $dbCandidates = @($q2Shared) + @($q2Dedicated)
     $dbRow = $dbCandidates | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
 
     if ($null -eq $dbRow -and -not [string]::IsNullOrWhiteSpace($chargeEvent.ResolvedCustomerOrderId)) {
@@ -1588,14 +2016,14 @@ function Get-ExpectedHistoryStepsForTenant {
 
 $checks = [ordered] @{}
 $expectedStepsByTenant = @{}
-$transactionRowsForHistory = @(@($q2Shared) + @($q2TenantC))
-$historyRowsForHistory = @(@($q5Shared) + @($q5TenantC))
+$transactionRowsForHistory = @(@($q2Shared) + @($q2Dedicated))
+$historyRowsForHistory = @(@($q5Shared) + @($q5Dedicated))
 foreach ($tenantCode in $expectedOrdersByTenant.Keys) {
     $expectedStepsByTenant[$tenantCode] = Get-ExpectedHistoryStepsForTenant -TenantCode $tenantCode -CustomerOrderIds $expectedOrdersByTenant[$tenantCode] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $transactionRowsForHistory -HistoryRows $historyRowsForHistory -TenantThreeDsByTenant $threeDsByTenant
 }
 
-$allRows = @(@($q2Shared) + @($q2TenantC))
-$allHistoryRows = @(@($q5Shared) + @($q5TenantC))
+$allRows = @(@($q2Shared) + @($q2Dedicated))
+$allHistoryRows = @(@($q5Shared) + @($q5Dedicated))
 foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
     $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
     $tenantRows = @($allRows | Where-Object { $_.Tenant -eq $tenantCode })
@@ -1608,6 +2036,11 @@ foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
 }
 $checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] (Get-CollectionCount -Value @($q8Shared))) -Outcome $(if ((Get-CollectionCount -Value @($q8Shared)) -eq 0) { 'PASS' } else { 'FAIL' })
 $checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] (Get-CollectionCount -Value @($q9Shared))) -Outcome $(if ((Get-CollectionCount -Value @($q9Shared)) -eq 0) { 'PASS' } else { 'FAIL' })
+$failedAppInsightsQueries = @($script:AppInsightsQueryOutcomes | Where-Object status -eq 'FAIL')
+$checks['App Insights query execution'] = Convert-CheckResult `
+    -Expected 'all attempted queries return valid Azure tables' `
+    -Actual $(if ($failedAppInsightsQueries.Count -eq 0) { 'all queries valid' } else { "$($failedAppInsightsQueries.Count) query failure(s)" }) `
+    -Outcome $(if ($failedAppInsightsQueries.Count -eq 0) { 'PASS' } else { 'FAIL' })
 
 $correlatedTransportCount = (Get-CollectionCount -Value @($transportEvidence | Where-Object Correlated))
 $checks['Provider payment IDs -> request/dependency correlation'] = Convert-CheckResult `
@@ -1640,6 +2073,7 @@ $report = [PSCustomObject] @{
     AppInsightsAvailable = $appInsightsAvailable
     Warnings = @($appInsightsWarnings)
     AppInsights = [PSCustomObject] @{
+        QueryOutcomes = @($script:AppInsightsQueryOutcomes.ToArray())
         ApiEvidence = @($selectedApiEvents | Select-Object Timestamp, Tenant, ResolvedCustomerOrderId, ChargeId, Message)
         UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
         TransportEvidence = @($transportEvidence)

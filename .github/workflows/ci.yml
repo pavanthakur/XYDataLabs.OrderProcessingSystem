@@ -103,7 +103,7 @@ jobs:
 
       - name: Test immutable Phase 10 release and Functions package contracts
         id: release-contract-tests
-        run: node --test scripts/tests/phase10-release-artifacts.test.mjs scripts/tests/phase10-release-run.test.mjs scripts/tests/phase10-hosted-ci-evidence.test.mjs scripts/tests/phase10-deployment-identity.test.mjs scripts/tests/phase10-release-inputs.test.mjs scripts/tests/phase10-azure-static-preflight.test.mjs scripts/tests/phase10-azure-preflight.test.mjs scripts/tests/phase10-function-package-runtime.test.mjs scripts/tests/resolve-phase10-azure-generated-urls.test.mjs
+        run: node --test scripts/tests/phase10-release-artifacts.test.mjs scripts/tests/phase10-release-run.test.mjs scripts/tests/phase10-hosted-ci-evidence.test.mjs scripts/tests/phase10-deployment-identity.test.mjs scripts/tests/phase10-release-inputs.test.mjs scripts/tests/phase10-azure-static-preflight.test.mjs scripts/tests/phase10-azure-preflight.test.mjs scripts/tests/phase10-function-package-runtime.test.mjs scripts/tests/phase10-payment-verifier-sql-auth.test.mjs scripts/tests/resolve-phase10-azure-generated-urls.test.mjs
 
       - name: Test Azure tenant topology discovery with synthetic API responses
         id: tenant-catalog-tests
@@ -118,6 +118,11 @@ jobs:
         id: trx-sanitizer-tests
         shell: pwsh
         run: scripts/tests/test-sanitize-hosted-trx.ps1
+
+      - name: Test App Insights query response validation and redaction
+        id: app-insights-query-tests
+        shell: pwsh
+        run: scripts/test-phase10-appinsights-query.ps1
 
       - name: Test payment callback outcome guardrails
         id: callback-tests

@@ -1,4 +1,4 @@
-export type CleanupOutcome = "deleted" | "reset" | "manual-review";
+export type CleanupOutcome = "deleted" | "reset" | "manual-review" | "not-applicable";
 
 export interface FixturePrepareResult {
   fixtureIds: string[];

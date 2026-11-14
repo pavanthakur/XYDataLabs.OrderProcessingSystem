@@ -347,11 +347,10 @@ az resource list --resource-group rg-orderprocessing-dev --output table
 # Retrieve SQL admin password from Key Vault (used by provisioning script when not provided)
 az keyvault secret show --vault-name kv-orderprocessing-dev --name sql-admin-password --query value -o tsv
 
-# Open local firewall for dev (script handles IP detection + cleanup)
-.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev
+# Azure payment verification: use the per-run firewall lease; it cleans up the exact owned rule
+pwsh -NoProfile -File scripts/verify-payment-run-azure.ps1 -Environment dev -SqlAuthenticationMode Entra
 
-# Close local firewall when done
-.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev -Close
+# Do not use the legacy open-local-sql-firewall.ps1 helper for verification; it leaves a fixed-name rule
 ```
 ```
 

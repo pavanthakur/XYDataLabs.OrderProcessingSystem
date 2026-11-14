@@ -22,6 +22,11 @@ on:
         required: true
         default: false
         type: boolean
+      servicePreflightOnly:
+        description: 'No-payment dev dependency preflight; may create and remove a temporary SQL firewall lease; no browser/orders/payments'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -34,7 +39,7 @@ concurrency:
 
 jobs:
   azure_payment_matrix:
-    name: 04 Phase 10 Azure Payment Matrix
+    name: ${{ inputs.servicePreflightOnly && '04 Phase 10 Azure Service Preflight' || '04 Phase 10 Azure Payment Matrix' }}
     # Playwright's pinned Chromium build does not yet support Ubuntu 26 runners.
     # Keep the browser-dependent acceptance job on the supported 24.04 image.
     runs-on: ubuntu-24.04
@@ -67,6 +72,11 @@ jobs:
           else
             ENV_SUFFIX="dev"
             TARGET_KEY="azure-dev"
+          fi
+
+          if [ "${{ inputs.servicePreflightOnly }}" = "true" ] && [ "${{ inputs.environment }}" != "dev" ]; then
+            echo "Service-preflight-only mode is restricted to Azure dev." >&2
+            exit 1
           fi
 
           TARGET_JSON="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc = require("./automation/config/runtime-targets.json"); const target = doc.targets.find((item) => item.key === process.env.TARGET_KEY); if (!target) { throw new Error(`Unknown runtime target ${process.env.TARGET_KEY}`); } process.stdout.write(JSON.stringify(target));')"
@@ -232,9 +242,10 @@ jobs:
 
       - name: Install Playwright browser
         working-directory: automation
+        if: inputs.servicePreflightOnly != true
         run: npx playwright install chromium
 
-      - name: Run all tenants with assigned payment providers
+      - name: Run no-payment service preflight or assigned-provider matrix
         shell: bash
         env:
           PHASE10_FIREWALL_RUN_ID: ${{ github.run_id }}
@@ -249,10 +260,14 @@ jobs:
           XYDATALABS_AZURE_KEY_VAULT_NAME: ${{ steps.topology.outputs.keyVaultName }}
           XYDATALABS_AZURE_SQL_SERVER_NAME: ${{ steps.topology.outputs.sqlServer }}
           XYDATALABS_AZURE_RESOURCE_GROUP_NAME: ${{ steps.topology.outputs.resourceGroup }}
+          EXPECTED_AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
         run: |
           EXTRA_ARGS=()
           if [ "${{ inputs.skipVerification }}" = "true" ]; then
             EXTRA_ARGS+=("--skip-verification")
+          fi
+          if [ "${{ inputs.servicePreflightOnly }}" = "true" ]; then
+            EXTRA_ARGS+=("--service-preflight-only")
           fi
 
           npm --prefix automation run run:azure:matrix -- \
@@ -331,7 +346,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: phase10-azure-payment-matrix-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: phase10-azure-${{ inputs.servicePreflightOnly && 'service-preflight' || 'payment-matrix' }}-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             TestResults/Playwright/azure-https/**
             ${{ runner.temp }}/phase10-sql-firewall-lease-payment-${{ github.run_id }}-*.json

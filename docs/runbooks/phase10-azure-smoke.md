@@ -152,6 +152,29 @@ Promotion rules:
 - Use `01` in `dryRun=true` mode first for infrastructure-affecting changes.
 - Use `01` with `cleanupInfra=true` only when intentionally removing or resetting an environment.
 
+#### Operator-assisted Entra payment run (Azure dev only)
+
+The hosted `04` job requires an interactive delegated Entra user session; deployment OIDC is not a substitute. For a no-payment dependency check, dispatch `04` with `servicePreflightOnly=true`. It verifies service access but is not fully read-only: SQL reachability may create a run-owned temporary firewall lease, which must be removed and independently verified. It does not open a browser, create orders or submit payments. The separate no-charge authorization check below uses one headed browser login and does not create a temporary SQL firewall rule. A payment run can take repeated `--tenant` values to use one headed Entra login across selected dev tenants; each provider checkout still has its own contact/card flow. Resolve both current generated origins from Azure before running:
+
+```powershell
+Set-Location automation
+$uiFqdn = az containerapp show --resource-group rg-orderprocessing-dev --name orderprocessing-ui-dev --query properties.configuration.ingress.fqdn -o tsv
+$apiFqdn = az containerapp show --resource-group rg-orderprocessing-dev --name orderprocessing-gate-dev --query properties.configuration.ingress.fqdn -o tsv
+$env:XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL = "https://$uiFqdn"
+$env:XYDATALABS_RUNTIME_TARGET_AZURE_DEV_API_BASE_URL = "https://$apiFqdn"
+npm run run:azure:matrix -- --target azure-dev --headed --operator-assisted-entra --auth-preflight-only
+```
+
+The runner obtains the SPA access token once from the live browser, performs authenticated read-only tenant/customer and provider-runtime checks for every active tenant, cycles the UI selector across all active tenants and back to the first tenant, then signs out once and verifies that the application token was cleared. It reports `preflight-passed`, not payment acceptance. Any authentication, scope, tenant, sandbox, selector or logout failure stops the run. Do not pass `--tenant` to preflight unless you intentionally want one specific entry tenant; the default checks all active tenants. For an explicitly approved Azure-dev sandbox payment matrix, use:
+
+```powershell
+npm run run:azure:matrix -- --target azure-dev --tenant TenantA --tenant TenantB --tenant TenantC --headed --operator-assisted-entra
+```
+
+The selected tenant journeys share one in-memory browser context and sign out once at the end. Razorpay may request a test contact mobile number before showing card entry; this is contact capture, not OTP/3DS. The runner must verify the sandbox fixture was accepted and the validation message cleared before it continues. Failure to pass this check stops before card submission. A completed sandbox payment is a provider sandbox transaction; an ambiguous result must never be retried. If provider/SQL verification fails, the matrix stops before submitting another tenant payment. This operator-assisted evidence does not turn a hosted workflow `04` run into PASS. Hosted Entra automation remains pending until its MFA-compatible identity design is implemented and approved.
+
+For this operator-assisted matrix, SQL verification uses the current Azure CLI Entra token; it does not require SQL-admin or Key Vault secret-read access. The signed-in principal must already have a contained, read-only verifier principal with `SELECT` access in the shared and dedicated databases. Entra mode discovers dedicated database names from Azure SQL resource tags and fails closed unless each dedicated tenant maps to exactly one database tagged `tenant=<tenant-code>`. It deliberately does not inspect Key Vault provider-secret presence; that remains a separate deployment/runtime contract. No SQL user, role, or Azure permission is created by the verifier. The verifier's default remains `KeyVault` for hosted workflows. Do not create a second vault containing a copy of the SQL administrator password as a workaround.
+
 ### Workflow Catalog
 
 These are the numbered Phase 10 workflows and their responsibilities:
@@ -223,7 +246,8 @@ Use the same gate order in all environments; the local Docker acceptance is a pr
 4. `01 Phase 10 Azure Deploy Orchestrator` real deploy
 5. `02 Phase 10 Azure Runtime Smoke`
 6. `03 Phase 10 Azure Transport Smoke`
-7. `04 Phase 10 Azure Payment Matrix`
+7. For Azure dev, run workflow `04` once with `servicePreflightOnly = true`; this validates the hosted OIDC identity, Key Vault secret reads, App Insights Logs access, SQL read access/topology and firewall-lease cleanup without launching browser automation or creating orders/payments.
+8. Run workflow `04` with `servicePreflightOnly = false` only after the no-charge preflight packet passes. This is the payment-mutating browser matrix and requires separate approval.
 
 Resource-name note:
 
@@ -288,7 +312,10 @@ Run this after local pre-Azure L6 is green on the target commit SHA.
      - notifications consume pass
      - DLQ forward pass
      - replay pass
-7. Run `04 Phase 10 Azure Payment Matrix`.
+7. Run `04 Phase 10 Azure Payment Matrix` with `servicePreflightOnly = true`.
+   - Use this dev-only run to verify GitHub OIDC Key Vault access and read-only App Insights/SQL/topology access before browser automation. It must end with `preflight-passed`, write JSON/Markdown evidence, and show no target payment journeys.
+   - If it fails, stop. Do not grant the signed-in operator broad Key Vault access as a workaround; correct the GitHub environment identity's least-privilege access and rerun this no-charge preflight.
+8. After the no-charge preflight passes and a separate payment-test approval is in place, run `04 Phase 10 Azure Payment Matrix` with `servicePreflightOnly = false`.
    - Inputs:
      - `environment = dev`
      - `tenantTimeoutMs = 180000`
@@ -1131,7 +1158,27 @@ The local command requires Azure CLI login and access to the `phase10-transport`
 
 ### SQL firewall lease and interrupted-run recovery
 
-Transport and payment verification use a single-run Azure SQL firewall lease. Each lease has a unique name and a sanitized manifest under the GitHub runner temporary directory. The workflow attempts script-level cleanup and an `if: always()` cleanup step, then uploads the manifest with the run evidence. The verifier's `-SkipFirewallOpen` option performs no firewall mutation.
+Before local Azure payment verification, confirm Azure CLI is logged into the intended subscription and run `verify-payment-run-azure.ps1` **without** `-SkipFirewallOpen`. The verifier obtains the current public IP and opens a unique, per-invocation Azure SQL firewall lease before querying SQL, then verifies and removes only the rule recorded in its lease manifest during normal or error cleanup. The operator-assisted payment matrix uses this same verifier path automatically. The recent blocked attempt intentionally used `-SkipFirewallOpen`, so it bypassed the hook and is not evidence that the lease path failed.
+
+Before starting any Azure payment browser run, execute the no-order/no-charge service preflight. The `run-azure-matrix.ts` orchestrator now invokes it automatically for each selected Azure target immediately before browser execution, and blocks all tenant journeys if it fails. It records `verification-preflight-<target>.json` and `.md` in the same run folder as the matrix packet. A dry run skips this cloud check because it does not execute journeys.
+
+```powershell
+$expectedSubscriptionId = '<approved subscription ID>'
+pwsh -NoProfile -File scripts/verify-payment-run-azure.ps1 `
+  -Environment dev `
+  -SqlAuthenticationMode Entra `
+  -ExpectedSubscriptionId $expectedSubscriptionId `
+  -PreflightOnly `
+  -OutputFormat Json
+```
+
+For an operator run, replace the placeholder only with the approved subscription ID. The preflight validates the subscription, App Insights query access, active tenant/provider topology, tagged dedicated-database mapping, read-only SQL access to each required database, and removal of the exact temporary SQL firewall lease. In `KeyVault` mode it also proves configured verifier secret reads without emitting values; `Entra` mode deliberately does not require operator Key Vault access. It writes a versioned JSON and Markdown packet beneath `TestResults/Playwright/azure-https`. It creates no role assignments, changes no Key Vault policy, and creates no orders or payments.
+
+The SQL firewall lease addresses network allowlisting. Key Vault secret access and App Insights Logs access are identity permissions, not firewall leases; if missing, preflight fails with no automatic privilege escalation. For Entra SQL mode, provider secret presence remains unverified by the operator preflight because the operator intentionally does not read Key Vault secrets; the deployed runtime/topology contract must verify those separately. In the hosted workflow, `KeyVault` mode confirms the configured verifier secret reads without emitting their values.
+
+The lease requires Azure permissions to create and delete a firewall rule on the target SQL server. If the operator lacks those permissions, run from a network already permitted by the SQL firewall or use a separately approved operator-managed lease. Do not use the legacy `Resources/Azure-Deployment/open-local-sql-firewall.ps1` as a verification prerequisite: it uses a fixed `dev-machine` rule name, does not record per-run ownership, and its `-Close` switch deletes that fixed rule. Do not manually create broad IP ranges or leave persistent rules behind.
+
+Each automated lease has a unique name and a sanitized manifest. The payment verifier attempts script-level cleanup and retains the manifest if cleanup cannot be proven; hosted workflows also have an `if: always()` cleanup step and upload the manifest with run evidence. The verifier's `-SkipFirewallOpen` option performs no firewall mutation and is appropriate only when the caller's network is already allowed.
 
 Abrupt runner loss can prevent both cleanup layers from running. Do not delete rules by name prefix. Review the exact failed run's manifest artifact, then confirm its subscription, resource group, SQL server, rule name, and IP against Azure before recovery. Only an exact manifest showing that run's creation intent/confirmed lease authorizes cleanup. Use the read-only rule lookup first; if Azure state cannot be queried, treat cleanup as UNKNOWN and stop.
 

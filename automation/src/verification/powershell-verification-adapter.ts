@@ -80,7 +80,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     request: VerificationRequest,
     preQueryDelaySeconds: number
   ): Promise<VerificationResult> {
-    const stdout = await this.invokePowerShell([
+    const argumentsList = [
       "-NoProfile",
       "-File",
       scriptPath,
@@ -100,7 +100,11 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       "Json",
       "-PreQueryDelaySeconds",
       String(preQueryDelaySeconds)
-    ]);
+    ];
+    if (request.sqlAuthenticationMode === "entra") {
+      argumentsList.push("-SqlAuthenticationMode", "Entra");
+    }
+    const stdout = await this.invokePowerShell(argumentsList);
 
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
     const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");

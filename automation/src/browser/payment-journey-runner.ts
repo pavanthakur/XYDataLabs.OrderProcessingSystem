@@ -3,10 +3,12 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, request as playwrightRequest } from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 import type { ChallengeOutcome } from "../contracts/provider-challenge-handler.js";
 import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { RuntimeTargetDefinition } from "../contracts/runtime-target-catalog.js";
 import { OpenPaySandboxChallengeHandler } from "./openpay-sandbox-challenge-handler.js";
+import { completeRazorpayContactDetails } from "./razorpay-contact-details.js";
 import { waitForCallbackOutcome } from "./callback-outcome.js";
 import {assertSandboxConfirmation,assertRuntimeMode} from "./payment-evidence.js";
 import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
@@ -51,6 +53,9 @@ export interface PaymentJourneyRequest {
   headless: boolean;
   requestedProvider?: string;
   loginUsername?: string;
+  operatorAssistedEntra?: boolean;
+  reuseEntraSession?: boolean;
+  authPreflightOnly?: boolean;
   manualEntry?: boolean;
   diagnosticsDirectory?: string;
   logger?: (message: string) => void;
@@ -75,24 +80,43 @@ export interface PaymentJourneyResult {
   statusMessage: string;
   adapterMode: "sandbox" | "deterministic" | "live";
   collectionMode: string;
-  observedChallenge: "presented" | "not-presented";
+  observedChallenge: "presented" | "not-presented" | "not-applicable";
   providerVerification: string;
+  tenantPreflightResults?: Array<{ tenantCode: string; paymentProvider: string; adapterMode: string; collectionMode: string; threeDsSetting: ThreeDsSetting }>;
 }
 
 export class PaymentJourneyRunner {
   private readonly challengeHandler = new OpenPaySandboxChallengeHandler();
+  private operatorSession?: { browser: Browser; context: BrowserContext; sessionStorage: Record<string, string>; baseUrl: string; authenticated: boolean };
 
   public async execute(request: PaymentJourneyRequest): Promise<PaymentJourneyResult> {
     const log = (message:string) => request.logger?.(safePaymentDiagnostic(message));
     log(`Launching browser for ${request.tenantCode} on ${request.target.key}.`);
-    const browser = await chromium.launch({ headless: request.headless });
+    const reuseOperatorSession = request.target.runtime === "azure" && request.operatorAssistedEntra === true
+      && request.reuseEntraSession === true && !request.authPreflightOnly;
+    const previousSession = reuseOperatorSession ? this.operatorSession : undefined;
+    if (previousSession && previousSession.baseUrl !== request.target.baseUrl) {
+      throw new Error("An operator-assisted Entra browser session cannot be reused across different Azure origins.");
+    }
+    if (previousSession && !previousSession.browser.isConnected()) {
+      this.operatorSession = undefined;
+      throw new Error("The operator-assisted Entra browser session closed before all tenant journeys completed; refusing to start a new sign-in or resubmit a payment.");
+    }
+    const browser = previousSession?.browser ?? await chromium.launch({ headless: request.headless });
+    let authenticatedEntra = previousSession?.authenticated ?? false;
     const abortBrowser=()=>{void browser.close();};
     request.signal?.addEventListener("abort",abortBrowser,{once:true});
     if(request.signal?.aborted) abortBrowser();
 
     try {
-      const context = await browser.newContext({ ignoreHTTPSErrors: request.target.ignoreHttpsErrors });
+      const context = previousSession?.context ?? await browser.newContext({ ignoreHTTPSErrors: request.target.ignoreHttpsErrors });
       const page = await context.newPage();
+      if (previousSession) {
+        await page.addInitScript((storedSession) => {
+          for (const [key, value] of Object.entries(storedSession as Record<string, string>)) window.sessionStorage.setItem(key, value);
+        }, previousSession.sessionStorage);
+        log("Reusing the in-memory Entra browser session; no second login is required for this tenant.");
+      }
       const confirmations: Array<{paymentId:string;status:string;remoteStatusConfirmed:boolean;isSuccess:boolean;isPending:boolean;isFailure:boolean;providerAmount?:number;providerCurrency?:string;providerOrderId?:string}> = [];
       page.on("response", response => {
         if (new URL(response.url()).pathname.endsWith("/confirm-status") && response.ok()) {
@@ -150,12 +174,89 @@ export class PaymentJourneyRunner {
       await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       await this.completeLocalKeycloakLogin(page, request, log);
       const accessToken = await this.waitForLocalAccessToken(page, request, log);
+      if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) authenticatedEntra = true;
       await page.getByRole("heading", { name: /Take a card payment|Collect payment/i }).waitFor({ timeout: 30000 });
       log("Payment page is ready.");
       const paymentConfiguration = await this.resolvePaymentConfiguration(
         request,
         log,
         accessToken);
+      if (request.authPreflightOnly) {
+        if (request.target.runtime !== "azure" || !request.operatorAssistedEntra || !accessToken) {
+          throw new Error("Auth-preflight-only is restricted to a headed, authenticated Azure-dev Entra session.");
+        }
+        const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
+        const runtimeResponse = await page.request.get(`${apiBaseUrl}/api/v1/Info/runtime-configuration`, {
+          headers: { Authorization: `Bearer ${accessToken}`, "X-Tenant-Code": request.tenantCode }, timeout: 10000
+        });
+        if (!runtimeResponse.ok()) throw new Error(`Authenticated tenant configuration could not be read for UI-switch verification (${runtimeResponse.status()}).`);
+        const runtimeEnvelope = await runtimeResponse.json() as { data?: { availableTenants?: Array<{ tenantCode?: string }> }; availableTenants?: Array<{ tenantCode?: string }> };
+        const activeTenantCodes = (runtimeEnvelope.data?.availableTenants ?? runtimeEnvelope.availableTenants ?? [])
+          .map((tenant) => tenant.tenantCode?.trim()).filter((code): code is string => Boolean(code));
+        if (activeTenantCodes.length < 2 || !activeTenantCodes.includes(request.tenantCode)) {
+          throw new Error("Authenticated runtime did not provide multiple active tenants for admin-switch verification.");
+        }
+        const tenantPreflightResults: NonNullable<PaymentJourneyResult["tenantPreflightResults"]> = [];
+        for (const tenantCode of activeTenantCodes) {
+          const tenantConfiguration = tenantCode === request.tenantCode
+            ? paymentConfiguration
+            : await this.resolvePaymentConfiguration({ ...request, tenantCode, requestedProvider: undefined }, log, accessToken);
+          tenantPreflightResults.push({
+            tenantCode,
+            paymentProvider: tenantConfiguration.activeProviderType,
+            adapterMode: tenantConfiguration.adapterMode,
+            collectionMode: tenantConfiguration.collectionMode,
+            threeDsSetting: tenantConfiguration.isThreeDSecure ? "enabled" : "disabled"
+          });
+        }
+        const tenantPicker = page.locator(".tenant-picker select");
+        await tenantPicker.waitFor({ state: "visible", timeout: 10000 });
+        if (await tenantPicker.isDisabled()) throw new Error("The authenticated admin tenant selector is disabled.");
+        const uiTenantOptions = await tenantPicker.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+        if (activeTenantCodes.some((code) => !uiTenantOptions.includes(code))) {
+          throw new Error("The authenticated tenant selector is missing an active authorized tenant.");
+        }
+        for (const tenantCode of [...activeTenantCodes, activeTenantCodes[0]]) {
+          await tenantPicker.selectOption(tenantCode);
+          await page.waitForFunction((expected) => document.querySelector(".shell-meta")?.textContent?.trim() === `Active tenant: ${expected}`, tenantCode, { timeout: 10000 });
+          if (await tenantPicker.inputValue() !== tenantCode) throw new Error(`Tenant selector did not retain ${tenantCode} after the change.`);
+        }
+        log(`Admin UI tenant-switch cycle passed across ${activeTenantCodes.length} active tenants and returned to ${activeTenantCodes[0]}. Provider sandbox routes verified for all active tenants.`);
+        const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
+        await signOutButton.waitFor({ state: "visible", timeout: 10000 });
+        await signOutButton.click();
+        await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin && url.pathname === "/signed-out", { timeout: 60000 });
+        const applicationTokenRemains = await page.evaluate(() => Boolean(localStorage.getItem("orderprocessing.accessToken")));
+        if (applicationTokenRemains) throw new Error("Application sign-out did not clear the browser API token.");
+        const signedOutHeading = page.getByRole("heading", { name: /Signed out of the application/i });
+        try {
+          await signedOutHeading.waitFor({ state: "visible", timeout: 10000 });
+        } catch {
+          throw new Error("Identity-provider sign-out did not render the signed-out state; no payment was submitted.");
+        }
+        if (!(await signedOutHeading.isVisible().catch(() => false))) {
+          throw new Error("Identity-provider sign-out did not complete cleanly; no payment was submitted.");
+        }
+        log("Authenticated tenant access, sandbox configuration, and application sign-out verified. No customer, order, or payment was created.");
+        return {
+          journeyOutcome: "auth-preflight-passed",
+          challengeOutcome: "not-applicable",
+          threeDsSetting: paymentConfiguration.isThreeDSecure ? "enabled" : "disabled",
+          paymentProvider: paymentConfiguration.activeProviderType,
+          customerOrderId: "not-created",
+          orderId: 0,
+          orderReferenceId: "not-created",
+          orderAmount: 0,
+          orderCurrencyCode: "not-applicable",
+          finalUrl: (() => { const url = new URL(page.url()); return `${url.origin}${url.pathname}`; })(),
+          statusMessage: `Entra access, tenant switching, sandbox configuration and application sign-out passed; providers=${tenantPreflightResults.map((item) => `${item.tenantCode}:${item.paymentProvider}/${item.adapterMode}`).join(",")}; no payment was attempted.`,
+          adapterMode: paymentConfiguration.adapterMode,
+          collectionMode: paymentConfiguration.collectionMode,
+          observedChallenge: "not-applicable",
+          providerVerification: "not-applicable",
+          tenantPreflightResults
+        };
+      }
       const authoritativeOrder = request.manualEntry ? await this.createOrderThroughUi(page, request, accessToken, paymentConfiguration.activeProviderType) : await this.createAuthoritativeOrder(
         request,
         accessToken,
@@ -237,7 +338,7 @@ export class PaymentJourneyRunner {
         }
         else {
           if (request.expectedOutcome === "cancelled") {
-            await this.fillRazorpayContactDetails(page,automationPayerEmail,log);
+            await completeRazorpayContactDetails(page, razorpayAutomationPhone, automationPayerEmail, log);
             const close=await this.findVisibleLocator(page,[(scope)=>scope.locator('button[data-testid="checkout-close"]'),(scope)=>scope.getByRole("button",{name:/close checkout/i})],60000,"Razorpay checkout dismissal");
             await close.locator.click();
             await this.tryClickVisible(page,[(scope)=>scope.getByRole("button",{name:/^Yes,?\s*(exit|close|cancel)$|^Cancel payment$/i})],10000);
@@ -378,7 +479,7 @@ export class PaymentJourneyRunner {
       };
     }
     catch(error) {
-      if(request.diagnosticsDirectory){
+      if(request.diagnosticsDirectory && !request.operatorAssistedEntra){
         await mkdir(request.diagnosticsDirectory,{recursive:true});
         const page=browser.contexts().flatMap(context=>context.pages())[0];
         if(page) await page.screenshot({path:path.join(request.diagnosticsDirectory,"failure.png"),fullPage:true,
@@ -388,8 +489,53 @@ export class PaymentJourneyRunner {
     }
     finally {
       request.signal?.removeEventListener("abort",abortBrowser);
-      await browser.close();
+      if (reuseOperatorSession && browser.isConnected()) {
+        const context = previousSession?.context ?? browser.contexts()[0];
+        const page = context?.pages().at(-1);
+        const sessionStorage = page
+          ? await page.evaluate(() => Object.fromEntries(Array.from({ length: window.sessionStorage.length }, (_, index) => {
+            const key = window.sessionStorage.key(index);
+            return key === null ? null : [key, window.sessionStorage.getItem(key) ?? ""] as const;
+          }).filter((entry): entry is readonly [string, string] => entry !== null))).catch(() => ({} as Record<string, string>))
+          : {};
+        if (page) await page.close().catch(() => undefined);
+        if (context) this.operatorSession = { browser, context, sessionStorage, baseUrl: request.target.baseUrl, authenticated: authenticatedEntra };
+        else { this.operatorSession = undefined; await browser.close(); }
+      } else {
+        if (reuseOperatorSession) this.operatorSession = undefined;
+        await browser.close();
+      }
     }
+  }
+
+  public async closeOperatorAssistedSession(logger?: (message: string) => void): Promise<void> {
+    const session = this.operatorSession;
+    this.operatorSession = undefined;
+    if (!session) return;
+    let logoutError: Error | undefined;
+    try {
+      if (session.authenticated) {
+        const page = await session.context.newPage();
+        await page.addInitScript((storedSession) => {
+          for (const [key, value] of Object.entries(storedSession as Record<string, string>)) window.sessionStorage.setItem(key, value);
+        }, session.sessionStorage);
+        await page.goto(`${session.baseUrl}/payments/new`, { waitUntil: "domcontentloaded" });
+        const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
+        await signOutButton.waitFor({ state: "visible", timeout: 30000 });
+        await signOutButton.click();
+        await page.waitForURL((url) => url.origin === new URL(session.baseUrl).origin && url.pathname === "/signed-out", { timeout: 60000 });
+        if (await page.evaluate(() => Boolean(localStorage.getItem("orderprocessing.accessToken")))) {
+          throw new Error("Application sign-out did not clear the browser API token after the payment matrix.");
+        }
+        await page.getByRole("heading", { name: /Signed out of the application/i }).waitFor({ state: "visible", timeout: 10000 });
+        logger?.("One Entra sign-out completed after the selected tenant payment journeys; the application token was cleared.");
+      }
+    } catch (error) {
+      logoutError = error instanceof Error ? error : new Error("Entra sign-out verification failed after the payment matrix.");
+    } finally {
+      await session.browser.close().catch(() => undefined);
+    }
+    if (logoutError) throw logoutError;
   }
 
   private async resolvePaymentConfiguration(
@@ -429,6 +575,28 @@ export class PaymentJourneyRunner {
     });
 
     try {
+      if (request.target.runtime === "azure") {
+        if (!accessToken) throw new Error("Entra access token is required before any Azure payment-test mutation.");
+        const topologyResponse = await apiContext.get("/api/v1/Info/runtime-configuration", { timeout: Math.max(1, Math.min(5000, timeoutMs / 2)) });
+        if (!topologyResponse.ok()) throw new Error(`Entra runtime preflight failed (${topologyResponse.status()}); no customer or order was created.`);
+        const topologyEnvelope = await topologyResponse.json() as { data?: { availableTenants?: Array<{ tenantCode?: string }> }; availableTenants?: Array<{ tenantCode?: string }> };
+        const activeTenants = (topologyEnvelope.data?.availableTenants ?? topologyEnvelope.availableTenants ?? [])
+          .map((tenant) => tenant.tenantCode?.trim()).filter((code): code is string => Boolean(code));
+        if (!activeTenants.includes(request.tenantCode) || activeTenants.length === 0) {
+          throw new Error(`Entra runtime preflight did not authorize/resolve ${request.tenantCode}; no customer or order was created.`);
+        }
+        for (const tenantCode of activeTenants) {
+          const accessProbe = await apiContext.get("/api/v1/Customer/GetAllCustomers", {
+            headers: { "X-Tenant-Code": tenantCode },
+            timeout: Math.max(1, Math.min(5000, timeoutMs / 2))
+          });
+          if (!accessProbe.ok()) {
+            throw new Error(`Entra authorization preflight denied tenant ${tenantCode} (${accessProbe.status()}); confirm delegated API scope, platform-admin role, and active-tenant access. No customer or order was created.`);
+          }
+        }
+        log(`Entra delegated API access and platform-admin tenant coverage verified read-only for ${activeTenants.length} active tenant(s).`);
+      }
+
       const response = await apiContext.get("/api/v1/Info/payment-configuration", { timeout: Math.max(1, Math.min(5000, timeoutMs / 2)) });
       if (!response.ok()) {
         const responseBody = await response.text().catch(() => "");
@@ -482,18 +650,29 @@ export class PaymentJourneyRunner {
     request: PaymentJourneyRequest,
     log: (message: string) => void
   ): Promise<string | null> {
-    if (request.target.runtime === "azure") {
-      return null;
+    const operatorEntra = request.target.runtime === "azure" && request.operatorAssistedEntra === true;
+    if (request.target.runtime === "azure" && !operatorEntra) {
+      throw new Error("Azure payment automation requires an Entra browser session. Use the headed --operator-assisted-entra mode; unattended Azure browser authentication is not configured.");
     }
 
-    const accessToken = await page.waitForFunction(() => {
+    const authResult = await page.waitForFunction(() => {
+      const search = new URLSearchParams(window.location.search);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const error = search.get("error") ?? hash.get("error");
+      if (error) return { error };
       const token = window.localStorage.getItem("orderprocessing.accessToken");
-      return typeof token === "string" && token.trim().length > 0 ? token : null;
-    }, undefined, { timeout: 30000 })
-      .then((result) => result.jsonValue() as Promise<string | null>)
+      return typeof token === "string" && token.trim().length > 0 ? { token } : null;
+    }, undefined, { timeout: operatorEntra ? 300000 : 30000 })
+      .then((result) => result.jsonValue() as Promise<{ token?: string; error?: string } | null>)
       .catch(() => null);
 
+    if (authResult?.error) {
+      const safeCode = authResult.error.replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 80) || "unknown";
+      throw new Error(`Entra sign-in returned OAuth error code ${safeCode}; no customer or order was created.`);
+    }
+    const accessToken = authResult?.token ?? null;
     if (!accessToken) {
+      if (request.target.runtime === "azure") throw new Error("No Entra application access token became available within the sign-in window. Complete normal sign-in/MFA and return to the application; refusing to continue without authenticated API preflight.");
       log(`Local access token was not available after login for ${request.tenantCode}; proceeding without bearer auth.`);
       return null;
     }
@@ -508,6 +687,27 @@ export class PaymentJourneyRunner {
     log: (message: string) => void
   ): Promise<void> {
     if (request.target.runtime === "azure") {
+      if (!request.operatorAssistedEntra || request.headless) {
+        throw new Error("Azure payment automation requires operator-assisted Entra sign-in. Run the dev matrix locally with --headed --operator-assisted-entra; MFA is completed by the operator, never bypassed by automation.");
+      }
+      const identityConfigResponse = await page.request.get(`${request.target.baseUrl}/runtime-config.json`, { timeout: 10000 });
+      if (!identityConfigResponse.ok()) throw new Error(`Azure public identity configuration is unavailable (${identityConfigResponse.status()}); no payment test was started.`);
+      const identityConfig = await identityConfigResponse.json() as { mode?: string; authority?: string; clientId?: string; scopes?: string[]; redirectUri?: string; apiBaseUrl?: string };
+      const expectedUiOrigin = new URL(request.target.baseUrl).origin;
+      const expectedApiOrigin = new URL(request.target.apiBaseUrl ?? request.target.baseUrl).origin;
+      const configuredApiOrigin = identityConfig.apiBaseUrl ? new URL(identityConfig.apiBaseUrl, expectedUiOrigin).origin : null;
+      const configuredAuthority = identityConfig.authority ? new URL(identityConfig.authority) : null;
+      const authoritySegments = configuredAuthority?.pathname.split("/").filter(Boolean) ?? [];
+      if (identityConfig.mode !== "Entra" || !identityConfig.clientId || !identityConfig.scopes?.length
+        || !identityConfig.redirectUri || new URL(identityConfig.redirectUri).origin !== expectedUiOrigin
+        || (configuredApiOrigin !== null && configuredApiOrigin !== expectedUiOrigin && configuredApiOrigin !== expectedApiOrigin)
+        || configuredAuthority?.protocol !== "https:" || configuredAuthority.hostname !== "login.microsoftonline.com"
+        || !/^[0-9a-f-]{36}$/i.test(authoritySegments[0] ?? "") || authoritySegments[1] !== "v2.0") {
+        throw new Error("Azure UI identity configuration is not a valid Entra SPA setup for this origin; no payment test was started.");
+      }
+      log(`Complete the normal Entra sign-in and MFA for ${request.tenantCode} in the opened browser. No credentials or browser state will be saved.`);
+      await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin, { timeout: 300000 })
+        .catch(() => { throw new Error("Operator-assisted Entra sign-in did not return to the Azure application within five minutes."); });
       return;
     }
 
@@ -753,46 +953,11 @@ export class PaymentJourneyRunner {
     }
 
     log("Waiting for Razorpay hosted checkout UI.");
-    await this.fillRazorpayContactDetails(page, payerEmail, log);
+    await completeRazorpayContactDetails(page, razorpayAutomationPhone, payerEmail, log);
     await this.fillRazorpayCardDetails(page, log);
     await this.dismissRazorpaySaveCardPrompt(page, log);
     await this.completeRazorpayMockBankChallenge(page, log,failPayment);
     return true;
-  }
-
-  private async fillRazorpayContactDetails(
-    page: import("playwright").Page,
-    payerEmail: string,
-    log: (message: string) => void
-  ): Promise<void> {
-    const contactScope = await this.tryFindScope(page, [
-      (scope) => scope.getByText(/Contact details/i),
-      (scope) => scope.getByText(/Enter mobile .* email to continue/i)
-    ], 15000, "Razorpay contact details");
-
-    if (!contactScope) {
-      log("Razorpay contact-details step was not shown.");
-      return;
-    }
-
-    log("Completing Razorpay contact-details step.");
-    await this.fillVisibleInput(page, [
-      (scope) => scope.locator('input[type="tel"]').first(),
-      (scope) => scope.locator('input[inputmode="tel"]').first(),
-      (scope) => scope.locator('input[name*="phone"]').first(),
-      (scope) => scope.locator('input[name*="contact"]').first()
-    ], razorpayAutomationPhone, 10000, "Razorpay phone");
-
-    await this.fillVisibleInput(page, [
-      (scope) => scope.locator('input[type="email"]').first(),
-      (scope) => scope.locator('input[name*="email"]').first(),
-      (scope) => scope.getByPlaceholder(/email/i).first()
-    ], payerEmail, 10000, "Razorpay email");
-
-    await this.clickWithinScope(contactScope.scope, [
-      (scope) => scope.getByRole("button", { name: /^Continue$/i }),
-      (scope) => scope.getByText(/^Continue$/i)
-    ], "Razorpay contact-details continue");
   }
 
   private async fillRazorpayCardDetails(
