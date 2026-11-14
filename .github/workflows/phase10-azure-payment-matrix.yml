@@ -217,14 +217,14 @@ jobs:
           $summaryPath = Join-Path $artifactRoot 'topology-preflight-${{ inputs.environment }}-${{ github.run_id }}.md'
           $verifyError = $null
           try {
-            $topologyArgs = @(
-              '-Environment', '${{ inputs.environment }}',
-              '-ResourceGroupName', '${{ steps.topology.outputs.resourceGroup }}',
-              '-GatewayBaseUrl', '${{ steps.topology.outputs.gatewayBaseUrl }}',
-              '-SummaryPath', $summaryPath
-            )
-            if ('${{ inputs.environment }}' -eq 'dev') { $topologyArgs += @('-RequiredProviderCodes', 'Razorpay', 'OpenPay') }
-            & scripts/verify-phase10-azure-tenant-topology.ps1 @topologyArgs
+            $topologyParameters = @{
+              Environment = '${{ inputs.environment }}'
+              ResourceGroupName = '${{ steps.topology.outputs.resourceGroup }}'
+              GatewayBaseUrl = '${{ steps.topology.outputs.gatewayBaseUrl }}'
+              SummaryPath = $summaryPath
+            }
+            if ('${{ inputs.environment }}' -eq 'dev') { $topologyParameters.RequiredProviderCodes = @('Razorpay', 'OpenPay') }
+            & scripts/verify-phase10-azure-tenant-topology.ps1 @topologyParameters
           }
           catch {
             $verifyError = $_

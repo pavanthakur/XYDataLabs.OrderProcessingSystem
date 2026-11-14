@@ -68,7 +68,9 @@ test('Azure payment workflow runs service-access preflight before the browser pa
   assert.match(matrixRunnerSource, /"-PreflightOnly"/);
   assert.match(matrixRunnerSource, /No browser journey or payment was started/);
   assert.match(paymentWorkflowSource, /EXPECTED_AZURE_SUBSCRIPTION_ID: \$\{\{ secrets\.AZUREAPPSERVICE_SUBSCRIPTIONID \}\}/);
-  assert.match(paymentWorkflowSource, /if \('\$\{\{ inputs\.environment \}\}' -eq 'dev'\) \{ \$topologyArgs \+= @\('-RequiredProviderCodes', 'Razorpay', 'OpenPay'\) \}/);
+  assert.match(paymentWorkflowSource, /\$topologyParameters = @\{[\s\S]*?Environment = '\$\{\{ inputs\.environment \}\}'[\s\S]*?\}/);
+  assert.match(paymentWorkflowSource, /if \('\$\{\{ inputs\.environment \}\}' -eq 'dev'\) \{ \$topologyParameters\.RequiredProviderCodes = @\('Razorpay', 'OpenPay'\) \}/);
+  assert.match(paymentWorkflowSource, /verify-phase10-azure-tenant-topology\.ps1\s+@topologyParameters/);
 });
 
 test('hosted service-preflight-only mode is dev-only and cannot reach payment automation', () => {
