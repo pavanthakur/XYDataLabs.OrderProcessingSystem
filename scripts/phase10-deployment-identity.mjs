@@ -7,11 +7,19 @@ const hash = (content) => createHash('sha256')
   .update(Buffer.isBuffer(content) ? content.toString('utf8').replace(/\r\n?/g, '\n') : content)
   .digest('hex');
 
-export async function calculateDeploymentIdentity({ repositoryRoot, environment, location, publicDomain = '', bindAliases = false, aliasMode = 'direct', cleanupInfra = false }) {
+export async function calculateDeploymentIdentity({ repositoryRoot, environment, location, publicDomain = '', bindAliases = false, aliasMode = 'direct', cleanupInfra = false, deploySql = false, deployRedis = false, sqlEntraAdminObjectId = '', sqlEntraAdminLogin = '' }) {
   if (!['dev', 'staging', 'prod'].includes(environment)) throw new Error('Unsupported deployment environment.');
   if (!/^[a-z0-9]+$/.test(location)) throw new Error('Azure region is invalid.');
   if (!['direct', 'frontdoor'].includes(aliasMode)) throw new Error('Alias mode is invalid.');
   if (publicDomain && !/^(?:[a-z0-9-]+\.)*[a-z0-9-]+\.[a-z]{2,}$/i.test(publicDomain)) throw new Error('Public domain is invalid.');
+  const sqlEntraAdminConfigurationSha256 = deploySql
+    ? (() => {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sqlEntraAdminObjectId) || !sqlEntraAdminLogin.trim()) {
+        throw new Error('Deploying SQL requires a valid explicit Entra administrator object ID and login.');
+      }
+      return hash(JSON.stringify({ objectId: sqlEntraAdminObjectId.toLowerCase(), login: sqlEntraAdminLogin.trim().toLowerCase() }));
+    })()
+    : '';
   const parameterFile = path.join(repositoryRoot, 'infra', 'parameters', `phase10-${environment}.json`);
   const parameterBytes = await readFile(parameterFile);
   const parameterFileSha256 = hash(parameterBytes);
@@ -40,6 +48,9 @@ export async function calculateDeploymentIdentity({ repositoryRoot, environment,
     bindAliases: Boolean(bindAliases),
     aliasMode,
     cleanupInfra: Boolean(cleanupInfra),
+    deploySql: Boolean(deploySql),
+    deployRedis: Boolean(deployRedis),
+    sqlEntraAdminConfigurationSha256,
     parameterFile: `infra/parameters/phase10-${environment}.json`,
     parameterFileSha256,
     infrastructureInputs,
@@ -59,6 +70,10 @@ async function main() {
     bindAliases: read('bindAliases') === 'true',
     aliasMode: read('aliasMode') ?? 'direct',
     cleanupInfra: read('cleanupInfra') === 'true',
+    deploySql: read('deploySql') === 'true',
+    deployRedis: read('deployRedis') === 'true',
+    sqlEntraAdminObjectId: read('sqlEntraAdminObjectId') ?? process.env.SQL_ENTRA_ADMIN_OBJECT_ID ?? '',
+    sqlEntraAdminLogin: read('sqlEntraAdminLogin') ?? process.env.SQL_ENTRA_ADMIN_LOGIN ?? '',
   });
   if (process.env.GITHUB_OUTPUT) {
     const { appendFile } = await import('node:fs/promises');

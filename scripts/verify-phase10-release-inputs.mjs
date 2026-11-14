@@ -70,6 +70,10 @@ async function main() {
       bindAliases: process.env.BIND_ALIASES === 'true',
       aliasMode: process.env.ALIAS_MODE ?? 'direct',
       cleanupInfra: process.env.CLEANUP_INFRA === 'true',
+      deploySql: process.env.DEPLOY_SQL === 'true',
+      deployRedis: process.env.DEPLOY_REDIS === 'true',
+      sqlEntraAdminObjectId: process.env.SQL_ENTRA_ADMIN_OBJECT_ID ?? '',
+      sqlEntraAdminLogin: process.env.SQL_ENTRA_ADMIN_LOGIN ?? '',
     },
   });
   console.log(`Verified release source ${result.manifest.sourceSha}, deployment workflow ${process.env.DEPLOYMENT_WORKFLOW_SHA}, six immutable images, Functions package, and approved deployment parameter identity.`);

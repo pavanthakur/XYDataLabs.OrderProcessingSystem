@@ -79,6 +79,12 @@ param sqlAdminUsername string = 'sqladmin'
 @description('SQL Server admin password')
 param sqlAdminPassword string = ''
 
+@description('Object ID of the explicitly assigned Microsoft Entra administrator for this environment SQL server.')
+param aadAdminObjectId string = ''
+
+@description('Login name of the Microsoft Entra administrator for this environment SQL server.')
+param aadAdminLogin string = ''
+
 @description('Database service objective (Basic, S0, S1, etc)')
 param databaseServiceObjective string = 'Basic'
 
@@ -158,6 +164,8 @@ module sql 'modules/sql.bicep' = if (deploySql) {
     baseName: baseName
     sqlAdminUsername: sqlAdminUsername
     sqlAdminPassword: sqlAdminPassword
+    aadAdminObjectId: aadAdminObjectId
+    aadAdminLogin: aadAdminLogin
     databaseServiceObjective: databaseServiceObjective
   }
 }

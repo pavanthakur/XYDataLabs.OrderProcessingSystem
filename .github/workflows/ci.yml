@@ -62,6 +62,11 @@ jobs:
         shell: pwsh
         run: Resources/Azure-Deployment/validate-phase10-environment-contract.ps1
 
+      - name: Test Azure SQL managed identity SID provisioning contract
+        id: sql-managed-identity-sid
+        shell: pwsh
+        run: Resources/Azure-Deployment/test-phase10-sql-managed-identity-sid.ps1
+
       - name: Set up .NET
         id: setup-dotnet
         uses: actions/setup-dotnet@v5

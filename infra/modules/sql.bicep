@@ -117,9 +117,9 @@ resource tenantCDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = 
   }
 }
 
-// Azure AD administrator — required for Managed Identity connections from App Services.
-// Set aadAdminObjectId + aadAdminLogin in parameters/{env}.json, then run:
-//   Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment dev
+// Microsoft Entra administrator — required for managed-identity connections.
+// The approved Azure deployment environment supplies the explicit object ID and login;
+// local parameter files remain free of person-specific directory identifiers.
 resource sqlAadAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = if (!empty(aadAdminObjectId)) {
   parent: sqlServer
   name: 'ActiveDirectory'

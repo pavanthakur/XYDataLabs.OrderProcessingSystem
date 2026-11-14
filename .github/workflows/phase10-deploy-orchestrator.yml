@@ -45,6 +45,16 @@ on:
         required: true
         default: false
         type: boolean
+      deploySql:
+        description: 'Provision/update the SQL baseline. This can rotate its SQL admin password; leave off for routine redeploys.'
+        required: true
+        default: false
+        type: boolean
+      deployRedis:
+        description: 'Provision/update the Redis baseline. Select only when the Redis slice must be deployed.'
+        required: true
+        default: false
+        type: boolean
       candidateSha:
         description: 'Full source SHA already validated by hosted CI and immutable release build'
         required: false
@@ -81,6 +91,7 @@ jobs:
     name: Verify candidate, hosted CI and immutable release evidence
     if: ${{ !inputs.cleanupInfra }}
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       actions: read
@@ -202,6 +213,10 @@ jobs:
           BIND_ALIASES: ${{ inputs.bindAliases }}
           ALIAS_MODE: ${{ inputs.aliasMode }}
           CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
+          DEPLOY_SQL: ${{ inputs.deploySql }}
+          DEPLOY_REDIS: ${{ inputs.deployRedis }}
+          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
+          SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
           APPROVED_PARAMETER_IDENTITY: ${{ inputs.approvedParameterIdentity }}
         run: |
           set -euo pipefail
@@ -222,7 +237,9 @@ jobs:
             --publicDomain "$PUBLIC_DOMAIN" \
             --bindAliases "$BIND_ALIASES" \
             --aliasMode "$ALIAS_MODE" \
-            --cleanupInfra "$CLEANUP_INFRA")"
+            --cleanupInfra "$CLEANUP_INFRA" \
+            --deploySql "$DEPLOY_SQL" \
+            --deployRedis "$DEPLOY_REDIS")"
           calculated="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.identitySha256)' "$identity")"
           echo "Calculated deployment parameter identity: $calculated"
           echo "Calculated deployment parameter identity: \`$calculated\`" >> "$GITHUB_STEP_SUMMARY"
@@ -458,6 +475,8 @@ jobs:
       aliasMode: ${{ inputs.aliasMode }}
       dryRun: ${{ inputs.dryRun }}
       cleanupInfra: ${{ inputs.cleanupInfra }}
+      deploySql: ${{ inputs.deploySql }}
+      deployRedis: ${{ inputs.deployRedis }}
       candidateSha: ${{ inputs.candidateSha }}
       deploymentWorkflowSha: ${{ github.sha }}
       releaseRunId: ${{ inputs.releaseRunId }}
@@ -654,7 +673,8 @@ jobs:
           echo "|----------|------------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| OIDC + GitHub Secrets | ✅ Prerequisite | Azure Initial Setup workflow |" >> $GITHUB_STEP_SUMMARY
           echo "| Platform foundation RG + persistent ACR + pull identity | ✅ Yes | 00 Azure Platform Foundation |" >> $GITHUB_STEP_SUMMARY
-          echo "| SQL Server + Redis baseline | ✅ Yes | Automatic Phase 10 deploy path |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Server baseline | ${{ inputs.deploySql }} | Explicit workflow input; enabling it updates the slice and rotates the SQL admin password |" >> $GITHUB_STEP_SUMMARY
+          echo "| Redis baseline | ${{ inputs.deployRedis }} | Explicit workflow input; enabling it updates the slice |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 service images | No | A separately approved immutable release build must exist before the wrapper consumes it |" >> $GITHUB_STEP_SUMMARY
           echo "| Resource Group + Service Bus + Log Analytics + App Insights + Container Apps + Function App + Key Vault | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

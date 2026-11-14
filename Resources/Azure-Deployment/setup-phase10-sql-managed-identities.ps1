@@ -25,7 +25,13 @@ param(
     [string]$SqlAdminUsername,
 
     [Parameter(Mandatory = $false)]
-    [string]$SqlAdminPassword
+    [string]$SqlAdminPassword,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$IdentityNames = @(),
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$AdditionalDatabaseNames = @()
 )
 
 Set-StrictMode -Version Latest
@@ -495,10 +501,8 @@ function Grant-IdentityAccessToDatabase {
         [switch]$UseSqlAuth
     )
 
-    # Azure SQL external service principals use the canonical Microsoft Entra
-    # application/client GUID bytes. Guid.ToByteArray() uses CLR mixed-endian
-    # layout and creates a valid external principal that cannot match the token.
-    $managedIdentitySid = '0x' + ([System.Guid]::Parse($ManagedIdentityAppId)).ToString('N').ToUpperInvariant()
+    # Azure SQL stores the client ID in uniqueidentifier VARBINARY byte order.
+    $managedIdentitySid = Convert-GuidToSqlSidHex -GuidText $ManagedIdentityAppId
 
     $roleGrantSql = @"
 IF NOT EXISTS (
@@ -526,24 +530,25 @@ END
 PRINT 'Roles granted: db_datareader, db_datawriter'
 "@
 
-    if ($UseSqlAuth) {
-        $sqlScript = @"
+    $sqlScript = @"
 IF EXISTS (
     SELECT 1
     FROM sys.database_principals
     WHERE name = '$DisplayName'
-      AND type = 'E'
-      AND sid <> $managedIdentitySid
+      AND (type <> 'E' OR sid <> $managedIdentitySid)
 )
 BEGIN
+    IF EXISTS (SELECT 1 FROM sys.schemas WHERE principal_id = USER_ID('$DisplayName'))
+       OR EXISTS (SELECT 1 FROM sys.objects WHERE principal_id = USER_ID('$DisplayName'))
+        THROW 51000, 'Refusing to replace mismatched external user that owns database objects or schemas.', 1;
     DROP USER [$DisplayName];
-    PRINT 'Dropped contained external user whose SID did not match: $DisplayName'
+    PRINT 'Dropped contained user whose type or SID did not match: $DisplayName'
 END
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$DisplayName')
 BEGIN
     CREATE USER [$DisplayName] WITH SID = $managedIdentitySid, TYPE = E;
-    PRINT 'Created contained external user with explicit object SID: $DisplayName'
+    PRINT 'Created contained external user with SQL-compatible client ID SID: $DisplayName'
 END
 ELSE
 BEGIN
@@ -551,8 +556,29 @@ BEGIN
 END
 
 $roleGrantSql
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_principals
+    WHERE name = '$DisplayName' AND type = 'E' AND sid = $managedIdentitySid
+)
+    THROW 51001, 'Managed identity database principal SID verification failed.', 1;
+
+IF EXISTS (
+    SELECT requiredRole.name
+    FROM (VALUES ('db_datareader'), ('db_datawriter')) AS requiredRole(name)
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM sys.database_role_members drm
+        JOIN sys.database_principals rolePrincipal ON rolePrincipal.principal_id = drm.role_principal_id
+        JOIN sys.database_principals memberPrincipal ON memberPrincipal.principal_id = drm.member_principal_id
+        WHERE rolePrincipal.name = requiredRole.name AND memberPrincipal.name = '$DisplayName'
+    )
+)
+    THROW 51002, 'Managed identity database role verification failed.', 1;
 "@
 
+    if ($UseSqlAuth) {
         Invoke-SqlScriptFile `
             -SqlScript $sqlScript `
             -SqlServerFqdn $SqlServerFqdn `
@@ -560,29 +586,15 @@ $roleGrantSql
             -Username $SqlUsername `
             -Password $SqlPassword `
             -UseSqlAuth
-        return
     }
-
-    $sqlScript = @"
-IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$DisplayName')
-BEGIN
-    CREATE USER [$DisplayName] FROM EXTERNAL PROVIDER;
-    PRINT 'Created contained user: $DisplayName'
-END
-ELSE
-BEGIN
-    PRINT 'User already exists (idempotent): $DisplayName'
-END
-
-$roleGrantSql
-"@
-
-    Invoke-SqlScriptFile `
-        -SqlScript $sqlScript `
-        -SqlServerFqdn $SqlServerFqdn `
-        -DatabaseName $DatabaseName `
-        -AccessToken $AccessToken `
-        -UseAzureAdToken
+    else {
+        Invoke-SqlScriptFile `
+            -SqlScript $sqlScript `
+            -SqlServerFqdn $SqlServerFqdn `
+            -DatabaseName $DatabaseName `
+            -AccessToken $AccessToken `
+            -UseAzureAdToken
+    }
 }
 
 $script:CurrentStage = 'Initialize SQL identity setup'
@@ -624,13 +636,16 @@ $runtimeIdentities = @(
         ResourceName = "$BaseName-functions-$envSuffix"
         FriendlyName = 'Functions'
     }
-    @{
-        Kind = 'UserAssignedIdentity'
-        ResourceGroupName = 'rg-orderprocessing-platform'
-        ResourceName = 'id-orderprocessing-acr-pull-platform'
-        FriendlyName = 'Shared Container Apps user-assigned identity'
-    }
 )
+
+if ($IdentityNames.Count -gt 0) {
+    $unknownIdentities = @($IdentityNames | Where-Object { $_ -notin @($runtimeIdentities | ForEach-Object { $_.ResourceName }) })
+    if ($unknownIdentities.Count -gt 0) {
+        throw "Unknown SQL runtime identity filter: $($unknownIdentities -join ', ')."
+    }
+
+    $runtimeIdentities = @($runtimeIdentities | Where-Object { $_.ResourceName -in $IdentityNames })
+}
 
 Write-Host "Configuring Phase 10 SQL access for runtime identities..." -ForegroundColor Cyan
 Write-Host "Environment      : $Environment ($envSuffix)" -ForegroundColor White
@@ -674,21 +689,39 @@ if ($UseSqlAuthentication) {
 }
 else {
     $script:CurrentStage = 'Discover and validate dedicated tenant topology'
-    $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
-        -SqlServerFqdn $sqlFqdn `
-        -SharedDatabaseName $sharedDatabaseName `
-        -KeyVaultName $keyVaultName `
-        -AccessToken $token `
-        -SqlUsername $resolvedSqlUsername `
-        -SqlPassword $resolvedSqlPassword `
-        -UseAzureAdToken)
+    if ($AdditionalDatabaseNames.Count -gt 0) {
+        $sqlServerName = $sqlFqdn.Split('.')[0]
+        $availableDatabaseNames = @(az sql db list --resource-group $resourceGroupName --server $sqlServerName --query "[?name!='master'].name" -o tsv)
+        if ($LASTEXITCODE -ne 0) { throw 'Could not validate explicit SQL database targets through Azure Resource Manager.' }
+        $invalidDatabaseNames = @($AdditionalDatabaseNames | Where-Object { $_ -eq $sharedDatabaseName -or $_ -notin $availableDatabaseNames })
+        if ($invalidDatabaseNames.Count -gt 0) { throw "Explicit additional database targets are missing or duplicate the shared database: $($invalidDatabaseNames -join ', ')." }
+        $dedicatedTenantDatabases = @($AdditionalDatabaseNames | Select-Object -Unique | ForEach-Object {
+            [pscustomobject]@{ TenantCode = 'OperatorVerified'; TenantName = 'Operator-verified database target'; PaymentProviderCode = ''; DatabaseName = $_ }
+        })
+    }
+    else {
+        $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
+            -SqlServerFqdn $sqlFqdn `
+            -SharedDatabaseName $sharedDatabaseName `
+            -KeyVaultName $keyVaultName `
+            -AccessToken $token `
+            -SqlUsername $resolvedSqlUsername `
+            -SqlPassword $resolvedSqlPassword `
+            -UseAzureAdToken)
+    }
 }
 
 if ($dedicatedTenantDatabases.Count -eq 0) {
     Write-Host 'Dedicated Databases: none active in tenant registry' -ForegroundColor Yellow
 }
 else {
-    Write-Host 'Dedicated Databases discovered from tenant registry + Key Vault:' -ForegroundColor White
+    $discoveryLabel = if ($AdditionalDatabaseNames.Count -gt 0) {
+        'Additional databases explicitly selected by the operator:'
+    }
+    else {
+        'Dedicated databases discovered from tenant registry + Key Vault:'
+    }
+    Write-Host $discoveryLabel -ForegroundColor White
     foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
         Write-Host "  - $($dedicatedDatabase.TenantCode) -> $($dedicatedDatabase.DatabaseName) [$($dedicatedDatabase.PaymentProviderCode)]" -ForegroundColor Gray
     }

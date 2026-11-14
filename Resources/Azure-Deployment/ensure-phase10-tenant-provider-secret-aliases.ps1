@@ -5,6 +5,8 @@ param(
     [string]$ResourceGroupName,
     [string]$SummaryPath,
     [string]$BaseName = 'orderprocessing',
+    [string]$GatewayBaseUrl,
+    [string]$GatewayContainerAppName,
     [string]$DeploymentPrincipalObjectId,
     [ValidateSet('OpenPay', 'Razorpay')]
     [string[]]$RequiredProviderCodes = @('OpenPay', 'Razorpay'),
@@ -21,7 +23,7 @@ Set-StrictMode -Version Latest
 
 $envSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-$BaseName-$envSuffix" } else { $ResourceGroupName }
-$gatewayApp = "$BaseName-gate-$envSuffix"
+$gatewayApp = if ([string]::IsNullOrWhiteSpace($GatewayContainerAppName)) { "$BaseName-gate-$envSuffix" } else { $GatewayContainerAppName }
 $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
 $keyVaultName = "kv-$shortBaseName-$envSuffix"
 $supportedProviders = @('OpenPay', 'Razorpay')
@@ -51,6 +53,14 @@ function Invoke-AzText {
 }
 
 function Get-GatewayFqdn {
+    if (-not [string]::IsNullOrWhiteSpace($GatewayBaseUrl)) {
+        $uri = $null
+        if (-not [System.Uri]::TryCreate($GatewayBaseUrl, [System.UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -ne 'https') {
+            throw 'GatewayBaseUrl must be an absolute HTTPS URL resolved by the deployment workflow.'
+        }
+        return $uri.Host
+    }
+
     return Invoke-AzText -Arguments @(
         'containerapp', 'show',
         '--resource-group', $resourceGroup,

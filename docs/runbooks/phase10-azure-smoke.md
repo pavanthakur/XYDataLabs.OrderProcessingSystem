@@ -707,7 +707,7 @@ To launch the deployment from GitHub:
 3. Click `01 Phase 10 Azure Deploy Orchestrator`.
 4. Click `Run workflow`.
 5. Choose the target branch.
-6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`.
+6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`. Leave `deploySql` and `deployRedis` off for a routine redeploy; select them only when the corresponding baseline slice must be provisioned or intentionally updated. `deploySql=true` rotates the SQL admin password, so make sure the Entra SQL administrator variables are configured and that dependent operator credentials are handled before selecting it.
 7. Click `Run workflow` to start the deployment.
 
 After the deploy finishes:

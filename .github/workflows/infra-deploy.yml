@@ -54,12 +54,12 @@ on:
       deploySql:
         description: 'Deploy the Phase 10 Azure SQL baseline slice'
         required: false
-        default: true
+        default: false
         type: boolean
       deployRedis:
         description: 'Deploy the Phase 10 Azure Redis baseline slice'
         required: false
-        default: true
+        default: false
         type: boolean
       acrLoginServer:
         description: 'Optional ACR login server for Phase 10 runtime images'
@@ -163,7 +163,8 @@ jobs:
           echo "| workflow | ${{ github.workflow }} |" >> $GITHUB_STEP_SUMMARY
           echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| SQL Server + Redis baseline | automatic | Included in the default Phase 10 path |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Server baseline | ${{ inputs.deploySql }} | Explicitly selected; routine redeploy defaults to preserve SQL credentials and data |" >> $GITHUB_STEP_SUMMARY
+          echo "| Redis baseline | ${{ inputs.deployRedis }} | Explicitly selected; routine redeploy defaults to preserve the existing slice |" >> $GITHUB_STEP_SUMMARY
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
           echo "| acr_login_server | ${{ inputs.acrLoginServer || '(not provided)' }} |" >> $GITHUB_STEP_SUMMARY
@@ -283,6 +284,10 @@ jobs:
           BIND_ALIASES: ${{ inputs.bindAliases }}
           ALIAS_MODE: ${{ inputs.aliasMode }}
           CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
+          DEPLOY_SQL: ${{ inputs.deploySql }}
+          DEPLOY_REDIS: ${{ inputs.deployRedis }}
+          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
+          SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
         run: node scripts/verify-phase10-release-inputs.mjs
 
       - name: Validate Entra provisioning before cloud writes
@@ -316,6 +321,8 @@ jobs:
           INVENTORY_IMAGE_INPUT: ${{ inputs.inventoryImage }}
           NOTIFICATIONS_IMAGE_INPUT: ${{ inputs.notificationsImage }}
           UI_IMAGE_INPUT: ${{ inputs.uiImage }}
+          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
+          SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
         run: |
           set -euo pipefail
           if [ -n "${{ inputs.environment }}" ]; then
@@ -326,6 +333,14 @@ jobs:
             echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT
             echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT
             echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.deploySql }}" = "true" ]; then
+              [[ "$SQL_ENTRA_ADMIN_OBJECT_ID" =~ ^[0-9a-fA-F-]{36}$ && -n "$SQL_ENTRA_ADMIN_LOGIN" ]] || { echo "SQL_ENTRA_ADMIN_OBJECT_ID and SQL_ENTRA_ADMIN_LOGIN must be configured as environment variables before deploying SQL." >&2; exit 1; }
+              echo "aadAdminObjectId=${SQL_ENTRA_ADMIN_OBJECT_ID}" >> $GITHUB_OUTPUT
+              echo "aadAdminLogin=${SQL_ENTRA_ADMIN_LOGIN}" >> $GITHUB_OUTPUT
+            else
+              echo "aadAdminObjectId=" >> $GITHUB_OUTPUT
+              echo "aadAdminLogin=" >> $GITHUB_OUTPUT
+            fi
             TARGET_KEY="azure-${{ inputs.environment }}"
             if [ "${{ inputs.environment }}" = "staging" ]; then TARGET_KEY="azure-stg"; fi
             RUNTIME_TARGET="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc=require("./automation/config/runtime-targets.json"); const target=doc.targets.find((item)=>item.key===process.env.TARGET_KEY); if(!target) process.exit(2); process.stdout.write(JSON.stringify(target));')"
@@ -532,6 +547,8 @@ jobs:
             --parameters existingFunctionsSqlDatabaseName="${{ steps.params.outputs.existingFunctionsSqlDatabaseName }}" \
             --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
             --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
+            --parameters aadAdminObjectId="${{ steps.params.outputs.aadAdminObjectId }}" \
+            --parameters aadAdminLogin="${{ steps.params.outputs.aadAdminLogin }}" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
@@ -614,6 +631,10 @@ jobs:
           BIND_ALIASES: ${{ inputs.bindAliases }}
           ALIAS_MODE: ${{ inputs.aliasMode }}
           CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
+          DEPLOY_SQL: ${{ inputs.deploySql }}
+          DEPLOY_REDIS: ${{ inputs.deployRedis }}
+          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
+          SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
         run: node scripts/verify-phase10-release-inputs.mjs
 
       - name: Validate Entra provisioning before cloud writes
@@ -970,6 +991,8 @@ jobs:
             --parameters existingFunctionsSqlDatabaseName="${{ steps.params.outputs.existingFunctionsSqlDatabaseName }}" \
             --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
             --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
+            --parameters aadAdminObjectId="${{ steps.params.outputs.aadAdminObjectId }}" \
+            --parameters aadAdminLogin="${{ steps.params.outputs.aadAdminLogin }}" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
@@ -1535,6 +1558,8 @@ jobs:
             & Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
               -Environment '${{ steps.params.outputs.env }}' `
               -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+              -GatewayBaseUrl '${{ steps.aliases.outputs.apiPublicUrl }}' `
+              -GatewayContainerAppName '${{ steps.outputs.outputs.gateway }}' `
               -SummaryPath $summaryPath `
               -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}' `
               -RequiredProviderCodes @('OpenPay', 'Razorpay')
@@ -1588,6 +1613,7 @@ jobs:
             & scripts/verify-phase10-azure-tenant-topology.ps1 `
               -Environment '${{ steps.params.outputs.env }}' `
               -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+              -GatewayBaseUrl '${{ steps.aliases.outputs.apiPublicUrl }}' `
               -RequiredProviderCodes @('OpenPay', 'Razorpay') `
               -SummaryPath $summaryPath
           }

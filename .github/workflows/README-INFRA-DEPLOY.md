@@ -22,6 +22,8 @@ The wrapper owns the selected environment-scoped application lifecycle. Persiste
 - `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack, creating the environment-scoped Azure resources when they are missing
 - `dryRun=false` and `cleanupInfra=true` tears down the environment-scoped Phase 10 stack
 
+SQL and Redis are explicit slices and default to **off** for routine redeploys. Turn on `deploySql` only when the SQL baseline must be created or intentionally updated; that path generates and stores a new SQL admin password. The configured Entra SQL administrator is passed explicitly and included in the reviewed deployment-identity hash. Turn on `deployRedis` only when its baseline slice must be created or intentionally updated. For a fresh environment, select the slices that are not already provisioned; for an existing environment, leave both off unless the reviewed what-if and task require them.
+
 The workflow summary surfaces the resources that matter for runtime and cleanup:
 
 - Resource Group
@@ -170,7 +172,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - Azure dev generated mode requires `Bind Aliases=false` and exact live ACA/Entra origin agreement. Staging/prod use stable owned public names from `automation/config/runtime-targets.json`; `Public Domain` is only a compatibility fallback for newly cataloged environments.
    - Release publication is a separate run; the deployment wrapper verifies and consumes the selected exact-run artifact rather than building replacement images
    - The wrapper summary is only the top-level checkpoint; detailed deployment logs and outputs live in the internal infrastructure job
-   - SQL Server and Redis are part of the automatic baseline now, so the wrapper no longer asks for parity toggles in the normal operator form
+   - SQL Server and Redis are explicit opt-in slices in the wrapper; leave them off for routine redeploys, and select them only for a reviewed provisioning/update. Enabling SQL rotates the SQL admin password.
 
 **Shared contract with local Docker validation:**
 - same environment suffix pattern (`dev`, `staging`, `prod`)
@@ -250,8 +252,8 @@ Use [docs/internal/phase10-parity-matrix.md](../../docs/internal/phase10-parity-
 
 | Need | What to add back or decide | Workflow touchpoint |
 |---|---|---|
-| SQL Server | Already part of the automatic baseline Phase 10 deployment path | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
-| Redis | Already part of the automatic baseline Phase 10 deployment path | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| SQL Server | Explicit `deploySql` input, off by default on redeploy; enabling it rotates the SQL admin password | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| Redis | Explicit `deployRedis` input, off by default on redeploy | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
 | App Service URLs | Not part of the active containerized target; use friendly aliases / Front Door names for Container Apps | alias planning in `infra-deploy.yml` |
 | Portal visibility | Summarize the live portal endpoints and resource inventory in one run summary | wrapper summary + internal deployment summary |
 
