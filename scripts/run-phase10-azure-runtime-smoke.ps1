@@ -9,14 +9,22 @@ param(
     [string]$UiFqdn,
     [string]$GatewayBaseUrl,
     [string]$UiBaseUrl,
-    [bool]$AllowGeneratedAzureUrlFallback = $false,
-    [bool]$GeneratedUrlIsExpected = $false,
+    [ValidateSet('true', 'false', 'True', 'False')]
+    [string]$AllowGeneratedAzureUrlFallback = 'false',
+    [ValidateSet('true', 'false', 'True', 'False')]
+    [string]$GeneratedUrlIsExpected = 'false',
     [string]$SummaryPath,
     [int]$Attempts = 18,
     [int]$DelaySeconds = 10
 )
 
 $ErrorActionPreference = 'Stop'
+
+# This script is invoked through `pwsh -File` in GitHub Actions. Native process
+# arguments arrive as strings, so normalize these flags explicitly instead of
+# relying on PowerShell's Boolean parameter binder to coerce CLI text.
+$isGeneratedAzureUrlFallbackAllowed = [bool]::Parse($AllowGeneratedAzureUrlFallback)
+$isGeneratedAzureUrlExpected = [bool]::Parse($GeneratedUrlIsExpected)
 
 $envSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-orderprocessing-$envSuffix" } else { $ResourceGroupName }
@@ -213,7 +221,7 @@ $azureGeneratedGatewayUrl = "https://$GatewayFqdn"
 $azureGeneratedUiUrl = "https://$UiFqdn"
 
 if ([string]::IsNullOrWhiteSpace($GatewayBaseUrl)) {
-    if (-not $AllowGeneratedAzureUrlFallback) {
+    if (-not $isGeneratedAzureUrlFallbackAllowed) {
         throw 'GatewayBaseUrl is required for Azure runtime smoke. Generated Azure Container Apps FQDN fallback is disabled.'
     }
 
@@ -221,7 +229,7 @@ if ([string]::IsNullOrWhiteSpace($GatewayBaseUrl)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($UiBaseUrl)) {
-    if (-not $AllowGeneratedAzureUrlFallback) {
+    if (-not $isGeneratedAzureUrlFallbackAllowed) {
         throw 'UiBaseUrl is required for Azure runtime smoke. Generated Azure Container Apps FQDN fallback is disabled.'
     }
 
@@ -231,12 +239,12 @@ if ([string]::IsNullOrWhiteSpace($UiBaseUrl)) {
 $GatewayBaseUrl = $GatewayBaseUrl.TrimEnd('/')
 $UiBaseUrl = $UiBaseUrl.TrimEnd('/')
 
-if ((($GatewayBaseUrl -like '*.azurecontainerapps.io*') -or ($UiBaseUrl -like '*.azurecontainerapps.io*')) -and -not $AllowGeneratedAzureUrlFallback) {
+if ((($GatewayBaseUrl -like '*.azurecontainerapps.io*') -or ($UiBaseUrl -like '*.azurecontainerapps.io*')) -and -not $isGeneratedAzureUrlFallbackAllowed) {
     throw "Configured public runtime smoke URLs must not use generated Azure Container Apps FQDNs unless AllowGeneratedAzureUrlFallback is true. GatewayBaseUrl='$GatewayBaseUrl'; UiBaseUrl='$UiBaseUrl'."
 }
 
 $fallbackUsed = ($GatewayBaseUrl -eq $azureGeneratedGatewayUrl) -or ($UiBaseUrl -eq $azureGeneratedUiUrl)
-if ($GeneratedUrlIsExpected -and ($Environment -ne 'dev' -or -not $AllowGeneratedAzureUrlFallback -or
+if ($isGeneratedAzureUrlExpected -and ($Environment -ne 'dev' -or -not $isGeneratedAzureUrlFallbackAllowed -or
     $GatewayBaseUrl -ne $azureGeneratedGatewayUrl -or $UiBaseUrl -ne $azureGeneratedUiUrl)) {
     throw 'Expected generated URL mode requires Azure dev and exact live Gateway/UI FQDN agreement.'
 }
@@ -293,7 +301,7 @@ $checks += Invoke-SmokeHttp -Name 'UI API proxy runtime configuration' -Url $uiP
 $completedUtc = [DateTimeOffset]::UtcNow
 $failed = @($checks | Where-Object { -not $_.Passed })
 $status = if ($failed.Count -eq 0) { 'PASS' } else { 'FAIL' }
-$deploymentVerdict = if ($failed.Count -gt 0) { 'FAIL' } elseif ($fallbackUsed -and -not $GeneratedUrlIsExpected) { 'PARTIAL' } else { 'PASS' }
+$deploymentVerdict = if ($failed.Count -gt 0) { 'FAIL' } elseif ($fallbackUsed -and -not $isGeneratedAzureUrlExpected) { 'PARTIAL' } else { 'PASS' }
 
 $summary = @()
 $summary += '## Phase 10 Azure Runtime Smoke'
@@ -315,7 +323,7 @@ $summary += "| Public UI Static Route | $uiUrl |"
 $summary += "| Public UI API Proxy | $uiProxyApiUrl |"
 $summary += "| Live Azure Generated Gateway | $azureGeneratedGatewayUrl |"
 $summary += "| Live Azure Generated UI | $azureGeneratedUiUrl |"
-$summary += "| Generated URL Mode Expected | $GeneratedUrlIsExpected |"
+$summary += "| Generated URL Mode Expected | $isGeneratedAzureUrlExpected |"
 $summary += "| Generated URL Used | $fallbackUsed |"
 $summary += "| Deployment Verdict | $deploymentVerdict |"
 $summary += ''
