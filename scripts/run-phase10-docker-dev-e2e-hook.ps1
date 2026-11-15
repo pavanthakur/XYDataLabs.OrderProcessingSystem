@@ -124,10 +124,12 @@ function Get-Phase10GitSnapshot {
         }
         $changes = @(& $git.Source --no-optional-locks -C $Directory status --porcelain=v1 --untracked-files=normal 2>$null)
         if ($LASTEXITCODE -ne 0) { throw 'Could not inspect Git worktree status.' }
-        return @{ commit = $commit[0]; worktree = $(if ($changes.Count -gt 0) { 'dirty' } else { 'clean' }) }
+        $identity=& node (Join-Path $Directory 'automation/node_modules/tsx/dist/cli.mjs') (Join-Path $Directory 'automation/src/cli/capture-payment-candidate.ts')
+        if($LASTEXITCODE -ne 0 -or [string]$identity -cnotmatch '^[a-f0-9]{64}$'){throw 'Source content identity unavailable.'}
+        return @{ commit = $commit[0]; worktree = $(if ($changes.Count -gt 0) { 'dirty' } else { 'clean' }); contentIdentity=[string]$identity }
     } catch {
         Write-Warning 'Git provenance is unavailable; candidate identity remains unverified.'
-        return @{ commit = $null; worktree = 'unknown' }
+        return @{ commit = $null; worktree = 'unknown'; contentIdentity='UNKNOWN' }
     }
 }
 
@@ -234,6 +236,7 @@ try {
     $handle=[IO.File]::Open($acceptanceLockPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     try{$bytes=[Text.Encoding]::UTF8.GetBytes($runRoot);$handle.Write($bytes,0,$bytes.Length);$acceptanceLockOwned=$true}finally{$handle.Dispose()}
     $runSummary.gitProvenance.start = Get-Phase10GitSnapshot -Directory $workspaceRoot
+    if($runSummary.gitProvenance.start.contentIdentity -cnotmatch '^[a-f0-9]{64}$'){throw 'A frozen source-content identity is required before Docker build/testing.'}
     if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Payment fixture recovery is required before deployment.' }
     if (@(Get-ChildItem (Join-Path $workspaceRoot 'TestResults') -Filter 'integration-active-*.lock').Count) { throw 'Active/interrupted integration execution must be reviewed before deployment.' }
     Assert-ScriptExists -Path $stackStartScript
@@ -318,6 +321,10 @@ finally {
     $profilePath=Join-Path $runRoot 'profile-summary.json'
     $deployment=if($runSummary.reusedExistingStack){'reused-ready-stack'}elseif(Test-Path $profilePath){(Get-Content $profilePath -Raw|ConvertFrom-Json).status}else{'not-run'}
     $runSummary.gitProvenance.finish = Get-Phase10GitSnapshot -Directory $workspaceRoot
+    if($runSummary.gitProvenance.finish.contentIdentity -cne $runSummary.gitProvenance.start.contentIdentity){
+        $runSummary.status='failed';$finalizationComplete=$false
+        $runSummary.error='Source contents changed during acceptance or identity became unavailable; affected evidence is not current-candidate acceptance.'
+    }
     $packet=@{status=$runSummary.status;runRoot=$runRoot;deployment=$deployment;steps=$steps;restoration=$restoration;storageExitCode=$runSummary.storageExitCode;deferrals=@('DW-023','DW-024');notCertified=@('fulfillment','monetary installments','deferred unresolved-order eligibility/recovery');note='Raw failed/partial evidence is preserved; capability gaps are not PASS.'}
     $packet|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $runRoot 'acceptance-packet.json')
     Write-RunSummary -Summary $runSummary

@@ -207,6 +207,7 @@ try{
     Run-Test 'docker-image-evidence' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-docker-image-evidence.ps1')
     Run-Test 'fixture-regression' 'pwsh' @('-NoProfile','-File','scripts/test-phase10-payment-fixture.ps1')
     Run-Test 'dotnet-inventory-regression' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-dotnet-inventory.ps1')
+    Run-Test 'paid-order-evidence' 'pwsh' @('-NoProfile','-File','scripts/tests/phase10-paid-order-evidence.test.ps1')
     foreach($name in @('Domain','Application','API','Gateway','Architecture')){
         $testCoverageRoot = Join-Path (Join-Path $artifact 'backend-coverage') $name
         if (Test-Path -LiteralPath $testCoverageRoot) { throw "Backend coverage output already exists for $name; refusing to overwrite evidence." }
@@ -291,7 +292,7 @@ try{
     Run-Test 'frontend-typecheck' 'npm' @('--prefix','frontend','run','typecheck')
     Push-Location (Join-Path $root 'automation')
     try{Run-Test 'automation-typecheck' 'npx' @('tsc','--noEmit','-p','tsconfig.json')}finally{Pop-Location}
-    foreach($suite in @('test:payment-evidence','test:razorpay-contact:browser','test:acceptance-coverage','test:verification-polling','test:callbacks','test:callbacks:browser','test:provider-challenges:browser')){
+    foreach($suite in @('test:payment-evidence','test:razorpay-contact:browser','test:acceptance-coverage','test:verification-polling','test:callbacks','test:callbacks:browser','test:provider-challenges:browser','test:verification-report','test:payment-scenarios','test:case-ledger','test:checkpoint-recovery','test:dry-run-reporting')){
         $suiteId=$suite.Replace(':','-')
         Run-Test $suiteId 'npm' @('--prefix','automation','run',$suite)
         Write-AutomationTestResults $suiteId (Join-Path $artifact "$suiteId.log") $results[-1].exitCode

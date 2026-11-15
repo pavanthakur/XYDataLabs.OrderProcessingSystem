@@ -2,18 +2,20 @@ import type { EvidenceStatus } from "./phase10-report.js";
 
 // Keep in sync with run-phase10-foundation-tests.ps1.
 export const FOUNDATION_CHECKS = [
-  "docker-safety", "docker-image-evidence", "fixture-regression", "dotnet-inventory-regression",
+  "docker-safety", "docker-image-evidence", "fixture-regression", "dotnet-inventory-regression", "paid-order-evidence",
   "Domain-tests", "Application-tests",
   "API-tests", "Gateway-tests", "Architecture-tests", "frontend-tests",
   "frontend-typecheck", "automation-typecheck", "test-payment-evidence",
   "test-acceptance-coverage", "test-verification-polling", "test-callbacks",
-  "test-callbacks-browser", "test-provider-challenges-browser", "messaging-probe-build"
+  "test-callbacks-browser", "test-provider-challenges-browser", "test-razorpay-contact-browser",
+  "test-verification-report", "test-payment-scenarios", "test-case-ledger", "test-checkpoint-recovery", "test-dry-run-reporting", "messaging-probe-build"
 ] as const;
 
-// These runner checks execute Node test suites but do not yet emit structured results.
+// Every listed suite must emit structured results reconciled to the versioned inventory.
 export const FOUNDATION_AUTOMATION_TEST_CHECKS = [
-  "test-payment-evidence", "test-acceptance-coverage", "test-verification-polling",
-  "test-callbacks", "test-callbacks-browser", "test-provider-challenges-browser"
+  "test-payment-evidence", "test-razorpay-contact-browser", "test-acceptance-coverage", "test-verification-polling",
+  "test-callbacks", "test-callbacks-browser", "test-provider-challenges-browser", "test-verification-report", "test-payment-scenarios",
+  "test-case-ledger", "test-checkpoint-recovery", "test-dry-run-reporting"
 ] as const;
 
 export interface FoundationReport {

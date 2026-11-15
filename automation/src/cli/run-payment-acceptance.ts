@@ -9,6 +9,7 @@ import {promisify} from "node:util";
 import {FileReportComposer} from "../report/file-report-composer.js";
 import {requiredChallengeVerified} from "../browser/payment-evidence.js";
 import {hasExactPaymentAcceptanceCoverage} from "./payment-acceptance-coverage.js";
+import {baselinePaymentScenarios} from "../contracts/payment-scenarios.js";
 
 // Deliberately local-only: no Azure provisioning, live payments or automatic reset.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../../..");
@@ -45,8 +46,7 @@ const scenarios:Array<{provider:string;threeDs:boolean;challengeRequired:boolean
     ? [{provider:"Razorpay",threeDs:false,challengeRequired:mode==="sandbox"},
        {provider:"OpenPay",threeDs:true,challengeRequired:mode==="sandbox"},
        {provider:"OpenPay",threeDs:false,challengeRequired:false}]
-    : [{provider:"Razorpay",threeDs:false,challengeRequired:false},
-       {provider:"OpenPay",threeDs:false,challengeRequired:false}];
+    : baselinePaymentScenarios.map(scenario=>({...scenario}));
 const selectedTenants=tenants.filter(tenant=>!onlyTenant || tenant===onlyTenant);
 const cases=manualSmoke
   ? selectedTenants.flatMap(tenant=>["Razorpay","OpenPay"].map(provider=>({tenant,scenario:scenarios.find(item=>item.provider===provider)!})))
@@ -105,6 +105,7 @@ for(const {tenant,scenario} of cases) {
     await writeFile(path.join(result.reportDirectory,"acceptance-executive-summary.md"),await new FileReportComposer().compose(result.rows));
     await writeFile(path.join(directory,"summary.json"),JSON.stringify({mode,status:"running",results},null,2));
     if(result.rows.some(row=>row.cleanupOutcome!=="reset")) throw new Error("Settings restoration failed; stop and recover from the manifest before continuing.");
+    if(!scenario.expectedOutcome && result.verificationSafety!=="established") throw new Error("Shared verification/SQL/identity safety is unproven; stopping further charges. Existing evidence is preserved.");
 }
 for(const tenant of selectedTenants){
   if(!negative && mode==="sandbox") results.push({tenant,provider:"Razorpay",threeDs:true,status:"blocked",reason:"S2S merchant entitlement has not been confirmed; no direct card submission attempted."});

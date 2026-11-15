@@ -4,6 +4,7 @@ import path from "node:path";
 import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { VerificationAdapter, VerificationRequest, VerificationResult } from "../contracts/verification-adapter.js";
 import {pollVerification} from "./verification-polling.js";
+import {validatePaymentVerificationReport,verificationSafetyEstablished} from "./payment-verification-report.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDirectory, "../../..");
@@ -36,20 +37,21 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       request.profile,
       "-RunPrefix",
       runAnchor,
+      "-OrderReferenceId",
+      request.orderReferenceId ?? "",
       "-OutputFormat",
       "Json"
     ],timeoutMs);
 
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
-    const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
-    const hasFailure = outcomes.includes("FAIL");
-    const hasInconclusive = outcomes.includes("INCONCLUSIVE");
+    const findings = validatePaymentVerificationReport(rawReport, request);
 
     return {
-      outcome: hasFailure || hasInconclusive ? "failed" : "passed",
-      summary: `Physical verification completed for ${runAnchor}.`,
+      outcome: findings.length ? "failed" : "passed",
+      summary: findings.length ? findings.join(" ") : `Physical verification completed for ${runAnchor}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
+      ,safetyEstablished:verificationSafetyEstablished(rawReport,request)
     };
   }
 
@@ -111,15 +113,14 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const stdout = await this.invokePowerShell(argumentsList);
 
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
-    const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
-    const hasFailure = outcomes.includes("FAIL");
-    const hasInconclusive = outcomes.includes("INCONCLUSIVE");
+    const findings = validatePaymentVerificationReport(rawReport, request);
 
     return {
-      outcome: hasFailure || hasInconclusive ? "failed" : "passed",
-      summary: `Azure verification completed for ${request.runPrefix}.`,
+      outcome: findings.length ? "failed" : "passed",
+      summary: findings.length ? findings.join(" ") : `Azure verification completed for ${request.runPrefix}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
+      ,safetyEstablished:verificationSafetyEstablished(rawReport,request)
     };
   }
 
@@ -147,7 +148,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
 
       child.on("error", (error) => {
         if(timer) clearTimeout(timer);
-        reject(error);
+        reject(new Error("Verification process could not start; raw diagnostics omitted."));
       });
 
       child.on("exit", (exitCode) => {
@@ -157,7 +158,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
           return;
         }
 
-        reject(new Error(stderr.trim() || `PowerShell verification exited with code ${exitCode}.`));
+        reject(new Error(`PowerShell verification exited with code ${exitCode}; raw diagnostics omitted. Shared safety is not established; no charge is retried.`));
       });
     });
   }

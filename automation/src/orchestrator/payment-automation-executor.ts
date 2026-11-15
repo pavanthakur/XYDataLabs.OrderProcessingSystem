@@ -17,6 +17,8 @@ import { buildCustomerOrderId, buildRunPrefix } from "../support/customer-order-
 import { PowerShellVerificationAdapter } from "../verification/powershell-verification-adapter.js";
 import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
 import { assertResumeSafe, candidateIdentity, matrixBinding, readCheckpoint, saveCheckpoint, type MatrixCheckpoint } from "../support/azure-matrix-checkpoint.js";
+import {recordCaseProgress,saveCaseLedger,verificationOnlyRecoveryEligible,type PaymentCaseLedger} from "../support/payment-case-ledger.js";
+import type {VerificationRequest} from "../contracts/verification-adapter.js";
 
 export interface ExecutePaymentAutomationRunOptions {
   target: string;
@@ -44,6 +46,7 @@ export interface ExecutePaymentAutomationRunOptions {
   challengeRequired?: boolean;
   expectedOutcome?: "failure" | "cancelled";
   resumeCheckpoint?: string;
+  continueAfterVerificationFailure?: boolean;
 }
 
 export interface PaymentAutomationRunOutput {
@@ -52,6 +55,7 @@ export interface PaymentAutomationRunOutput {
   reportDirectory: string;
   rows: ExecutiveSummaryRow[];
   verificationSummary: string;
+  verificationSafety?: "established" | "unknown";
   operatorAuthPreflight?: { status: "PASS" | "FAIL"; startedUtc: string; finishedUtc: string; evidence: string; error?: string };
 }
 
@@ -156,22 +160,27 @@ export async function executePaymentAutomationRun(
 
   const rows: ExecutiveSummaryRow[] = [];
   const verificationSummaries: string[] = [];
+  const verificationSafetySignals:boolean[]=[];
   const checkpointEnabled = target.runtime === "azure" && options.operatorAssistedEntra && !options.authPreflightOnly && !options.dryRun;
   if (options.resumeCheckpoint && !checkpointEnabled) throw new Error("Resume requires the headed Azure-dev payment matrix.");
   const caseKey = (item: ExecutionItem) => `${item.tenantCode.toLowerCase()}|${(item.paymentProviderCode ?? "resolved").toLowerCase()}`;
   const checkpointPath = path.join(reportDirectory, "checkpoint.json");
-  const binding = checkpointEnabled ? matrixBinding({
-    candidate: await candidateIdentity(path.resolve(automationRoot, "..")),
+  const provenance=checkpointEnabled?{
+    candidate:await candidateIdentity(path.resolve(automationRoot,"..")),
     deployment: process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY ?? "UNKNOWN",
-    settings: process.env.XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY ?? "UNKNOWN",
+    settings: process.env.XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY ?? "UNKNOWN"
+  }:undefined;
+  const binding = checkpointEnabled ? matrixBinding({
+    ...provenance,
     target, topology: tenantTopology, providers: providersForCheckpoint(options), threeDs: options.threeDs
   }) : "";
-  let checkpoint: MatrixCheckpoint = { schemaVersion: 1, binding, cases: [] };
+  let checkpoint: MatrixCheckpoint = { schemaVersion: 1, binding, cases: [],provenance,plannedKeys:executionItems.map(caseKey) };
   if (options.resumeCheckpoint) {
     if (!process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY || !process.env.XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY) throw new Error("Deployment/settings identity is UNKNOWN; resume through the operator wrapper only.");
     checkpoint = await readCheckpoint(options.resumeCheckpoint, path.resolve(automationRoot, "../TestResults/Playwright"));
     assertResumeSafe(checkpoint, binding, executionItems.map(caseKey));
-    rows.push(...checkpoint.cases.map((item) => item.row!));
+    rows.push(...checkpoint.cases.map((item) => ({...item.row!,executionEvidence:item.row!.executionEvidence==="read-only-reconciled"?"read-only-reconciled" as const:"carried-forward" as const})));
+    verificationSummaries.push(`Carried forward ${rows.length} previously verified/restored receipts under unchanged identity; these are not newly submitted payments.`);
     log(`Resume: preserving ${rows.length} verified/restored case receipts. No prior payment will be submitted again.`);
   }
   if (checkpointEnabled) await saveCheckpoint(checkpointPath, checkpoint);
@@ -265,6 +274,13 @@ export async function executePaymentAutomationRun(
     let fixtureIds: string[] = [];
     let provisioner: PaymentFixtureProvisioner | undefined;
     let stopAfterCurrentItem = false;
+    let verificationRequest:VerificationRequest|undefined;
+    let caseVerificationSafety=false;
+    const ledgerPath=path.join(tenantDiagnosticsDirectory,"case-ledger.json");
+    const ledger:PaymentCaseLedger={schemaVersion:1,tenantCode:executionItem.tenantCode,provider:paymentProvider,runtimeTarget:target.key,
+      runPrefix:executionItem.executionRunPrefix,startedUtc:tenantStartedAt.toISOString(),mutation:"preparing",journey:"pending",verification:"pending",restoration:"pending"};
+    const ledgerEnabled=!options.dryRun&&!options.authPreflightOnly;
+    if(ledgerEnabled){await mkdir(tenantDiagnosticsDirectory,{recursive:true});await saveCaseLedger(ledgerPath,ledger);}
 
     try {
       if (!options.dryRun && executionItem.paymentProviderCode && (executionItem.shouldPrepareProviderFixture || options.threeDs !== undefined)) {
@@ -307,6 +323,15 @@ export async function executePaymentAutomationRun(
             manualEntry: options.manualEntry,
             expectedOutcome: options.expectedOutcome,
             signal:journeyAbort.signal,
+            onProgress:ledgerEnabled?async progress=>{
+              recordCaseProgress(ledger,progress);
+              await saveCaseLedger(ledgerPath,ledger);
+              if(progress.orderId!==undefined) orderId=progress.orderId;
+              if(progress.customerOrderId) customerOrderId=progress.customerOrderId;
+              if(progress.orderReferenceId) orderReferenceId=progress.orderReferenceId;
+              if(progress.amount!==undefined) orderAmount=progress.amount;
+              if(progress.currency) orderCurrencyCode=progress.currency;
+            }:undefined,
             logger: (message) => {
               log(`[${executionItem.tenantCode}] ${message}`);
             }
@@ -338,7 +363,7 @@ export async function executePaymentAutomationRun(
             log(
               `[${executionItem.tenantCode}] Verification anchor customerOrderId=${customerOrderId} runPrefix=${executionItem.executionRunPrefix}.`
             );
-            const verificationResult = await verificationAdapter.execute({
+            verificationRequest={
               runtimeTarget: target.key,
               runtime: target.runtime,
               environment: target.environment,
@@ -351,9 +376,12 @@ export async function executePaymentAutomationRun(
               startedUtc: tenantStartedAt.toISOString(),
               finishedUtc: new Date().toISOString(),
               sqlAuthenticationMode: options.operatorAssistedEntra ? "entra" : "key-vault"
-            });
+            };
+            const verificationResult = await verificationAdapter.execute(verificationRequest);
 
             verificationOutcome = verificationResult.outcome;
+            caseVerificationSafety=verificationResult.safetyEstablished===true;
+            verificationSafetySignals.push(caseVerificationSafety);
             if (verificationOutcome !== "passed" && !options.allowPartialExecution) stopAfterCurrentItem = true;
             verificationSummaries.push(verificationResult.summary);
 
@@ -370,6 +398,7 @@ export async function executePaymentAutomationRun(
             );
           }
           catch (error) {
+            verificationSafetySignals.push(false);
             verificationOutcome = "failed";
             const verificationMessage = error instanceof Error ? error.message : "Verification failed.";
             verificationSummaries.push(`Verification failed for ${executionItem.tenantCode}: ${verificationMessage}`);
@@ -414,6 +443,7 @@ export async function executePaymentAutomationRun(
         journeyOutcome,
         verificationOutcome,
         cleanupOutcome,
+        executionEvidence:options.dryRun?"planned":"fresh",
         customerOrderId,
         orderId,
         orderReferenceId,
@@ -428,6 +458,17 @@ export async function executePaymentAutomationRun(
         paymentProvider
         ,...paymentEvidence
       });
+
+      if(ledgerEnabled){
+        const row=rows.at(-1)!;
+        ledger.journey=row.journeyOutcome==="completed"?"completed":"blocked";
+        ledger.verification=row.verificationOutcome==="passed"?"passed":"blocked";
+        ledger.restoration=row.cleanupOutcome==="reset"||row.cleanupOutcome==="not-applicable"?"passed":"blocked";
+        ledger.finishedUtc=row.finishedUtc;
+        ledger.row={...row,outcomeMessage:"See original journey report.",errorDetail:"",evidenceReference:"Durable case ledger; not a new submission."};
+        await saveCaseLedger(ledgerPath,ledger);
+        await writeFile(path.join(reportDirectory,"partial-summary.json"),JSON.stringify({runId,rows},null,2),"utf8");
+      }
 
       if (checkpointEnabled) {
         const row = rows.at(-1)!;
@@ -446,6 +487,11 @@ export async function executePaymentAutomationRun(
             outcomeMessage: "Previously verified sandbox case; see original runId evidence.", errorDetail: "",
             evidenceReference: "Preserved verified/restored checkpoint receipt; not a newly executed payment."
           };
+        } else if(verificationOnlyRecoveryEligible(ledger) && verificationRequest){
+          receipt.state="verification-pending";
+          receipt.row=ledger.row;
+          receipt.request=verificationRequest;
+          receipt.ledgerPath=path.relative(reportDirectory,ledgerPath);
         }
         await saveCheckpoint(checkpointPath, checkpoint);
         await writeFile(path.join(reportDirectory, "partial-summary.json"), JSON.stringify({ runId, rows }, null, 2), "utf8");
@@ -454,6 +500,17 @@ export async function executePaymentAutomationRun(
       log(
         `Tenant summary: ${executionItem.tenantCode} | provider=${paymentProvider} | tier=${executionItem.tenantTier} | journey=${journeyOutcome} | verification=${verificationOutcome} | cleanup=${cleanupOutcome}.`
       );
+    }
+
+    if(stopAfterCurrentItem && options.continueAfterVerificationFailure && caseVerificationSafety && verificationOnlyRecoveryEligible(ledger) && ledger.verification==="blocked"){
+      try {
+        const health=await paymentJourneyRunner.execute({tenantCode:executionItem.tenantCode,target,customerOrderId:"not-created",
+          sandboxOtpCode:options.sandboxOtpCode,headless:false,expectedAdapterMode:"sandbox",operatorAssistedEntra:true,
+          reuseEntraSession:true,authPreflightOnly:true,retainOperatorSessionAfterAuthPreflight:true,logger:log});
+        if(health.journeyOutcome!=="auth-preflight-passed") throw new Error("Authenticated safety recheck failed.");
+        stopAfterCurrentItem=false;
+        log("Payment is confirmed and settings restored; verification remains BLOCKED. Authenticated safety recheck passed; continuing independent cases without resubmission.");
+      }catch{log("Authentication/shared safety could not be revalidated; all further submissions remain stopped.");}
     }
 
     if (stopAfterCurrentItem) {
@@ -496,6 +553,7 @@ export async function executePaymentAutomationRun(
     reportDirectory,
     rows,
     verificationSummary,
+    verificationSafety:verificationSafetySignals.length>0&&verificationSafetySignals.every(Boolean)?"established":"unknown",
     ...(operatorAuthPreflight ? { operatorAuthPreflight } : {})
   };
 

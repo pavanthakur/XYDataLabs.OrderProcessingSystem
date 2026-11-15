@@ -109,6 +109,7 @@ param(
 )
 
 $requestedTenantCode = $TenantCode
+. (Join-Path $PSScriptRoot 'phase10-paid-order-evidence.ps1')
 if (($PSBoundParameters.ContainsKey('StartedUtc')) -xor ($PSBoundParameters.ContainsKey('FinishedUtc'))) {
     throw 'StartedUtc and FinishedUtc must be supplied together.'
 }
@@ -1938,7 +1939,8 @@ foreach ($chargeEvent in $apiChargeEvents) {
         DbStatus = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'Status') } else { '' }
         DbStage = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'ThreeDSecureStage') } else { '' }
         ThreeDSEnabled = $chargeThreeDsEnabled
-        UiCallbackExpected = ($chargeThreeDsEnabled -eq 1) -and (-not ($chargeEvent.ChargeId -match '^order_'))
+        # Positive payment journeys require callback evidence independently of configured 3DS.
+        UiCallbackExpected = $true
         UiCallbackLogged = ((Get-CollectionCount -Value $uiMatches) -gt 0)
         UiCorrelationMode = $uiCorrelationMode
         UiEventNames = @($uiEventNames)
@@ -1999,6 +2001,19 @@ $allHistoryRows = @(@($q5Shared) + @($q5Dedicated) | Sort-Object Tenant, Custome
 foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
     $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
     $tenantRows = @($allRows | Where-Object { $_.Tenant -eq $tenantCode })
+    $businessTenant=@($tenantTopology | Where-Object TenantCode -eq $tenantCode)
+    if($businessTenant.Count -ne 1){throw 'Tenant database resolution is ambiguous.'}
+    $proofDatabase=if($businessTenant[0].TenantTier -eq 'Dedicated'){$businessTenant[0].DedicatedDatabaseName}else{$sharedDbName}
+    $paidProof=Get-Phase10PaidOrderEvidence -TenantCode $tenantCode -CustomerOrderIds @($expectedOrdersByTenant[$tenantCode]) -ExpectedReference $OrderReferenceId -Query {
+        param($query) Invoke-AzureSqlQuery -Database $proofDatabase -Query $query
+    }
+    $checks["Paid order [$tenantCode]"]=Convert-CheckResult -Expected ([string]$paidProof.Expected) -Actual ([string]$paidProof.Verified) -Outcome $(if($paidProof.Passed){'PASS'}else{'FAIL'})
+    $successfulOrders = @($expectedOrdersByTenant[$tenantCode] | Where-Object {
+        $expectedOrder = $_
+        $charges = @($tenantRows | Where-Object { $_.CustomerOrderId -eq $expectedOrder -and $_.TransactionType -eq 'charge' })
+        $charges.Count -eq 1 -and $charges[0].Status -eq 'completed' -and [string]$charges[0].OK -in @('True','1')
+    })
+    $checks["Successful charge [$tenantCode]"] = Convert-CheckResult -Expected ([string]$expectedOrdersByTenant[$tenantCode].Count) -Actual ([string]$successfulOrders.Count) -Outcome $(if ($successfulOrders.Count -gt 0 -and $successfulOrders.Count -eq $expectedOrdersByTenant[$tenantCode].Count) { 'PASS' } else { 'FAIL' })
     $expectedOrderCount = (Get-CollectionCount -Value $expectedOrdersByTenant[$tenantCode])
     $tenantRowCount = (Get-CollectionCount -Value $tenantRows)
     $historyIntegrity = Get-HistoryIntegrityForTenant -TenantCode $tenantCode -TransactionRows $allRows -HistoryRows $allHistoryRows
@@ -2041,6 +2056,9 @@ else {
 }
 
 $report = [PSCustomObject] @{
+    SchemaVersion = 1
+    EvidenceKind = 'payment-correlation'
+    GeneratedUtc = [DateTimeOffset]::UtcNow.ToString('o')
     Environment = $Environment
     Runtime = 'azure'
     RunPrefix = $selectedRunPrefix

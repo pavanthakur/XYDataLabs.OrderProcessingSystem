@@ -76,7 +76,7 @@ test("automation suites require exact versioned inventory identities and consist
   assert.equal(normalizeAutomationSuite({ ...valid, complete: false, tests: valid.tests.map((item, index) => index
     ? { ...item, status: "skipped" } : item) }, suiteId, automationInventorySha256).status, "PARTIAL");
   assert.equal(normalizeAutomationSuite(undefined, suiteId, automationInventorySha256).status, "BLOCKED");
-  assert.equal(normalizeAutomationSuites({}, automationInventorySha256).length, 6);
+  assert.equal(normalizeAutomationSuites({}, automationInventorySha256).length, FOUNDATION_AUTOMATION_TEST_CHECKS.length);
 });
 
 test("Coverlet coverage requires valid XML, bounded counts and a passing same-window suite", () => {
@@ -280,7 +280,7 @@ test("complete packet remains blocked until independent L5-R gates are implement
   assert.equal(result.steps.length, DOCKER_PACKET_STEPS.length);
   assert.equal(result.restoration, "PASS");
   assert.equal(result.storage, "PASS");
-  assert.equal(result.issues.length, 14);
+  assert.equal(result.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 8);
   assert.match(renderPhase10Report(result), /cannot certify/);
 });
 
@@ -288,22 +288,22 @@ test("Git provenance is allowlisted, provisional, and never inferred from histor
   const commit = "a".repeat(40);
   const result = normalizePhase10Packet(packet, {
     ...summary, gitProvenance: {
-      start: { commit, worktree: "dirty", extra: "PRIVATE_MARKER" },
+      start: { commit, worktree: "dirty", contentIdentity:"c".repeat(64),extra: "PRIVATE_MARKER" },
       finish: { commit: "b".repeat(64), worktree: "clean" }
     }
   });
   assert.deepEqual(result.git, {
-    start: { commit, worktree: "DIRTY" }, finish: { commit: "b".repeat(64), worktree: "CLEAN" }
+    start: { commit, worktree: "DIRTY",contentIdentity:"c".repeat(64) }, finish: { commit: "b".repeat(64), worktree: "CLEAN",contentIdentity:null }
   });
   assert.match(renderPhase10Report(result), /do not identify built or running images/);
   assert.doesNotMatch(renderPhase10Report(result), /PRIVATE_MARKER/);
   const malformed = normalizePhase10Packet(packet, {
     ...summary, gitProvenance: { start: { commit: "<script>", worktree: "clean<script>" } }
   });
-  assert.deepEqual(malformed.git.start, { commit: null, worktree: "UNKNOWN" });
-  assert.deepEqual(malformed.git.finish, { commit: null, worktree: "UNKNOWN" });
+  assert.deepEqual(malformed.git.start, { commit: null, worktree: "UNKNOWN",contentIdentity:null });
+  assert.deepEqual(malformed.git.finish, { commit: null, worktree: "UNKNOWN",contentIdentity:null });
   assert.doesNotMatch(renderPhase10Report(malformed), /<script>/);
-  assert.deepEqual(normalizePhase10Packet(packet, summary).git.start, { commit: null, worktree: "UNKNOWN" });
+  assert.deepEqual(normalizePhase10Packet(packet, summary).git.start, { commit: null, worktree: "UNKNOWN",contentIdentity:null });
 });
 
 test("Docker image identities are validated, rendered escaped, and never inferred when absent", () => {
@@ -337,7 +337,7 @@ test("suite selection is separate from step outcome and unknown selection is exp
   assert.equal(deterministic.steps.find(step => step.name === "sandbox-payments")?.selection, "NOT-SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "payments-deterministic")?.selection, "SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "persistence")?.selection, "UNKNOWN");
-  assert.equal(deterministic.issues.length, 14);
+  assert.equal(deterministic.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 8);
   const unknown = normalizePhase10Packet(packet, { ...summary, paymentSuite: "unexpected" });
   assert.equal(unknown.paymentSuite, "UNKNOWN");
   assert.equal(unknown.steps.find(step => step.name === "sandbox-payments")?.selection, "UNKNOWN");
@@ -372,8 +372,8 @@ test("integration and frontend results are reconciled without exposing raw test 
 });
 
 test("structured source inventory displays bounded anonymous reconciled outcomes", () => {
-  assert.equal(FOUNDATION_AUTOMATION_TEST_CHECKS.length, 6);
-  assert.equal(new Set(FOUNDATION_AUTOMATION_TEST_CHECKS).size, 6);
+  assert.equal(FOUNDATION_AUTOMATION_TEST_CHECKS.length, 12);
+  assert.equal(new Set(FOUNDATION_AUTOMATION_TEST_CHECKS).size, FOUNDATION_AUTOMATION_TEST_CHECKS.length);
   assert.ok(FOUNDATION_AUTOMATION_TEST_CHECKS.every(name => FOUNDATION_CHECKS.some(check => check === name)));
   const states = [...Array<string>(100).fill("passed"), "failed", "pending", "todo"];
   const sanitized = { schema: "phase10-vitest-sanitized-v1", startTime: Date.parse(window.startedUtc),
@@ -407,7 +407,7 @@ test("structured source inventory displays bounded anonymous reconciled outcomes
     { ...additional, frontend: sanitized, integrationDuplicate: true });
   const html = renderPhase10Report(result);
   assert.match(html, /These fixed sources are only a subset of Phase 10 suites/);
-  assert.match(html, /Six automation suites reconcile against a versioned expected-test inventory/);
+  assert.match(html, /12 automation suites reconcile against a versioned expected-test inventory/);
   assert.match(html, /<td>test-payment-evidence<\/td><td>PASS<\/td><td>BLOCKED<\/td><td>UNAVAILABLE<\/td>/);
   assert.match(html, /test-callbacks-browser: UNAVAILABLE/);
   assert.match(html, /omitted tests cannot be detected from counts alone/);
@@ -620,12 +620,12 @@ test("inventory reconciliation counts statuses and selection independently witho
   assert.ok(result.issues.includes("Packet reports PASS with an incomplete or unsuccessful selected payment suite."));
   assert.match(html, /Docker packet steps: 14; PASS: 11; FAIL: 0; PARTIAL: 0; BLOCKED: 1; SKIPPED: 0; NOT-RUN: 2; DEFERRED: 0/);
   assert.match(html, /Packet selection: SELECTED: 1; NOT-SELECTED: 2; UNKNOWN: 11/);
-  assert.match(html, /Foundation runner checks: 19; PASS: 19; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 0; DEFERRED: 0/);
+  assert.ok(html.includes(`Foundation runner checks: ${FOUNDATION_CHECKS.length}; PASS: ${FOUNDATION_CHECKS.length}; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 0; DEFERRED: 0`));
   assert.match(html, /not individual test totals or acceptance gates/);
   assert.match(html, /Duplicates are BLOCKED; failures in conflicting entries still affect the overall result/);
   const empty = renderPhase10Report(normalizePhase10Packet(null, null));
   assert.match(empty, /Docker packet steps: 14; PASS: 0; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 14; DEFERRED: 0/);
-  assert.match(empty, /Foundation runner checks: 19; PASS: 0; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: 19; DEFERRED: 0/);
+  assert.ok(empty.includes(`Foundation runner checks: ${FOUNDATION_CHECKS.length}; PASS: 0; FAIL: 0; PARTIAL: 0; BLOCKED: 0; SKIPPED: 0; NOT-RUN: ${FOUNDATION_CHECKS.length}; DEFERRED: 0`));
   const deferred = normalizePhase10Packet({ ...packet, steps: packet.steps.map(step =>
     step.name === "order-continuation" ? { ...step, status: "deferred" } : step) }, summary, foundations, trxInputs, additional);
   assert.equal(deferred.steps.find(step => step.name === "order-continuation")?.status, "DEFERRED");
@@ -765,11 +765,12 @@ test("CLI reads the same-run foundation summary without changing input", async (
     assert.match(html, /Integration TRX<\/h2><p>Status: PASS; total: 1/);
     assert.match(html, /Integration test-process coverage<\/h2><p>Lines: 5\/10 \(50\.00%\); branches: 2\/4 \(50\.00%\)/);
     assert.match(html, /Frontend Vitest<\/h2><p>Status: PASS; total: 1/);
-    assert.match(html, /Versioned automation cases: 21 expected; 21 observed/);
+    const expectedAutomationCount=FOUNDATION_AUTOMATION_TEST_CHECKS.reduce((sum,id)=>sum+expectedAutomationTests(id).length,0);
+    assert.ok(html.includes(`Versioned automation cases: ${expectedAutomationCount} expected; ${expectedAutomationCount} observed`));
     assert.match(html, /Discovered \.NET cases: 6 expected; 6 observed across five foundation suites plus integration/);
     assert.match(html, /Domain foundation: showing 1 of 1 outcomes/);
     assert.match(html, /test-callbacks: showing 6 of 6 outcomes/);
-    assert.match(html, /Six automation suites reconcile against a versioned expected-test inventory/);
+    assert.match(html, /12 automation suites reconcile against a versioned expected-test inventory/);
     assert.match(html, /test-callbacks<\/td><td>PASS<\/td><td>PASS/);
     assert.match(html, /Lines: 3\/4 \(75\.00%\); branches: 1\/2 \(50\.00%\)/);
     assert.match(html, /Domain<\/td><td>3\/4 \(75\.00%\)<\/td><td>1\/2 \(50\.00%\)/);

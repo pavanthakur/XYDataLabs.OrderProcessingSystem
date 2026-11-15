@@ -4,6 +4,13 @@
   "version": "0.0.0-placeholder",
   "type": "module",
   "scripts": {
+    "test:verification-report": "tsx --test src/verification/payment-verification-report.test.ts",
+    "test:payment-scenarios": "tsx --test src/contracts/payment-scenarios.test.ts",
+    "test:case-ledger": "tsx --test src/support/payment-case-ledger.test.ts",
+    "test:checkpoint-recovery": "tsx --test src/support/reconcile-payment-checkpoint.test.ts",
+    "test:dry-run-reporting": "tsx --test src/cli/dry-run-reporting.test.ts",
+    "reconcile:azure:checkpoint": "tsx src/cli/reconcile-azure-payment-checkpoint.ts",
+    "test:payment-verification-contract": "tsx --test src/verification/payment-verification-report.test.ts src/contracts/payment-scenarios.test.ts",
     "test:azure-operator-safety": "tsx --test src/support/azure-matrix-checkpoint.test.ts src/browser/local-browser-launch.test.ts",
     "report:phase10-preview": "tsx src/cli/render-phase10-preview.ts",
     "verify:phase10-completion": "tsx src/cli/verify-phase10-completion.ts",

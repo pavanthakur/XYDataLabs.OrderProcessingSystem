@@ -7,7 +7,7 @@ description: |
   pass/fail report.
 
   Azure mode must derive a shared logical run prefix, narrow UI callback analysis to callback-only
-  traces, and treat UI callbacks as required only for 3DS-enabled tenants. Docker/local mode uses
+  traces, and require positive callback evidence for successful baseline journeys independently of the configured 3DS flag. Docker/local mode uses
   the physical API log for backend evidence and browser-originated ui_payment telemetry instead of
   the legacy UI file log.
 
@@ -29,6 +29,8 @@ Log source depends on **runtime**: `docker`/`local` read the physical API log pl
 > **Guardrail:** Any Azure-specific narrowing, parsing, or callback expectations in this prompt apply
 > only to the `azure` runtime. Do not change the `docker` or `local` verification flow when updating
 > the App Insights path.
+
+> **Current Phase 10 contract:** run the maintained `scripts/verify-payment-run-physical.ps1` or `scripts/verify-payment-run-azure.ps1`, not the legacy SQL illustrations below. They emit versioned evidence with mandatory checks. Missing/empty/unknown/skipped checks cannot establish PASS. Positive acceptance requires completed successful charge, matching Paid order/terms, provider correlation and callback proof. The SQL examples below predate the `payments`/`orders` schemas and generic dedicated-tenant routing: do not execute hardcoded tenant IDs or `dbo.CardTransactions` examples against the current application. Resolve registry identity and business databases through the maintained scripts/configuration. A successful verifier process alone is not payment acceptance.
 
 ---
 
@@ -249,7 +251,7 @@ If no browser UI telemetry lines match the selected prefix, note this as a findi
 
 > **Note:** Both the API (`pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`) and the UI (`pavanthakur-orderprocessing-ui-xyapp-{ENV_TAG}`) send Serilog traces to App Insights via the `Serilog.Sinks.ApplicationInsights` sink. Query the UI by `cloud_RoleName has 'ui'` and the API by `cloud_RoleName has 'api'`.
 
-Query UI callback traces with a **callback-only** filter. Do not treat absence of a UI callback as failure for non-3DS tenants; callback evidence is required only when Step 4 shows `ThreeDSEnabled = 1` for that tenant.
+Query UI callback traces with a **callback-only** filter. Positive baseline payments require callback proof regardless of `ThreeDSEnabled`; the flag does not determine whether hosted checkout or the application callback publishes required telemetry.
 
 Query UI callback traces with:
 ```powershell
@@ -343,7 +345,7 @@ WHERE  ct.CustomerOrderId LIKE '<RUN_PREFIX>%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 ```
 
-**Expected:** 4 rows per payment (3DS=1) or 2 rows (3DS=0). See pre-flight table.
+**Expected:** provider-specific history integrity and terminal charge success; never infer an exact history-row count from the 3DS flag. Use the current versioned verifier checks.
 
 ### Q8 — Cross-tenant bleed (shared DB)
 
@@ -373,7 +375,7 @@ WHERE  ct.TenantId = 3
 ORDER BY ct.CustomerOrderId, ct.Id;
 ```
 
-**Expected:** 2 rows (same logic as Q2 for TenantC's 3DS state).
+**Expected:** the selected case's tokenization/charge records and one successful charge; use the maintained verifier, not a tenant-specific row-count assumption.
 
 ### Q5-B — TransactionStatusHistories (TenantC dedicated DB)
 
@@ -387,7 +389,7 @@ WHERE  ct.TenantId = 3
 ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 ```
 
-**Expected:** 4 rows (3DS=1) or 2 rows (3DS=0).
+**Expected:** unique valid histories agreeing with current transaction state; successful positive cases additionally require a completed charge and Paid order with matching terms.
 
 ### Q9-B — No TenantC bleed into shared DB (run on shared DB)
 
@@ -420,7 +422,7 @@ For each charge ID, confirm the UI telemetry received the callback **when a call
 
 Flag any charge ID that:
 - Is in the API log but **missing from the DB** → persistence failure
-- Is in the DB but **missing from the UI callback log when `ThreeDSEnabled = 1`** → possible UI/App Insights logging gap or missed callback
+- Is in the DB but **missing required positive-case UI callback evidence** → UI/App Insights logging or correlation gap; configured 3DS does not waive the gate
 - Has `Status ≠ completed` in the DB → incomplete payment flow
 
 ---
@@ -443,7 +445,7 @@ Output a consolidated pass/fail table:
 | Q5-B TenantC steps | 4 or 2 | … | ✅/❌ |
 | Q9-B TenantC bleed | 0 | … | ✅/❌ |
 | API log → DB charge IDs | all match | … | ✅/❌ |
-| UI telemetry → callbacks present where expected | 3DS tenants only | … | ✅/❌ |
+| UI telemetry → callbacks present where expected | All successful baseline journeys | … | ✅/❌ |
 
 When the verifier script is used, mirror its table-style summary in the chat response. Only surface raw JSON when the user explicitly asks for JSON or machine-readable output.
 

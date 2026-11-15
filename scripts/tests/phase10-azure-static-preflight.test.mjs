@@ -18,9 +18,16 @@ test('Azure operator checkpoint and launch safety regressions execute in hosted 
   const output = execFileSync(process.execPath, [
     fileURLToPath(new URL('../../automation/node_modules/tsx/dist/cli.mjs', import.meta.url)), '--test',
     fileURLToPath(new URL('../../automation/src/support/azure-matrix-checkpoint.test.ts', import.meta.url)),
+    fileURLToPath(new URL('../../automation/src/support/payment-case-ledger.test.ts', import.meta.url)),
+    fileURLToPath(new URL('../../automation/src/support/reconcile-payment-checkpoint.test.ts', import.meta.url)),
+    fileURLToPath(new URL('../../automation/src/verification/payment-verification-report.test.ts', import.meta.url)),
+    fileURLToPath(new URL('../../automation/src/contracts/payment-scenarios.test.ts', import.meta.url)),
+    fileURLToPath(new URL('../../automation/src/cli/dry-run-reporting.test.ts', import.meta.url)),
     fileURLToPath(new URL('../../automation/src/browser/local-browser-launch.test.ts', import.meta.url))
   ], { encoding: 'utf8', env: environment });
   assert.match(output, /# fail 0/);
+  const paidOrderOutput=execFileSync('pwsh',['-NoProfile','-File',fileURLToPath(new URL('./phase10-paid-order-evidence.test.ps1',import.meta.url))],{encoding:'utf8'});
+  assert.match(paidOrderOutput,/Paid-order evidence tests passed/);
 });
 
 test('read-only Razorpay order lookup is sandbox-only and does not route to the payment matrix', async () => {
@@ -402,7 +409,7 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
   assert.match(cli, /if \(operatorAssistedEntra\) tenantTimeoutMs = Math\.max\(tenantTimeoutMs, 420000\)/);
   assert.match(cli, /if \(authPreflightOnly && !operatorAssistedEntra\)/);
   assert.match(cli, /\(options\.authPreflightOnly \|\| options\.servicePreflightOnly\) \? "preflight-passed"/);
-  assert.match(cli, /executionMode: options\.servicePreflightOnly \? "service-preflight-only" : options\.authPreflightOnly \? "auth-preflight-only"/);
+  assert.match(cli, /executionMode: options\.dryRun \? "dry-run" : options\.servicePreflightOnly \? "service-preflight-only" : options\.authPreflightOnly \? "auth-preflight-only"/);
   const authPreflight = runner.indexOf('const accessProbe = await apiContext.get("/api/v1/Customer/GetAllCustomers"');
   const configurationPreflight = runner.indexOf('const paymentConfiguration = await this.resolvePaymentConfiguration');
   const mutation = runner.indexOf('const authoritativeOrder = request.manualEntry ? await this.createOrderThroughUi');

@@ -2,6 +2,82 @@
   "schema": "phase10-automation-test-inventory-v1",
   "suites": [
     {
+      "id": "test-razorpay-contact-browser",
+      "file": "src/browser/razorpay-contact-details.browser.test.ts",
+      "tests": [
+        "Razorpay contact step validates sandbox phone and advances once before card entry",
+        "Razorpay contact step fails closed if provider rejects the phone fixture",
+        "Razorpay contact-shaped form without a recognized heading is not mistaken for card entry",
+        "Razorpay contact form discovery checks all checkout frames before rejecting an unrelated contact-shaped scope"
+      ]
+    },
+    {
+      "id": "test-verification-report",
+      "file": "src/verification/payment-verification-report.test.ts",
+      "tests": [
+        "complete versioned check inventory passes for an arbitrary tenant",
+        "FAIL status fails closed",
+        "INCONCLUSIVE status fails closed",
+        "SKIP status fails closed",
+        "BLOCKED status fails closed",
+        "unknown status fails closed",
+        "empty status fails closed",
+        "null report cannot pass",
+        "empty report cannot pass",
+        "array report cannot pass",
+        "empty checks cannot pass",
+        "array checks cannot pass",
+        "unexpected-only checks cannot pass",
+        "omitted mandatory check cannot pass even when remaining checks pass",
+        "wrong schema, runtime, environment and missing provider ID block",
+        "untrusted diagnostic values never appear in findings",
+        "stale or wrong-run reports cannot satisfy a new case",
+        "pending cross-tenant or wrong-order charge correlation cannot pass",
+        "isolated telemetry gaps may continue but shared safety and money-state failures stop"
+      ]
+    },
+    {
+      "id": "test-payment-scenarios",
+      "file": "src/contracts/payment-scenarios.test.ts",
+      "tests": [
+        "baseline fixes provider/currency/UI entry consistently without naming tenants",
+        "dry-run reports prominently reject payment-acceptance interpretation"
+      ]
+    },
+    {
+      "id": "test-case-ledger",
+      "file": "src/support/payment-case-ledger.test.ts",
+      "tests": [
+        "order and submission intent survive independently of later verification",
+        "cannot skip intent, confirm without provider ID or submit twice",
+        "a confirmed payment with failed verification permits read-only recovery only after restoration"
+      ]
+    },
+    {
+      "id": "test-checkpoint-recovery",
+      "file": "src/support/reconcile-payment-checkpoint.test.ts",
+      "tests": [
+        "verification-only recovery promotes a copy without repeating a payment",
+        "a green command without required report evidence cannot promote recovery",
+        "recovery refuses changed candidate before verification",
+        "recovery refuses unrestored settings before verification",
+        "recovery refuses ambiguous submission before verification",
+        "recovery refuses mismatched terms before verification",
+        "recovery refuses cross-tenant anchors before verification",
+        "recovery refuses alternate credential mode before verification",
+        "recovery refuses duplicate cases before verification",
+        "recovery refuses missing provider ID before verification"
+      ]
+    },
+    {
+      "id": "test-dry-run-reporting",
+      "file": "src/cli/dry-run-reporting.test.ts",
+      "tests": [
+        "local-http dry run is labelled and cannot replace live pointers",
+        "docker-dev-http dry run is labelled and cannot replace live pointers"
+      ]
+    },
+    {
       "id": "test-payment-evidence",
       "file": "src/browser/payment-evidence.test.ts",
       "tests": [

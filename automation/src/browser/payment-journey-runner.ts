@@ -13,6 +13,8 @@ import { waitForCallbackOutcome } from "./callback-outcome.js";
 import {assertSandboxConfirmation,assertRuntimeMode} from "./payment-evidence.js";
 import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
 import { launchLocalBrowser } from "./local-browser-launch.js";
+import {paymentCurrency} from "../contracts/payment-scenarios.js";
+import type {PaymentCaseProgress} from "../support/payment-case-ledger.js";
 
 type AutomationScope = import("playwright").Page | import("playwright").Frame;
 type ScopeLocatorFactory = (scope: AutomationScope) => import("playwright").Locator;
@@ -66,6 +68,7 @@ export interface PaymentJourneyRequest {
   expectedThreeDs?: boolean;
   expectedOutcome?: "failure" | "cancelled";
   signal?: AbortSignal;
+  onProgress?: (progress:PaymentCaseProgress)=>Promise<void>;
 }
 
 export interface PaymentJourneyResult {
@@ -285,6 +288,8 @@ export class PaymentJourneyRunner {
         paymentConfiguration.activeProviderType,
         log);
       const customerOrderId = `ORDER-${authoritativeOrder.orderId}`;
+      await request.onProgress?.({stage:"order-persisted",customerOrderId,orderId:authoritativeOrder.orderId,
+        orderReferenceId:authoritativeOrder.orderReferenceId,amount:authoritativeOrder.totalPrice,currency:authoritativeOrder.currencyCode});
       const orderPaymentUrl =
         `${request.target.baseUrl}/customers/${authoritativeOrder.customerId}` +
         `/orders/${authoritativeOrder.orderId}/payment` +
@@ -348,6 +353,7 @@ export class PaymentJourneyRunner {
       await page.waitForFunction((button) => !(button as HTMLButtonElement).disabled, await submitButton.elementHandle(), {
         timeout: 30000
       }).catch(() => undefined);
+      await request.onProgress?.({stage:"submission-started"});
       await submitButton.click();
 
       let razorpayMockBankChallengeRan = false;
@@ -453,6 +459,9 @@ export class PaymentJourneyRunner {
       if (request.challengeRequired && (observedChallenge !== "presented" || challengeOutcome !== "passed")) challengeOutcome = "partial";
       if (callbackOutcome.state === "completed" && paymentConfiguration.adapterMode === "sandbox") {
         assertSandboxConfirmation(confirmation,{amount:authoritativeOrder.totalPrice,currency:authoritativeOrder.currencyCode});
+      }
+      if(callbackOutcome.state==="completed" && confirmation?.remoteStatusConfirmed && confirmation.isSuccess) {
+        await request.onProgress?.({stage:"provider-confirmed",providerPaymentId:confirmation.paymentId,providerOrderId:confirmation.providerOrderId});
       }
       if(callbackOutcome.state==="completed") {
         const orderApi=await playwrightRequest.newContext({baseURL:request.target.apiBaseUrl ?? request.target.baseUrl,
@@ -815,7 +824,7 @@ export class PaymentJourneyRunner {
     await customerLink.click();
     await page.getByRole("link", { name: "Create order", exact: true }).click();
     await page.getByRole("checkbox").first().check();
-    const currency = this.providersMatch(provider, "Razorpay") ? "INR" : "MXN";
+    const currency = paymentCurrency(provider);
     await page.getByLabel("Order currency").selectOption(currency);
     await page.getByRole("button", { name: "Create order", exact: true }).click();
     await page.waitForURL(url => /\/customers\/\d+\/orders\/\d+$/.test(url.pathname));
@@ -886,9 +895,7 @@ export class PaymentJourneyRunner {
         data: {
           customerId: customerPayload.data,
           productIds: [product.productId],
-          currencyCode: this.providersMatch(providerType, "Razorpay")
-            ? "INR"
-            : "MXN"
+          currencyCode: paymentCurrency(providerType)
         }
       });
       if (!createResponse.ok()) {
@@ -904,7 +911,7 @@ export class PaymentJourneyRunner {
       }
 
       const orderReferenceId = payload.data.orderReferenceId?.trim() || `ORDER-${payload.data.orderId}`;
-      const currencyCode = payload.data.currencyCode?.trim().toUpperCase() || (this.providersMatch(providerType, "Razorpay") ? "INR" : "MXN");
+      const currencyCode = payload.data.currencyCode?.trim().toUpperCase() || paymentCurrency(providerType);
 
       log(
         `Persisted order ${payload.data.orderId} for customer ${customerPayload.data} ` +

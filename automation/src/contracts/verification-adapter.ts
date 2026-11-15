@@ -21,6 +21,7 @@ export interface VerificationResult {
   summary: string;
   threeDsByTenant?: Partial<Record<string, ThreeDsSetting>>;
   rawReport?: unknown;
+  safetyEstablished?: boolean;
 }
 
 export interface VerificationAdapter {

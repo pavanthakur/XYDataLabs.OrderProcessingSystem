@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix','Reconcile')][string]$Mode,
     [Parameter(Mandatory)][guid]$ExpectedSubscriptionId,
     [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN,
     [string]$ResumeCheckpoint
@@ -10,8 +10,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if (-not [Environment]::UserInteractive -or $env:CI -eq 'true') { throw 'Run this headed operator command in your signed-in desktop terminal, not a hosted/non-interactive job.' }
-if ($ResumeCheckpoint -and $Mode -ne 'ProviderMatrix') { throw 'ResumeCheckpoint is available only for ProviderMatrix.' }
+if ($Mode -ne 'Reconcile' -and (-not [Environment]::UserInteractive -or $env:CI -eq 'true')) { throw 'Run this headed operator command in your signed-in desktop terminal, not a hosted/non-interactive job.' }
+if ($ResumeCheckpoint -and $Mode -eq 'AuthPreflight') { throw 'ResumeCheckpoint is available only for ProviderMatrix or Reconcile.' }
+if ($Mode -eq 'Reconcile' -and -not $ResumeCheckpoint) { throw 'Reconcile requires an existing ResumeCheckpoint; it never creates orders/payments or opens a browser.' }
 $targetCatalogPath = Join-Path $repoRoot 'automation/config/runtime-targets.json'
 $targetCatalog = Get-Content -LiteralPath $targetCatalogPath -Raw | ConvertFrom-Json
 $targets = @($targetCatalog.targets | Where-Object key -eq 'azure-dev')
@@ -90,14 +91,16 @@ else {
     $settingsHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($baseline)))
     $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--all-active-tenants','--provider','Razorpay','--provider','OpenPay','--tenant-timeout-ms','420000')
     if ($ResumeCheckpoint) { $matrixArgs += @('--resume-checkpoint',$ResumeCheckpoint) }
-    Write-Warning 'This mode first performs a no-charge Entra tenant/access preflight in the same in-memory browser session, then creates fresh orders and submits serial sandbox payments for every active tenant/provider pair. Continue only after the hosted OIDC provider-secret preflight and local SQL fixture inspection have passed.'
+    if($Mode -eq 'Reconcile'){Write-Host 'Read-only checkpoint recovery selected: no browser, new order or charge.'}
+    else {Write-Warning 'This mode first performs a no-charge Entra tenant/access preflight in the same in-memory browser session, then creates fresh orders and submits serial sandbox payments for every active tenant/provider pair. Continue only after the hosted OIDC provider-secret preflight and local SQL fixture inspection have passed.'}
 }
 
 Push-Location $repoRoot
 try {
     $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $deploymentHash
     $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $settingsHash
-    & npm --prefix automation run run:azure:matrix -- @matrixArgs
+    if($Mode -eq 'Reconcile'){ & npm --prefix automation run reconcile:azure:checkpoint -- --checkpoint $ResumeCheckpoint }
+    else { & npm --prefix automation run run:azure:matrix -- @matrixArgs }
     $matrixExit = $LASTEXITCODE
 }
 finally {

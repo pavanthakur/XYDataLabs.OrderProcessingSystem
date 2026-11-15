@@ -31,7 +31,8 @@ interface LocalMatrixOutput {
   startedIst: string;
   finishedIst: string;
   currentStep?: string;
-  status?: "running" | "passed" | "failed";
+  status?: "running" | "passed" | "failed" | "dry-run-complete";
+  executionMode: "payment-matrix" | "dry-run";
   targetCount: number;
   targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
@@ -79,8 +80,8 @@ async function main(): Promise<void> {
     ? path.join(phase10RunRoot, "matrix")
     : path.join(playrightRoot, environmentKey);
   const reportDirectory = path.join(environmentRoot, matrixRunId);
-  const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
-  const rootMarkerPath = path.join(playrightRoot, "latest-playwright-run.txt");
+  const latestPointerPath = path.join(environmentRoot, options.dryRun ? "latest-playwright-matrix-dry-run.txt" : "latest-playwright-matrix.txt");
+  const rootMarkerPath = path.join(playrightRoot, options.dryRun ? "latest-playwright-dry-run.txt" : "latest-playwright-run.txt");
   const runPlanPath = path.join(reportDirectory, "run-plan.txt");
   const startupLogPath = path.join(reportDirectory, "startup.log");
   const progressLogPath = path.join(reportDirectory, "progress.log");
@@ -95,6 +96,7 @@ async function main(): Promise<void> {
     startedIst: formatIstTimestamp(startedAt),
     finishedIst: formatIstTimestamp(startedAt),
     status: "running",
+    executionMode: options.dryRun ? "dry-run" : "payment-matrix",
     targetCount: 0,
     targets: options.targets,
     targetRuns: []
@@ -106,7 +108,7 @@ async function main(): Promise<void> {
   await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   try {
-    await appendStatus(environmentKey, "local-http-matrix", "started", `runDir=${reportDirectory}`);
+    if (!options.dryRun) await appendStatus(environmentKey, "local-http-matrix", "started", `runDir=${reportDirectory}`);
     await writeFile(runPlanPath, [
     "Local HTTP matrix sanity run",
     "Goal: confirm local tenant/provider discovery and browser/payment execution across the active matrix.",
@@ -205,7 +207,7 @@ async function main(): Promise<void> {
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
   matrixOutput.currentStep = "completed";
-  matrixOutput.status = hasFailures ? "failed" : "passed";
+  matrixOutput.status = hasFailures ? "failed" : options.dryRun ? "dry-run-complete" : "passed";
   matrixOutput.targetCount = targetRuns.length;
   matrixOutput.targetRuns = targetRuns;
 
@@ -237,14 +239,14 @@ async function main(): Promise<void> {
   await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] state=completed-matrix`);
 
   await writeRunMessage(startupLogPath, progressLogPath, JSON.stringify(matrixOutput, null, 2));
-  await appendStatus(environmentKey, "local-http-matrix", hasFailures ? "failed" : "passed", `reportDirectory=${reportDirectory}`);
+  if (!options.dryRun) await appendStatus(environmentKey, "local-http-matrix", hasFailures ? "failed" : "passed", `reportDirectory=${reportDirectory}`);
 
   if (hasFailures) {
     throw new Error("Local payment matrix completed with failed tenant journey(s).");
   }
   }
   catch (error) {
-    await appendStatus(environmentKey, "local-http-matrix", "failed", error instanceof Error ? error.message : "Local matrix failed");
+    if (!options.dryRun) await appendStatus(environmentKey, "local-http-matrix", "failed", error instanceof Error ? error.message : "Local matrix failed");
     throw error;
   }
 }

@@ -23,7 +23,7 @@ export const DOCKER_PACKET_STEPS = [
 
 export type EvidenceStatus = "PASS" | "FAIL" | "SKIPPED" | "BLOCKED" | "DEFERRED" | "NOT-RUN" | "PARTIAL";
 export type PacketStep = { name: string; status: EvidenceStatus; selection: "SELECTED" | "NOT-SELECTED" | "UNKNOWN" };
-export type GitSnapshot = { commit: string | null; worktree: "CLEAN" | "DIRTY" | "UNKNOWN" };
+export type GitSnapshot = { commit: string | null; worktree: "CLEAN" | "DIRTY" | "UNKNOWN"; contentIdentity:string|null };
 export interface Phase10Report {
   version: typeof PHASE10_REPORT_VERSION;
   runId: string | null;
@@ -80,7 +80,8 @@ function gitSnapshot(value: unknown): GitSnapshot {
   const commit = typeof snapshot?.commit === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(snapshot.commit)
     ? snapshot.commit : null;
   const worktree = snapshot?.worktree === "clean" ? "CLEAN" : snapshot?.worktree === "dirty" ? "DIRTY" : "UNKNOWN";
-  return { commit, worktree };
+  const contentIdentity=typeof snapshot?.contentIdentity==="string"&&/^[a-f0-9]{64}$/.test(snapshot.contentIdentity)?snapshot.contentIdentity:null;
+  return { commit, worktree,contentIdentity };
 }
 
 export function normalizePhase10Packet(packetInput: unknown, summaryInput: unknown, foundationInput?: unknown,
@@ -325,6 +326,7 @@ export function renderPhase10Report(report: Phase10Report, coverageSummaryAvaila
 <h2>Recorded Git provenance</h2>
 <p>At start: ${report.git.start.commit ?? "UNKNOWN"}; worktree: ${report.git.start.worktree}.</p>
 <p>At finish: ${report.git.finish.commit ?? "UNKNOWN"}; worktree: ${report.git.finish.worktree}.</p>
+<p>Source-content hash at start: ${report.git.start.contentIdentity ?? "UNKNOWN"}; at finish: ${report.git.finish.contentIdentity ?? "UNKNOWN"}. These snapshots do not replace clean-commit or image-provenance requirements.</p>
 <p>These are Git observations only. They do not identify built or running images, prove the contents of a dirty worktree, or establish that files remained unchanged during the run.</p>
 <p>Profile: ${report.profile}; payment suite: ${report.paymentSuite}; started: ${report.startedUtc ?? "UNKNOWN"}; finished: ${report.finishedUtc ?? "UNKNOWN"}.</p>
 <p>Fixture restoration: ${report.restoration}; storage exit evidence: ${report.storage}.</p>
@@ -338,7 +340,7 @@ ${coverageSummaryAvailable ? '<p><a href="phase10-coverage-summary.json">Sanitiz
 <p>These inventories do not include every Phase 10 suite, test or independent gate and must not be added together.</p>
 <h2>Docker packet steps</h2><p>Selection is shown only where the run summary records it; UNKNOWN does not mean optional.</p><table><thead><tr><th>Step</th><th>Selection</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
 <h2>Foundation checks</h2><p>These are runner checks, not individual test counts.</p><table><thead><tr><th>Check</th><th>Status</th></tr></thead><tbody>${foundationRows}</tbody></table>
-<h2>Expected test-result sources</h2><p>These fixed sources are only a subset of Phase 10 suites. Six automation suites reconcile against a versioned expected-test inventory and stable hashed test IDs; inventory hash mismatch, missing, duplicate, unexpected or non-passing outcomes block that suite. The remaining sources reconcile recorded individual outcomes and counters but do not have a complete expected-test inventory; omitted tests cannot be detected from counts alone. Runner status is separate from result status.</p>
+<h2>Expected test-result sources</h2><p>These fixed sources are only a subset of Phase 10 suites. ${FOUNDATION_AUTOMATION_TEST_CHECKS.length} automation suites reconcile against a versioned expected-test inventory and stable hashed test IDs; inventory hash mismatch, missing, duplicate, unexpected or non-passing outcomes block that suite. The remaining sources reconcile recorded individual outcomes and counters but do not have a complete expected-test inventory; omitted tests cannot be detected from counts alone. Runner status is separate from result status.</p>
 <p>Versioned automation cases: ${report.automation.reduce((sum, suite) => sum + suite.expected, 0)} expected; ${report.automation.reduce((sum, suite) => sum + (suite.observed ?? 0), 0)} observed. Inventory/result completeness is separate from whether the cases passed.</p>
 <p>Discovered .NET cases: ${report.dotnetTests.reduce((sum, suite) => sum + suite.expected, 0)} expected; ${report.dotnetTests.reduce((sum, suite) => sum + (suite.observed ?? 0), 0)} observed across five foundation suites plus integration. IDs are hashes of discovered test names; raw names are not emitted.</p>
 <p>Frontend cases: ${report.frontend.identities?.length ?? "UNAVAILABLE"} stable hashed identities; the Vitest reporter reconciles its collected case inventory with emitted outcomes.</p>

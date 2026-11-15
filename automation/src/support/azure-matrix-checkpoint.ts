@@ -3,11 +3,14 @@ import { readFile, rename, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import type { ExecutiveSummaryRow } from "../contracts/report-composer.js";
+import type {VerificationRequest} from "../contracts/verification-adapter.js";
 
 export interface MatrixCheckpoint {
   schemaVersion: 1;
   binding: string;
-  cases: Array<{ key: string; state: "started" | "verified-restored"; row?: ExecutiveSummaryRow }>;
+  provenance?: {candidate:string;deployment:string;settings:string};
+  plannedKeys?: string[];
+  cases: Array<{ key: string; state: "started" | "verified-restored" | "verification-pending"; row?: ExecutiveSummaryRow; ledgerPath?:string; request?:VerificationRequest }>;
 }
 
 export function matrixBinding(value: unknown): string {
@@ -44,15 +47,23 @@ export async function candidateIdentity(root: string): Promise<string> {
 }
 
 export async function readCheckpoint(file: string, evidenceRoot: string): Promise<MatrixCheckpoint> {
+  return await readBoundedEvidence(file,evidenceRoot) as MatrixCheckpoint;
+}
+
+export async function readBoundedEvidence(file:string,evidenceRoot:string):Promise<unknown>{
   const root = await realpath(evidenceRoot);
   const actual = await realpath(file);
   const relative = path.relative(root, actual);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Checkpoint must be inside the local evidence root.");
-  return JSON.parse(await readFile(actual, "utf8")) as MatrixCheckpoint;
+  return JSON.parse(await readFile(actual, "utf8"));
 }
 
 export async function saveCheckpoint(file: string, checkpoint: MatrixCheckpoint): Promise<void> {
+  await writeAtomicEvidence(file,checkpoint);
+}
+
+export async function writeAtomicEvidence(file:string,value:unknown):Promise<void>{
   const temporary = `${file}.${randomUUID()}.tmp`;
-  await writeFile(temporary, JSON.stringify(checkpoint, null, 2), { encoding: "utf8", flag: "wx" });
+  await writeFile(temporary, JSON.stringify(value, null, 2), { encoding: "utf8", flag: "wx" });
   await rename(temporary, file);
 }

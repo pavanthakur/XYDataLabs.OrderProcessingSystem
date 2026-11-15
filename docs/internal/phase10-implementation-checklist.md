@@ -672,6 +672,20 @@ Keep these supporting docs aligned with the finalized L0-L6 plan:
 
 ## Next Change-Set Deliverables
 
+### 15 November tenant/provider parity repair — implementation and execution checkpoint
+
+The current approved change set repairs automation, not tenant seeds or payment business rules. Historical Docker acceptance on `494ab4fd` and Azure TenantA completions do not establish current A/B/C acceptance. Code `47dadbf4` remains the base revision; local changes must record a source-content identity and actual image IDs rather than claim a clean committed candidate.
+
+- [x] Local implementation: shared positive scenario/currency/UI-entry contract; fail-closed versioned verifier/check inventory; explicit dry-run status and separate pointers; order/submission/provider/verification/restoration case ledger; source-bound Azure verification-only reconciliation; continuation only after confirmed journey, exact restoration and authenticated safety recheck; positive charge/Paid-order/terms/UI callback requirements.
+- [x] Controlled tests: malformed/missing check inventory, interrupted submission intent, changed identity, failed restoration, cross-tenant/amount mismatch, read-only recovery without resubmission, and dry-run pointer preservation. Foundation runner/report inventories include the previously omitted Razorpay contact suite and the new verification/recovery suites; individual outcomes must reconcile.
+- [x] Read-only environment checks: Docker seed/provider contract passes for A/B/C × both providers; G: storage/log rotation passes. Existing Azure TenantA Razorpay callback proof now requires/found one callback, and OpenPay passes Paid-order/unique charge/terms/callback verification. These are follow-up checks, not a fresh full matrix.
+- [ ] Freeze source-content identity; rebuild/start current Docker services without reset, preserving volumes/provider settings; capture actual images.
+- [ ] Complete fresh deterministic and sandbox Docker baseline cases for every active tenant × both providers and the required negative/identity/operational gates. Preserve failed reports and prove restoration.
+- [ ] Complete Azure-dev UI/provider acceptance with one normal Entra login and the same positive scenario contract. Bind exact source/deployment/settings identity, SQL/provider/UI evidence and restoration. Verify remaining negative/identity/transport/Functions gates separately; required missing evidence stays BLOCKED/NOT RUN.
+- [ ] Produce/reconcile the new acceptance packet and HTML with raw same-run results. Never convert a dry run, partial recovery or historical PASS into fresh full acceptance.
+
+No reset, pruning, production/staging operation or directory/RBAC change is included in this repair execution. The owner separately authorized committing and pushing the reviewed automation fixes to `dev` after checks pass, so Docker can test a clean candidate. Ambiguous charges are never retried. DW-023/DW-024 and other approved capability/product exclusions remain explicit—not PASS.
+
 The next useful Phase 10 change sets should produce:
 
 - one completed architecture cleanup or service-ownership slice at a time

@@ -57,11 +57,13 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('Table', 'Json')]
-    [string] $OutputFormat = 'Table'
+    [string] $OutputFormat = 'Table',
+    [string] $OrderReferenceId
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'phase10-paid-order-evidence.ps1')
 
 if ($Runtime -eq 'local' -and $Environment -ne 'dev') {
     throw 'Runtime=local supports only Environment=dev. Use Runtime=docker for dev/stg/prod physical-log verification.'
@@ -1583,6 +1585,19 @@ $allHistoryRows = @(@($q5Shared) + @($q5TenantC))
 foreach ($tenantCode in $expectedOrdersByTenant.Keys | Sort-Object) {
     $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
     $tenantRows = @($allRows | Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $tenantCode })
+    $businessTenant=@($tenantTopology | Where-Object TenantCode -eq $tenantCode)
+    if($businessTenant.Count -ne 1){throw 'Tenant database resolution is ambiguous.'}
+    $proofDatabase=if($businessTenant[0].TenantTier -eq 'Dedicated'){$businessTenant[0].DedicatedDatabaseName}else{$sharedDbName}
+    $paidProof=Get-Phase10PaidOrderEvidence -TenantCode $tenantCode -CustomerOrderIds @($expectedOrdersByTenant[$tenantCode]) -ExpectedReference $OrderReferenceId -Query {
+        param($query) Invoke-PhysicalSqlQuery -Database $proofDatabase -Query $query
+    }
+    $checks["Paid order [$tenantCode]"]=Convert-CheckResult -Expected ([string]$paidProof.Expected) -Actual ([string]$paidProof.Verified) -Outcome $(if($paidProof.Passed){'PASS'}else{'FAIL'})
+    $successfulOrders = @($expectedOrdersByTenant[$tenantCode] | Where-Object {
+        $orderKey = $_
+        $charges = @($tenantRows | Where-Object { $_.CustomerOrderId -eq $orderKey -and $_.TransactionType -eq 'charge' })
+        $charges.Count -eq 1 -and $charges[0].Status -eq 'completed' -and [string]$charges[0].OK -in @('True','1')
+    })
+    $checks["Successful charge [$tenantCode]"] = Convert-CheckResult -Expected ([string]$expectedOrdersByTenant[$tenantCode].Count) -Actual ([string]$successfulOrders.Count) -Outcome $(if ($successfulOrders.Count -gt 0 -and $successfulOrders.Count -eq $expectedOrdersByTenant[$tenantCode].Count) { 'PASS' } else { 'FAIL' })
     $tenantHistoryRows = @($allHistoryRows | Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $tenantCode })
     $q2Outcome = if ($tenantRows.Count -eq ($expectedOrdersByTenant[$tenantCode].Count * 2)) { 'PASS' } else { 'FAIL' }
     # Extra legitimate created/authorized transitions are valid. Require each
@@ -1626,6 +1641,9 @@ else {
 }
 
 $report = [PSCustomObject] @{
+    SchemaVersion = 1
+    EvidenceKind = 'payment-correlation'
+    GeneratedUtc = [DateTimeOffset]::UtcNow.ToString('o')
     Environment = $Environment
     Runtime = $Runtime
     Profile = $Profile

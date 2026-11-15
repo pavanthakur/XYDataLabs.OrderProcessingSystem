@@ -196,6 +196,22 @@ Local mock tests: `pwsh -NoProfile -File scripts/tests/phase10-razorpay-order-lo
 
 ##### Local launch and resume procedure
 
+**Tenant/provider parity repair:** Docker and Azure baseline positives share `automation/src/contracts/payment-scenarios.ts`: Razorpay hosted/INR and OpenPay 3DS-off/MXN, both using customer directory → customer → create order → initiate payment. Fresh customer data may be provisioned through the existing API. Azure's normal assigned-provider workflow does not acquire permission to switch providers from this contract; alternate-provider fixtures remain separately selected, dev-only and serialized.
+
+Current verification requires `SchemaVersion=1`, `EvidenceKind=payment-correlation`, exact runtime/environment and the mandatory named check inventory. Empty/missing/skipped/unknown checks fail closed. Charge completion, unique successful charge, Paid-order projection, matching SQL amount/currency and required UI callback telemetry are distinct from history integrity. Callback proof is required for positive baseline payments even when configured 3DS is false. Dry-run packets use `dry-run-complete`, show **DRY-RUN — NOT PAYMENT ACCEPTANCE EVIDENCE**, and write separate dry-run pointers; they do not replace live pointers.
+
+Every new real case writes an atomic `case-ledger.json` before fixture/order work and at persisted-order, pre-submission and provider-confirmed boundaries. Verification and restoration are recorded separately. Azure all-tenant fixture runs may continue after an isolated verifier failure only when the original sandbox journey completed, provider proof exists, settings were restored, and an authenticated no-charge safety recheck passes. The failed verification remains failed in the original packet; continuation never retries that payment. Ambiguous submission, invalid identity/live mode, or failed restoration still stops further charges.
+
+For a new checkpoint explicitly marked `verification-pending`, recover only the read-only evidence:
+
+```powershell
+pwsh -NoProfile -File scripts/run-phase10-azure-dev-operator-matrix.ps1 `
+  -Mode Reconcile -ExpectedSubscriptionId $expectedSubscriptionId `
+  -ResumeCheckpoint '<original checkpoint.json under TestResults/Playwright>'
+```
+
+This mode opens no browser and submits no charge. It validates unchanged source/deployment/settings identities and matching original provider/ledger/order anchors, then re-evaluates mandatory verification checks. It writes a new `checkpoint-reconciled-*.json` plus a separate evidence sidecar without changing original reports. Only a reconciled checkpoint whose required cases are verified/restored may be supplied to `ProviderMatrix -ResumeCheckpoint` to execute unstarted cases. Started/ambiguous cases, unproven restoration, legacy receipts without anchors, and changed candidates are refused. Original failed packets stay failed. This is recovery of verification for a previously confirmed journey, not a fresh provider transaction or certification of deferred order-recovery features.
+
 Run the wrapper from PowerShell 7 in your signed-in Windows desktop, not through a hosted job or the chat browser plugin. Install the automation dependencies and Playwright Chromium using the existing local setup before running it. `BROWSER_LAUNCH_FAILED` is a local launch problem; `WAITING_FOR_SIGN_IN`, `AUTHENTICATED`, `SIGN_IN_TIMEOUT` and `SESSION_EXPIRED` describe authentication separately. Remain available for initial normal MFA; after authenticated preflight, the serial matrix can continue without interaction unless the identity provider or payment provider requires it. Unattended completion is not guaranteed. No MFA bypass, saved browser credentials or workload-identity API path is introduced.
 
 The executor writes `checkpoint.json` atomically in its child `payment-automation-*` directory, plus a per-case `partial-summary.json`. Intent is persisted **before** fixture/order mutation. An interrupted or failed case remains unresolved even if its fixture was restored. Do not retry its charge. Inspect provider/SQL state and recovery manifests read-only first. Legacy runs without checkpoints cannot be automatically resumed.
