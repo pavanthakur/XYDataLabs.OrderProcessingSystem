@@ -3,12 +3,15 @@
 param(
     [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix')][string]$Mode,
     [Parameter(Mandatory)][guid]$ExpectedSubscriptionId,
-    [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN
+    [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN,
+    [string]$ResumeCheckpoint
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if (-not [Environment]::UserInteractive -or $env:CI -eq 'true') { throw 'Run this headed operator command in your signed-in desktop terminal, not a hosted/non-interactive job.' }
+if ($ResumeCheckpoint -and $Mode -ne 'ProviderMatrix') { throw 'ResumeCheckpoint is available only for ProviderMatrix.' }
 $targetCatalogPath = Join-Path $repoRoot 'automation/config/runtime-targets.json'
 $targetCatalog = Get-Content -LiteralPath $targetCatalogPath -Raw | ConvertFrom-Json
 $targets = @($targetCatalog.targets | Where-Object key -eq 'azure-dev')
@@ -47,23 +50,59 @@ $env:XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL = [string]$resolved.uiOrigin
 $env:XYDATALABS_RUNTIME_TARGET_AZURE_DEV_API_BASE_URL = [string]$resolved.apiOrigin
 $env:EXPECTED_AZURE_SUBSCRIPTION_ID = $expectedSubscription
 
+# Hash live app templates/revisions locally. Never print environment values or secret references.
+$deploymentParts = @()
+foreach ($property in @('azureGatewayContainerAppName','azureOrdersContainerAppName','azurePaymentsContainerAppName','azureInventoryContainerAppName','azureNotificationsContainerAppName','azureUiContainerAppName')) {
+    $appName = [string]$target.$property
+    $identityJson = & az containerapp show --resource-group $resourceGroup --name $appName --query '{id:id,revision:properties.latestReadyRevisionName,template:properties.template,traffic:properties.configuration.ingress.traffic}' -o json --only-show-errors
+    if ($LASTEXITCODE -ne 0 -or -not $identityJson) { throw 'Could not establish live deployment identity; browser launch blocked.' }
+    $identity = $identityJson | ConvertFrom-Json
+    if ($ResumeCheckpoint -and @($identity.template.containers | Where-Object { $_.image -notmatch '@sha256:[a-f0-9]{64}$' }).Count -gt 0) { throw 'Resume requires immutable image digest references; mutable image tags cannot certify deployment continuity.' }
+    $deploymentParts += ($identity | ConvertTo-Json -Depth 50 -Compress)
+}
+$deploymentBytes = [Text.Encoding]::UTF8.GetBytes(($deploymentParts -join "`n"))
+$deploymentHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($deploymentBytes))
+$priorDeploymentIdentity = $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY
+$priorSettingsIdentity = $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY
+$settingsHash = $null
+
 if ($Mode -eq 'AuthPreflight') {
     $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--auth-preflight-only')
     Write-Host 'Starting headed no-charge Entra preflight. Complete sign-in once; this mode creates no orders and submits no payments.'
 }
 else {
     Write-Host 'Running no-charge Azure SQL/provider fixture preflight before opening the browser.'
-    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-azure-payment-test-state.ps1') `
+    $inspectionLines = @(& pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-azure-payment-test-state.ps1') `
         -Action Inspect -Environment dev -ExpectedSubscriptionId $expectedSubscription
+    )
     if ($LASTEXITCODE -ne 0) { throw 'Azure tenant/provider SQL preflight failed; no browser or payment was started.' }
+    $inspection = $null
+    for ($lineIndex = 0; $lineIndex -lt $inspectionLines.Count; $lineIndex++) {
+        try {
+            $parsed = ($inspectionLines[$lineIndex..($inspectionLines.Count-1)] -join "`n") | ConvertFrom-Json
+            if ($parsed.status -eq 'PASS' -and $parsed.tenants -and $parsed.reportPath) { $inspection = $parsed; break }
+        } catch { }
+    }
+    if (-not $inspection) { throw 'Fixture preflight did not return a valid baseline; no browser was launched.' }
+    $baseline = @($inspection.tenants | Sort-Object tenantCode | ForEach-Object {
+        [ordered]@{ tenant=$_.tenantCode; tier=$_.tier; route=$_.assignedProvider; providers=@($_.configuredProviders | Sort-Object provider) }
+    }) | ConvertTo-Json -Depth 10 -Compress
+    $settingsHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($baseline)))
     $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--all-active-tenants','--provider','Razorpay','--provider','OpenPay','--tenant-timeout-ms','420000')
+    if ($ResumeCheckpoint) { $matrixArgs += @('--resume-checkpoint',$ResumeCheckpoint) }
     Write-Warning 'This mode first performs a no-charge Entra tenant/access preflight in the same in-memory browser session, then creates fresh orders and submits serial sandbox payments for every active tenant/provider pair. Continue only after the hosted OIDC provider-secret preflight and local SQL fixture inspection have passed.'
 }
 
 Push-Location $repoRoot
 try {
+    $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $deploymentHash
+    $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $settingsHash
     & npm --prefix automation run run:azure:matrix -- @matrixArgs
     $matrixExit = $LASTEXITCODE
 }
-finally { Pop-Location }
+finally {
+    Pop-Location
+    $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $priorDeploymentIdentity
+    $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $priorSettingsIdentity
+}
 exit $matrixExit

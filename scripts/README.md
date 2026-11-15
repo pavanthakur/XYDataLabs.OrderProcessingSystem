@@ -4,6 +4,12 @@
 
 This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management, including GitHub App automation tools.
 
+## Azure-dev payment diagnostics
+
+- `lookup-phase10-azure-razorpay-order.ps1`: workflow-04 diagnostic-only entrypoint for an existing Razorpay order. Requires the dev branch, hosted OIDC, exact `-TenantCode`, `-OrderId`, `-ExpectedAmountMinor` (INR paise) and `-ExpectedSubscriptionId`. Uses existing Key Vault aliases, GET-only provider calls, and sanitized reports; never charges, captures, refunds or updates SQL. See the [Azure smoke runbook](../docs/runbooks/phase10-azure-smoke.md#read-only-razorpay-order-investigation-workflow-04-dev-only) for workflow inputs and result limitations.
+- `phase10-razorpay-order-lookup-core.ps1`: bounded provider lookup/classification, shared with offline mocks. Test with `pwsh -NoProfile -File scripts/tests/phase10-razorpay-order-lookup.test.ps1`.
+- `run-phase10-azure-dev-operator-matrix.ps1`: desktop-only one-login browser entrypoint. `-Mode AuthPreflight` creates no order/payment; `-Mode ProviderMatrix` submits approved sandbox cases. Optional `-ResumeCheckpoint` refuses interrupted or changed-candidate receipts; follow the same runbook before use.
+
 ## Phase 10 Azure cost and image retention (read-only)
 
 - `phase10-cost-snapshot.mjs` captures month-to-date cost by service/resource, an explicitly selected subscription's dev resource inventory, active Container App revisions/replicas, ACR usage, Log Analytics table ingestion, SQL storage metrics and Functions host-storage usage when available. It requires Azure CLI read permissions, Cost Management/Monitor query support, and PowerShell 7 on Windows. It writes a new sanitized JSON file and refuses to overwrite an existing report; Azure cost data may lag.

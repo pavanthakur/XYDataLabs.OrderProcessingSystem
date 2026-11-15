@@ -1,7 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, open, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CleanupOutcome } from "../contracts/payment-fixture-provisioner.js";
@@ -16,6 +16,7 @@ import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildCustomerOrderId, buildRunPrefix } from "../support/customer-order-id.js";
 import { PowerShellVerificationAdapter } from "../verification/powershell-verification-adapter.js";
 import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
+import { assertResumeSafe, candidateIdentity, matrixBinding, readCheckpoint, saveCheckpoint, type MatrixCheckpoint } from "../support/azure-matrix-checkpoint.js";
 
 export interface ExecutePaymentAutomationRunOptions {
   target: string;
@@ -42,6 +43,7 @@ export interface ExecutePaymentAutomationRunOptions {
   manualEntry?: boolean;
   challengeRequired?: boolean;
   expectedOutcome?: "failure" | "cancelled";
+  resumeCheckpoint?: string;
 }
 
 export interface PaymentAutomationRunOutput {
@@ -86,6 +88,13 @@ export async function executePaymentAutomationRun(
   const log = (message:string) => options.logger?.(safePaymentDiagnostic(message));
   log(`Resolving runtime target ${options.target}.`);
   const target = await runtimeTargetCatalog.resolve(options.target);
+  const operatorLockPath = path.resolve(automationRoot, "../TestResults/Playwright/azure-operator-session.lock");
+  let operatorLock: Awaited<ReturnType<typeof open>> | undefined;
+  if (options.operatorAssistedEntra) {
+    await mkdir(path.dirname(operatorLockPath), { recursive: true });
+    operatorLock = await open(operatorLockPath, "wx").catch(() => { throw new Error("Azure operator session lock exists or is inaccessible. Review the active/interrupted run; never delete its lock automatically."); });
+  }
+  try {
   log(`Resolved runtime target ${target.key} (${target.runtime}/${target.profile}).`);
   log(`Resolving tenant execution plan for ${options.target}.`);
   const tenantExecutionCatalog = options.dryRun && target.runtime !== "azure"
@@ -147,6 +156,25 @@ export async function executePaymentAutomationRun(
 
   const rows: ExecutiveSummaryRow[] = [];
   const verificationSummaries: string[] = [];
+  const checkpointEnabled = target.runtime === "azure" && options.operatorAssistedEntra && !options.authPreflightOnly && !options.dryRun;
+  if (options.resumeCheckpoint && !checkpointEnabled) throw new Error("Resume requires the headed Azure-dev payment matrix.");
+  const caseKey = (item: ExecutionItem) => `${item.tenantCode.toLowerCase()}|${(item.paymentProviderCode ?? "resolved").toLowerCase()}`;
+  const checkpointPath = path.join(reportDirectory, "checkpoint.json");
+  const binding = checkpointEnabled ? matrixBinding({
+    candidate: await candidateIdentity(path.resolve(automationRoot, "..")),
+    deployment: process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY ?? "UNKNOWN",
+    settings: process.env.XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY ?? "UNKNOWN",
+    target, topology: tenantTopology, providers: providersForCheckpoint(options), threeDs: options.threeDs
+  }) : "";
+  let checkpoint: MatrixCheckpoint = { schemaVersion: 1, binding, cases: [] };
+  if (options.resumeCheckpoint) {
+    if (!process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY || !process.env.XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY) throw new Error("Deployment/settings identity is UNKNOWN; resume through the operator wrapper only.");
+    checkpoint = await readCheckpoint(options.resumeCheckpoint, path.resolve(automationRoot, "../TestResults/Playwright"));
+    assertResumeSafe(checkpoint, binding, executionItems.map(caseKey));
+    rows.push(...checkpoint.cases.map((item) => item.row!));
+    log(`Resume: preserving ${rows.length} verified/restored case receipts. No prior payment will be submitted again.`);
+  }
+  if (checkpointEnabled) await saveCheckpoint(checkpointPath, checkpoint);
 
   let operatorAuthPreflight: PaymentAutomationRunOutput["operatorAuthPreflight"];
   const providersForRun = normalizeRequestedProviders(options.requestedProviders ?? []);
@@ -197,6 +225,12 @@ export async function executePaymentAutomationRun(
 
   const runnableExecutionItems = operatorAuthPreflight?.status === "FAIL" ? [] : executionItems;
   for (const executionItem of runnableExecutionItems) {
+    if (checkpointEnabled && checkpoint.cases.some((item) => item.key === caseKey(executionItem))) continue;
+    // Durable intent precedes fixture or order mutation. An interrupted intent is never auto-retried.
+    if (checkpointEnabled) {
+      checkpoint.cases.push({ key: caseKey(executionItem), state: "started" });
+      await saveCheckpoint(checkpointPath, checkpoint);
+    }
     const tenantStartedAt = new Date();
     log(`Starting tenant ${executionItem.tenantCode} (${executionItem.tenantTier}${executionItem.paymentProviderCode ? `, provider ${executionItem.paymentProviderCode}` : ""}).`);
     const syntheticCustomerOrderId = buildCustomerOrderId(
@@ -320,6 +354,7 @@ export async function executePaymentAutomationRun(
             });
 
             verificationOutcome = verificationResult.outcome;
+            if (verificationOutcome !== "passed" && !options.allowPartialExecution) stopAfterCurrentItem = true;
             verificationSummaries.push(verificationResult.summary);
 
             // The setting was captured before submission; never overwrite it with
@@ -394,6 +429,28 @@ export async function executePaymentAutomationRun(
         ,...paymentEvidence
       });
 
+      if (checkpointEnabled) {
+        const row = rows.at(-1)!;
+        const receipt = checkpoint.cases.find((item) => item.key === caseKey(executionItem))!;
+        if (row.journeyOutcome.startsWith("completed") && row.verificationOutcome === "passed"
+          && row.cleanupOutcome === "reset" && row.adapterMode === "sandbox") {
+          receipt.state = "verified-restored";
+          // Explicit field projection: no URLs, arbitrary errors, tokens or raw provider payloads.
+          receipt.row = {
+            runId: row.runId, runtimeTarget: row.runtimeTarget, tenantCode: row.tenantCode, paymentProvider: row.paymentProvider,
+            customerOrderId: row.customerOrderId, orderId: row.orderId, orderReferenceId: row.orderReferenceId,
+            orderAmount: row.orderAmount, orderCurrencyCode: row.orderCurrencyCode, threeDsSetting: row.threeDsSetting,
+            adapterMode: row.adapterMode, collectionMode: row.collectionMode, observedChallenge: row.observedChallenge,
+            journeyOutcome: row.journeyOutcome, challengeOutcome: row.challengeOutcome, verificationOutcome: row.verificationOutcome,
+            cleanupOutcome: row.cleanupOutcome, startedUtc: row.startedUtc, finishedUtc: row.finishedUtc,
+            outcomeMessage: "Previously verified sandbox case; see original runId evidence.", errorDetail: "",
+            evidenceReference: "Preserved verified/restored checkpoint receipt; not a newly executed payment."
+          };
+        }
+        await saveCheckpoint(checkpointPath, checkpoint);
+        await writeFile(path.join(reportDirectory, "partial-summary.json"), JSON.stringify({ runId, rows }, null, 2), "utf8");
+      }
+
       log(
         `Tenant summary: ${executionItem.tenantCode} | provider=${paymentProvider} | tier=${executionItem.tenantTier} | journey=${journeyOutcome} | verification=${verificationOutcome} | cleanup=${cleanupOutcome}.`
       );
@@ -414,6 +471,11 @@ export async function executePaymentAutomationRun(
       if (lastRow) {
         lastRow.journeyOutcome = `failed: ${message}`;
         lastRow.errorDetail = [lastRow.errorDetail, message].filter(Boolean).join(" | ");
+        if (checkpointEnabled) {
+          const receipt = checkpoint.cases.find((item) => item.key === `${lastRow.tenantCode.toLowerCase()}|${lastRow.paymentProvider.toLowerCase()}`);
+          if (receipt) { receipt.state = "started"; delete receipt.row; }
+          await saveCheckpoint(checkpointPath, checkpoint);
+        }
       }
       if (operatorAuthPreflight) {
         operatorAuthPreflight.status = "FAIL";
@@ -445,6 +507,17 @@ export async function executePaymentAutomationRun(
   }
 
   return output;
+  } finally {
+    // Also close the browser on unexpected checkpoint/report errors. A hard kill leaves the lock for review.
+    if (operatorLock) {
+      try { await paymentJourneyRunner.closeOperatorAssistedSession(log); }
+      finally { await operatorLock.close(); await unlink(operatorLockPath); }
+    }
+  }
+}
+
+function providersForCheckpoint(options: ExecutePaymentAutomationRunOptions): string[] {
+  return normalizeRequestedProviders(options.requestedProviders ?? []).map((provider) => provider.toLowerCase()).sort();
 }
 
 function extractProviderPaymentId(finalUrl: string): string | undefined {

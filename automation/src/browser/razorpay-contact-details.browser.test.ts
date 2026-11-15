@@ -63,7 +63,21 @@ test("Razorpay contact-shaped form without a recognized heading is not mistaken 
   }
 });
 
-async function openContactFixture(page: import("playwright").Page, acceptPhone: boolean, heading = "Contact details"): Promise<void> {
+test("Razorpay contact form discovery checks all checkout frames before rejecting an unrelated contact-shaped scope", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await openContactFixture(page, true, "Contact details", true);
+
+    await completeRazorpayContactDetails(page, phoneFixture, emailFixture, () => undefined);
+
+    assert.equal(await page.frameLocator("#provider").getByText("Payment options").isVisible(), true);
+  } finally {
+    await browser.close();
+  }
+});
+
+async function openContactFixture(page: import("playwright").Page, acceptPhone: boolean, heading = "Contact details", addUnrecognizedParentForm = false): Promise<void> {
   const html = `<!doctype html><html><body>
     <section id="contact">
       <h1>${heading}</h1>
@@ -87,7 +101,10 @@ async function openContactFixture(page: import("playwright").Page, acceptPhone: 
       });
     </script>
   </body></html>`;
-  await page.setContent('<iframe id="provider"></iframe>');
+  const parentForm = addUnrecognizedParentForm
+    ? '<input type="tel" aria-label="phone"><input type="email" aria-label="email"><button type="button">Continue</button>'
+    : "";
+  await page.setContent(`${parentForm}<iframe id="provider"></iframe>`);
   await page.locator("#provider").evaluate((iframe, content) => {
     (iframe as HTMLIFrameElement).srcdoc = content;
   }, html);

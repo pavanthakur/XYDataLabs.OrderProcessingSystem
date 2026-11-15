@@ -15,23 +15,21 @@ export async function completeRazorpayContactDetails(
   const deadline = Date.now() + 15000;
   let scope: CheckoutScope | undefined;
   let heading: Locator | undefined;
+  let unrecognizedContactForm = false;
 
   while (Date.now() < deadline && !scope) {
     for (const candidate of checkoutScopes(page)) {
       const marker = candidate.getByText(/^(Contact details|Enter mobile .* email to continue)$/i).first();
-      if (await marker.isVisible().catch(() => false)) {
+      const hasContactForm = await hasVisibleContactFields(candidate);
+      if (hasContactForm && await marker.isVisible().catch(() => false)) {
         scope = candidate;
         heading = marker;
         break;
       }
-      const phoneCandidate = candidate.locator('input[type="tel"], input[inputmode="tel"], input[name*="phone" i]').first();
-      const emailCandidate = candidate.locator('input[type="email"], input[name*="email" i]').first();
-      const continueCandidate = candidate.getByRole("button", { name: /^Continue$/i }).first();
-      if (await phoneCandidate.isVisible().catch(() => false)
-        && await emailCandidate.isVisible().catch(() => false)
-        && await continueCandidate.isVisible().catch(() => false)) {
-        throw new Error("Razorpay shows an unrecognized contact form; refusing to treat it as card entry or continue checkout.");
-      }
+      unrecognizedContactForm ||= hasContactForm;
+    }
+    if (!scope && unrecognizedContactForm) {
+      throw new Error("Razorpay shows an unrecognized contact form; refusing to treat it as card entry or continue checkout.");
     }
     if (!scope) await page.waitForTimeout(200);
   }
@@ -97,6 +95,15 @@ export async function completeRazorpayContactDetails(
 
 function checkoutScopes(page: Page): CheckoutScope[] {
   return page.context().pages().flatMap((candidatePage) => [candidatePage, ...candidatePage.frames()]);
+}
+
+async function hasVisibleContactFields(scope: CheckoutScope): Promise<boolean> {
+  const phoneCandidate = scope.locator('input[type="tel"], input[inputmode="tel"], input[name*="phone" i]').first();
+  const emailCandidate = scope.locator('input[type="email"], input[name*="email" i]').first();
+  const continueCandidate = scope.getByRole("button", { name: /^Continue$/i }).first();
+  return await phoneCandidate.isVisible().catch(() => false)
+    && await emailCandidate.isVisible().catch(() => false)
+    && await continueCandidate.isVisible().catch(() => false);
 }
 
 async function findVisible(scope: CheckoutScope, factories: Array<(scope: CheckoutScope) => Locator>, description: string): Promise<Locator> {

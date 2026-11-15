@@ -12,6 +12,7 @@ import { completeRazorpayContactDetails } from "./razorpay-contact-details.js";
 import { waitForCallbackOutcome } from "./callback-outcome.js";
 import {assertSandboxConfirmation,assertRuntimeMode} from "./payment-evidence.js";
 import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
+import { launchLocalBrowser } from "./local-browser-launch.js";
 
 type AutomationScope = import("playwright").Page | import("playwright").Frame;
 type ScopeLocatorFactory = (scope: AutomationScope) => import("playwright").Locator;
@@ -107,10 +108,8 @@ export class PaymentJourneyRunner {
       this.operatorSession = undefined;
       throw new Error("The operator-assisted Entra browser session closed before all tenant journeys completed; refusing to start a new sign-in or resubmit a payment.");
     }
-    const browser = previousSession?.browser ?? await chromium.launch({
-      headless: request.headless,
-      args: headedOperatorEntra ? ["--start-maximized"] : [],
-    });
+    if (!previousSession && headedOperatorEntra) log("BROWSER_LAUNCHING: local Playwright window; independent of the chat browser connection.");
+    const browser = previousSession?.browser ?? await launchLocalBrowser((options) => chromium.launch(options), request.headless, headedOperatorEntra);
     let authenticatedEntra = previousSession?.authenticated ?? false;
     const abortBrowser=()=>{void browser.close();};
     request.signal?.addEventListener("abort",abortBrowser,{once:true});
@@ -186,11 +185,14 @@ export class PaymentJourneyRunner {
       await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       if (headedOperatorEntra) {
         await page.bringToFront();
-        log("Operator Entra sign-in page is in the foreground; complete normal sign-in/MFA in this window.");
+        log(previousSession ? "AUTH_SESSION_REUSED: checking the existing Entra session." : "WAITING_FOR_SIGN_IN: complete normal Entra sign-in/MFA in the local browser window.");
       }
       await this.completeLocalKeycloakLogin(page, request, log);
       const accessToken = await this.waitForLocalAccessToken(page, request, log);
-      if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) authenticatedEntra = true;
+      if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) {
+        authenticatedEntra = true;
+        log("AUTHENTICATED: Entra token available; authorization and sandbox preflight must still pass before payment.");
+      }
       await page.getByRole("heading", { name: /Take a card payment|Collect payment/i }).waitFor({ timeout: 30000 });
       log("Payment page is ready.");
       const paymentConfiguration = await this.resolvePaymentConfiguration(
@@ -682,7 +684,7 @@ export class PaymentJourneyRunner {
       if (error) return { error };
       const token = window.localStorage.getItem("orderprocessing.accessToken");
       return typeof token === "string" && token.trim().length > 0 ? { token } : null;
-    }, undefined, { timeout: operatorEntra ? 300000 : 30000 })
+    }, undefined, { timeout: operatorEntra ? (this.operatorSession?.authenticated ? 15000 : 300000) : 30000 })
       .then((result) => result.jsonValue() as Promise<{ token?: string; error?: string } | null>)
       .catch(() => null);
 
@@ -692,6 +694,7 @@ export class PaymentJourneyRunner {
     }
     const accessToken = authResult?.token ?? null;
     if (!accessToken) {
+      if (operatorEntra && this.operatorSession?.authenticated) throw new Error("SESSION_EXPIRED: authenticated browser state is unavailable; new submissions stopped. Reconcile the checkpoint before a fresh normal sign-in.");
       if (request.target.runtime === "azure") throw new Error("No Entra application access token became available within the sign-in window. Complete normal sign-in/MFA and return to the application; refusing to continue without authenticated API preflight.");
       log(`Local access token was not available after login for ${request.tenantCode}; proceeding without bearer auth.`);
       return null;
@@ -725,9 +728,10 @@ export class PaymentJourneyRunner {
         || !/^[0-9a-f-]{36}$/i.test(authoritySegments[0] ?? "") || authoritySegments[1] !== "v2.0") {
         throw new Error("Azure UI identity configuration is not a valid Entra SPA setup for this origin; no payment test was started.");
       }
-      log(`Complete the normal Entra sign-in and MFA for ${request.tenantCode} in the opened browser. No credentials or browser state will be saved.`);
-      await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin, { timeout: 300000 })
-        .catch(() => { throw new Error("Operator-assisted Entra sign-in did not return to the Azure application within five minutes."); });
+      const reusedSession = this.operatorSession?.authenticated === true;
+      if (!reusedSession) log(`Complete normal Entra sign-in/MFA in the opened browser. No credentials or browser state will be saved.`);
+      await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin, { timeout: reusedSession ? 15000 : 300000 })
+        .catch(() => { throw new Error(reusedSession ? "SESSION_EXPIRED: Entra requested interactive authentication again; new submissions stopped." : "SIGN_IN_TIMEOUT: Entra did not return to the application within five minutes; no order was created."); });
       return;
     }
 

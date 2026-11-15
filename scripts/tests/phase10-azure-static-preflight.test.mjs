@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { auditAzureDeployContract, validateAzureRuntimeTargets } from '../phase10-azure-static-preflight.mjs';
 
@@ -9,6 +11,39 @@ const yaml = requireAutomation('js-yaml');
 const verifierSource = await readFile(new URL('../verify-payment-run-azure.ps1', import.meta.url), 'utf8');
 const paymentWorkflowSource = await readFile(new URL('../../.github/workflows/phase10-azure-payment-matrix.yml', import.meta.url), 'utf8');
 const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-azure-matrix.ts', import.meta.url), 'utf8');
+
+test('Azure operator checkpoint and launch safety regressions execute in hosted contract CI', () => {
+  const environment = { ...process.env };
+  delete environment.NODE_TEST_CONTEXT;
+  const output = execFileSync(process.execPath, [
+    fileURLToPath(new URL('../../automation/node_modules/tsx/dist/cli.mjs', import.meta.url)), '--test',
+    fileURLToPath(new URL('../../automation/src/support/azure-matrix-checkpoint.test.ts', import.meta.url)),
+    fileURLToPath(new URL('../../automation/src/browser/local-browser-launch.test.ts', import.meta.url))
+  ], { encoding: 'utf8', env: environment });
+  assert.match(output, /# fail 0/);
+});
+
+test('read-only Razorpay order lookup is sandbox-only and does not route to the payment matrix', async () => {
+  const workflow = yaml.load(paymentWorkflowSource);
+  assert.equal(workflow.on.workflow_dispatch.inputs.razorpayOrderLookupOnly.default, false);
+  const steps = workflow.jobs.azure_payment_matrix.steps;
+  const matrix = steps.find((step) => step.name === 'Run no-payment service preflight or assigned-provider matrix');
+  assert.equal(matrix.if, 'inputs.razorpayOrderLookupOnly != true');
+  const lookup = steps.find((step) => step.name === 'Read existing Razorpay order and payments (no charge)');
+  assert.equal(lookup.if, 'inputs.razorpayOrderLookupOnly == true');
+  assert.match(lookup.run, /lookup-phase10-azure-razorpay-order\.ps1/);
+  assert.doesNotMatch(lookup.run, /ProcessPayment|capture|refund|--value/);
+  const core = await readFile(new URL('../phase10-razorpay-order-lookup-core.ps1', import.meta.url), 'utf8');
+  assert.match(core, /-Method Get -MaximumRedirection 0/);
+  assert.match(core, /rzp_test_/);
+  assert.match(core, /Select-Object id, status, amount, currency/);
+  const entry = await readFile(new URL('../lookup-phase10-azure-razorpay-order.ps1', import.meta.url), 'utf8');
+  assert.match(entry, /refs\/heads\/dev/);
+  assert.match(entry, /ExpectedSubscriptionId/);
+  assert.match(entry, /PaymentProviders--\$TenantCode--Razorpay--PrivateKey/);
+  const output = execFileSync('pwsh', ['-NoProfile', '-File', fileURLToPath(new URL('./phase10-razorpay-order-lookup.test.ps1', import.meta.url))], { encoding: 'utf8' });
+  assert.match(output, /Passed 10 read-only provider diagnostic tests/);
+});
 
 const runtimeTarget = (key, environment) => ({
   key, runtime: 'azure', verificationMode: 'azure', browserMode: 'azure', allowGeneratedAzureUrlFallback: false,
@@ -59,6 +94,15 @@ test('Azure payment verifier treats dedicated tenants generically instead of har
   assert.doesNotMatch(verifierSource, /q[25]TenantC|preflightTenantC|tenantCDbChargeIds/);
   assert.match(verifierSource, /foreach \(\$tenant in \$dedicatedTenants\)/);
   assert.match(verifierSource, /DedicatedDatabaseName = \$dedicatedDatabaseName/);
+});
+
+test('Azure payment verifier de-duplicates SQL history fallback rows and validates history integrity', () => {
+  assert.match(verifierSource, /tsh\.Id AS HistoryId/);
+  assert.match(verifierSource, /Sort-Object Tenant, CustomerOrderId, HistoryId -Unique/);
+  assert.match(verifierSource, /PaymentHistoryEvidence = @\(\$allHistoryRows/);
+  assert.match(verifierSource, /function Get-HistoryIntegrityForTenant/);
+  assert.match(verifierSource, /TerminalStatusMismatchCount/);
+  assert.match(verifierSource, /MissingHistoryCount -eq 0/);
 });
 
 test('Azure payment workflow runs service-access preflight before the browser payment matrix', () => {
@@ -375,10 +419,11 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
   assert.match(runner, /tenantPreflightResults\.push/);
   assert.match(runner, /paymentConfiguration:|paymentProvider: tenantConfiguration\.activeProviderType/);
   assert.match(runner, /localStorage\.getItem\("orderprocessing\.accessToken"\)/);
-  assert.match(runner, /headedOperatorEntra \? \["--start-maximized"\] : \[\]/);
+  assert.match(runner, /launchLocalBrowser\(\(options\) => chromium\.launch\(options\), request\.headless, headedOperatorEntra\)/);
   assert.match(runner, /viewport: headedOperatorEntra \? null : undefined/);
   assert.match(runner, /if \(headedOperatorEntra\) await page\.bringToFront\(\)/);
-  assert.match(runner, /Operator Entra sign-in page is in the foreground/);
+  assert.match(runner, /WAITING_FOR_SIGN_IN/);
+  assert.match(runner, /SESSION_EXPIRED/);
   assert.match(runner, /Identity-provider sign-out did not complete cleanly/);
   assert.match(runner, /signedOutHeading\.waitFor\(\{ state: "visible", timeout: 10000 \}\)/);
   assert.doesNotMatch(runner, /observedHeading|allTextContents\(\)/);

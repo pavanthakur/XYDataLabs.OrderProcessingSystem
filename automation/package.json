@@ -4,6 +4,7 @@
   "version": "0.0.0-placeholder",
   "type": "module",
   "scripts": {
+    "test:azure-operator-safety": "tsx --test src/support/azure-matrix-checkpoint.test.ts src/browser/local-browser-launch.test.ts",
     "report:phase10-preview": "tsx src/cli/render-phase10-preview.ts",
     "verify:phase10-completion": "tsx src/cli/verify-phase10-completion.ts",
     "reconcile:phase10-acceptance": "tsx src/cli/reconcile-phase10-acceptance.ts",

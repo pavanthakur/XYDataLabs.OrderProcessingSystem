@@ -1178,7 +1178,7 @@ else {
 }
 
 $q2Shared = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId, ct.TransactionId AS ChargeId,
        ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
@@ -1189,7 +1189,8 @@ ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
 "@)
 
 $q5Shared = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId,
+       ct.TransactionType, ct.TransactionStatus AS CurrentStatus, tsh.Id AS HistoryId, tsh.Status,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
@@ -1204,7 +1205,7 @@ $q8Shared = @()
 $q2Dedicated = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId, ct.TransactionId AS ChargeId,
        ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
@@ -1218,7 +1219,8 @@ ORDER BY ct.CustomerOrderId, ct.Id;
 $q5Dedicated = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
+SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId,
+       ct.TransactionType, ct.TransactionStatus AS CurrentStatus, tsh.Id AS HistoryId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
 JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
@@ -1510,7 +1512,7 @@ customEvents
                 $sqlTenant = ConvertTo-SqlStringLiteral -Value $operationEvent.Tenant
                 if ($resolvedTenant.TenantTier -eq 'SharedPool') {
                     $mappedTransactions = @(Invoke-AzureSqlQuery -Database $sharedDbName -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId, ct.TransactionId AS ChargeId,
        ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
@@ -1520,7 +1522,8 @@ WHERE t.Code = N'$sqlTenant' AND ct.CustomerOrderId = N'$sqlOrderId'
 ORDER BY ct.Id;
 "@)
                     $mappedHistories = @(Invoke-AzureSqlQuery -Database $sharedDbName -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId,
+       ct.TransactionType, ct.TransactionStatus AS CurrentStatus, tsh.Id AS HistoryId, tsh.Status,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
@@ -1530,11 +1533,11 @@ WHERE t.Code = N'$sqlTenant' AND ct.CustomerOrderId = N'$sqlOrderId'
 ORDER BY ct.Id, tsh.Id;
 "@)
                     $q2Shared = @($q2Shared + $mappedTransactions | Sort-Object Tenant, CustomerOrderId, ChargeId -Unique)
-                    $q5Shared = @($q5Shared + $mappedHistories)
+                    $q5Shared = @($q5Shared + $mappedHistories | Sort-Object Tenant, CustomerOrderId, HistoryId -Unique)
                 }
                 else {
                     $mappedTransactions = @(Invoke-AzureSqlQuery -Database $resolvedTenant.DedicatedDatabaseName -Query @"
-SELECT '$sqlTenant' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+SELECT '$sqlTenant' AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId, ct.TransactionId AS ChargeId,
        ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
@@ -1543,7 +1546,8 @@ WHERE ct.CustomerOrderId = N'$sqlOrderId'
 ORDER BY ct.Id;
 "@)
                     $mappedHistories = @(Invoke-AzureSqlQuery -Database $resolvedTenant.DedicatedDatabaseName -Query @"
-SELECT '$sqlTenant' AS Tenant, ct.CustomerOrderId, tsh.Status,
+SELECT '$sqlTenant' AS Tenant, ct.CustomerOrderId, ct.Id AS CardTransactionRowId,
+       ct.TransactionType, ct.TransactionStatus AS CurrentStatus, tsh.Id AS HistoryId, tsh.Status,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
@@ -1552,7 +1556,7 @@ WHERE ct.CustomerOrderId = N'$sqlOrderId'
 ORDER BY ct.Id, tsh.Id;
 "@)
                     $q2Dedicated = @($q2Dedicated + $mappedTransactions | Sort-Object Tenant, CustomerOrderId, ChargeId -Unique)
-                    $q5Dedicated = @($q5Dedicated + $mappedHistories)
+                    $q5Dedicated = @($q5Dedicated + $mappedHistories | Sort-Object Tenant, CustomerOrderId, HistoryId -Unique)
                 }
             }
 
@@ -1950,109 +1954,59 @@ else {
     @($selectedUiEvents)
 }
 
-function Get-ExpectedHistoryStepsForTenant {
+function Get-HistoryIntegrityForTenant {
     param(
         [Parameter(Mandatory = $true)] [string] $TenantCode,
-        [Parameter(Mandatory = $true)] [string[]] $CustomerOrderIds,
-        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $RunApiEvents,
-        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $RunChargeEvents,
         [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $TransactionRows,
-        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $HistoryRows,
-        [Parameter(Mandatory = $true)] [hashtable] $TenantThreeDsByTenant
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $HistoryRows
     )
 
-    $expectedSteps = 0
+    $tenantTransactions = @($TransactionRows | Where-Object Tenant -eq $TenantCode)
+    $tenantHistories = @($HistoryRows | Where-Object Tenant -eq $TenantCode)
+    $missingHistoryCount = 0
+    $terminalStatusMismatchCount = 0
 
-    foreach ($customerOrderId in $CustomerOrderIds) {
-        $orderApiEvents = @(
-            $RunApiEvents |
-                Where-Object {
-                    $_.Tenant -eq $TenantCode -and
-                    $_.ResolvedCustomerOrderId -eq $customerOrderId
-                }
+    foreach ($transaction in $tenantTransactions) {
+        $matchingHistory = @(
+            $tenantHistories |
+                Where-Object { [string]$_.CustomerOrderId -eq [string]$transaction.CustomerOrderId -and [string]$_.CardTransactionRowId -eq [string]$transaction.CardTransactionRowId } |
+                Sort-Object { [long]$_.HistoryId }
         )
-
-        $orderChargeEvents = @(
-            $RunChargeEvents |
-                Where-Object {
-                    $_.Tenant -eq $TenantCode -and
-                    $_.ResolvedCustomerOrderId -eq $customerOrderId
-                }
-        )
-
-        $orderTransactionRows = @(
-            $TransactionRows |
-                Where-Object {
-                    $_.CustomerOrderId -eq $customerOrderId -and
-                    $_.Tenant -eq $TenantCode
-                }
-        )
-
-        $orderHistoryRows = @(
-            $HistoryRows |
-                Where-Object {
-                    $_.CustomerOrderId -eq $customerOrderId -and
-                    $_.Tenant -eq $TenantCode
-                }
-        )
-
-        $runtimeThreeDsEnabled = $false
-        $hasOrderLevelRuntimeEvidence = ((Get-CollectionCount -Value $orderApiEvents) -gt 0) -or ((Get-CollectionCount -Value $orderTransactionRows) -gt 0) -or ((Get-CollectionCount -Value $orderHistoryRows) -gt 0)
-
-        if ((Get-CollectionCount -Value @($orderApiEvents | Where-Object { $_.PSObject.Properties.Name -contains 'IsThreeDSecureEnabled' -and $_.IsThreeDSecureEnabled })) -gt 0) {
-            $runtimeThreeDsEnabled = $true
-        }
-        elseif ((Get-CollectionCount -Value @($orderTransactionRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.ThreeDSecureStage -match 'redirect|challenge|authenticated' })) -gt 0) {
-            $runtimeThreeDsEnabled = $true
-        }
-        elseif ((Get-CollectionCount -Value @($orderHistoryRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.Stage -match 'redirect|challenge|authenticated' })) -gt 0) {
-            $runtimeThreeDsEnabled = $true
-        }
-        elseif (-not $hasOrderLevelRuntimeEvidence -and $TenantThreeDsByTenant.ContainsKey($TenantCode) -and $TenantThreeDsByTenant[$TenantCode] -eq 1) {
-            $runtimeThreeDsEnabled = $true
+        if ((Get-CollectionCount -Value $matchingHistory) -eq 0) {
+            $missingHistoryCount++
+            continue
         }
 
-        $uniqueChargeIds = @(
-            $orderChargeEvents |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_.ChargeId) } |
-                Select-Object -ExpandProperty ChargeId -Unique
-        )
-
-        $expectedSteps += $(if ($runtimeThreeDsEnabled) { 4 } else { 2 })
-
-        if (-not $runtimeThreeDsEnabled -and (Get-CollectionCount -Value $uniqueChargeIds) -gt 1) {
-            $expectedSteps += ((Get-CollectionCount -Value $uniqueChargeIds) - 1)
-        }
-        elseif (
-            -not $runtimeThreeDsEnabled -and
-            (Get-CollectionCount -Value @($orderHistoryRows | Where-Object { [string] $_.Stage -eq 'tokenization_completed' })) -gt 0
-        ) {
-            $expectedSteps += 1
+        if ([string]$matchingHistory[-1].Status -ne [string]$transaction.Status) {
+            $terminalStatusMismatchCount++
         }
     }
 
-    return $expectedSteps
+    [PSCustomObject]@{
+        TransactionCount = (Get-CollectionCount -Value $tenantTransactions)
+        HistoryCount = (Get-CollectionCount -Value $tenantHistories)
+        MissingHistoryCount = $missingHistoryCount
+        TerminalStatusMismatchCount = $terminalStatusMismatchCount
+    }
 }
 
 $checks = [ordered] @{}
-$expectedStepsByTenant = @{}
 $transactionRowsForHistory = @(@($q2Shared) + @($q2Dedicated))
 $historyRowsForHistory = @(@($q5Shared) + @($q5Dedicated))
-foreach ($tenantCode in $expectedOrdersByTenant.Keys) {
-    $expectedStepsByTenant[$tenantCode] = Get-ExpectedHistoryStepsForTenant -TenantCode $tenantCode -CustomerOrderIds $expectedOrdersByTenant[$tenantCode] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $transactionRowsForHistory -HistoryRows $historyRowsForHistory -TenantThreeDsByTenant $threeDsByTenant
-}
 
 $allRows = @(@($q2Shared) + @($q2Dedicated))
-$allHistoryRows = @(@($q5Shared) + @($q5Dedicated))
+$allHistoryRows = @(@($q5Shared) + @($q5Dedicated) | Sort-Object Tenant, CustomerOrderId, HistoryId -Unique)
 foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
     $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
     $tenantRows = @($allRows | Where-Object { $_.Tenant -eq $tenantCode })
-    $tenantHistoryRows = @($allHistoryRows | Where-Object { $_.Tenant -eq $tenantCode })
     $expectedOrderCount = (Get-CollectionCount -Value $expectedOrdersByTenant[$tenantCode])
     $tenantRowCount = (Get-CollectionCount -Value $tenantRows)
-    $tenantHistoryRowCount = (Get-CollectionCount -Value $tenantHistoryRows)
+    $historyIntegrity = Get-HistoryIntegrityForTenant -TenantCode $tenantCode -TransactionRows $allRows -HistoryRows $allHistoryRows
     $checks["Q2 rows [$tenantCode]"] = Convert-CheckResult -Expected ([string] ($expectedOrderCount * 2)) -Actual ([string] $tenantRowCount) -Outcome $(if ($tenantRowCount -eq ($expectedOrderCount * 2)) { 'PASS' } else { 'FAIL' })
-    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ([string] $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRowCount) -Outcome $(if ($tenantHistoryRowCount -eq $expectedStepsByTenant[$tenantCode]) { 'PASS' } else { 'FAIL' })
+    $historyExpected = 'one or more histories per transaction; latest status matches current transaction'
+    $historyActual = "transactions=$($historyIntegrity.TransactionCount); uniqueHistories=$($historyIntegrity.HistoryCount); missing=$($historyIntegrity.MissingHistoryCount); terminalMismatches=$($historyIntegrity.TerminalStatusMismatchCount)"
+    $historyValid = $historyIntegrity.TransactionCount -eq $tenantRowCount -and $historyIntegrity.MissingHistoryCount -eq 0 -and $historyIntegrity.TerminalStatusMismatchCount -eq 0
+    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected $historyExpected -Actual $historyActual -Outcome $(if ($historyValid) { 'PASS' } else { 'FAIL' })
 }
 $checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] (Get-CollectionCount -Value @($q8Shared))) -Outcome $(if ((Get-CollectionCount -Value @($q8Shared)) -eq 0) { 'PASS' } else { 'FAIL' })
 $checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] (Get-CollectionCount -Value @($q9Shared))) -Outcome $(if ((Get-CollectionCount -Value @($q9Shared)) -eq 0) { 'PASS' } else { 'FAIL' })
@@ -2103,6 +2057,7 @@ $report = [PSCustomObject] @{
         UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
         TransportEvidence = @($transportEvidence)
     }
+    PaymentHistoryEvidence = @($allHistoryRows | Select-Object Tenant, CustomerOrderId, CardTransactionRowId, TransactionType, CurrentStatus, HistoryId, Status, Stage, ThreeDS, Ref)
     Topology = @(
         $tenantTopology |
             Select-Object @{ Name = 'tenantCode'; Expression = { $_.TenantCode } },

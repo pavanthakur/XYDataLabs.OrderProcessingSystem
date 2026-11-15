@@ -27,6 +27,24 @@ on:
         required: true
         default: false
         type: boolean
+      razorpayOrderLookupOnly:
+        description: 'Dev-only read-only provider order/payments lookup; no browser, charge, capture or SQL mutation'
+        required: true
+        default: false
+        type: boolean
+      lookupTenantCode:
+        description: 'Exact tenant for diagnostic-only provider secret alias'
+        required: false
+        type: string
+      lookupOrderId:
+        description: 'Exact existing Razorpay order_* ID; diagnostic mode only'
+        required: false
+        type: string
+      lookupAmountMinor:
+        description: 'Expected INR amount in paise; diagnostic mode only'
+        required: false
+        default: 0
+        type: number
 
 permissions:
   contents: read
@@ -39,7 +57,7 @@ concurrency:
 
 jobs:
   azure_payment_matrix:
-    name: ${{ inputs.servicePreflightOnly && '04 Phase 10 Azure Service Preflight' || '04 Phase 10 Azure Payment Matrix' }}
+    name: ${{ inputs.razorpayOrderLookupOnly && '04 Phase 10 Read-Only Provider Lookup' || inputs.servicePreflightOnly && '04 Phase 10 Azure Service Preflight' || '04 Phase 10 Azure Payment Matrix' }}
     # Playwright's pinned Chromium build does not yet support Ubuntu 26 runners.
     # Keep the browser-dependent acceptance job on the supported 24.04 image.
     runs-on: ubuntu-24.04
@@ -49,6 +67,22 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Validate read-only provider diagnostic selection
+        shell: pwsh
+        env:
+          LOOKUP_ONLY: ${{ inputs.razorpayOrderLookupOnly }}
+          SERVICE_ONLY: ${{ inputs.servicePreflightOnly }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
+          LOOKUP_ORDER: ${{ inputs.lookupOrderId }}
+          LOOKUP_AMOUNT: ${{ inputs.lookupAmountMinor }}
+        run: |
+          if ($env:LOOKUP_ONLY -eq 'true') {
+            if ($env:TARGET_ENVIRONMENT -ne 'dev' -or $env:GITHUB_REF -ne 'refs/heads/dev' -or $env:SERVICE_ONLY -eq 'true') { throw 'Order lookup is dev-branch/dev-environment only and cannot combine with service-preflight mode.' }
+            if ($env:LOOKUP_TENANT -cnotmatch '^[A-Za-z0-9_-]{1,64}$' -or $env:LOOKUP_ORDER -cnotmatch '^order_[A-Za-z0-9]{1,80}$' -or [long]$env:LOOKUP_AMOUNT -le 0) { throw 'Invalid read-only lookup parameters.' }
+          }
+          elseif ($env:LOOKUP_TENANT -or $env:LOOKUP_ORDER -or [long]$env:LOOKUP_AMOUNT -ne 0) { throw 'Lookup parameters require explicit diagnostic-only selection.' }
 
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -244,10 +278,11 @@ jobs:
 
       - name: Install Playwright browser
         working-directory: automation
-        if: inputs.servicePreflightOnly != true
+        if: inputs.servicePreflightOnly != true && inputs.razorpayOrderLookupOnly != true
         run: npx playwright install chromium
 
       - name: Run no-payment service preflight or assigned-provider matrix
+        if: inputs.razorpayOrderLookupOnly != true
         shell: bash
         env:
           PHASE10_FIREWALL_RUN_ID: ${{ github.run_id }}
@@ -276,6 +311,20 @@ jobs:
             --target "${{ steps.topology.outputs.targetKey }}" \
             --tenant-timeout-ms "${{ inputs.tenantTimeoutMs }}" \
             "${EXTRA_ARGS[@]}"
+
+      - name: Read existing Razorpay order and payments (no charge)
+        if: inputs.razorpayOrderLookupOnly == true
+        shell: pwsh
+        env:
+          LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
+          LOOKUP_ORDER: ${{ inputs.lookupOrderId }}
+          LOOKUP_AMOUNT: ${{ inputs.lookupAmountMinor }}
+          EXPECTED_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+        run: |
+          & scripts/lookup-phase10-azure-razorpay-order.ps1 `
+            -TenantCode $env:LOOKUP_TENANT -OrderId $env:LOOKUP_ORDER `
+            -ExpectedAmountMinor ([long]$env:LOOKUP_AMOUNT) `
+            -ExpectedSubscriptionId $env:EXPECTED_SUBSCRIPTION_ID
 
       - name: Verify assigned topology remains unchanged
         if: always()
@@ -348,7 +397,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: phase10-azure-${{ inputs.servicePreflightOnly && 'service-preflight' || 'payment-matrix' }}-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: phase10-azure-${{ inputs.razorpayOrderLookupOnly && 'provider-lookup' || inputs.servicePreflightOnly && 'service-preflight' || 'payment-matrix' }}-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             TestResults/Playwright/azure-https/**
             ${{ runner.temp }}/phase10-sql-firewall-lease-payment-${{ github.run_id }}-*.json

@@ -24,6 +24,7 @@ interface AzureMatrixOptions {
   authPreflightOnly: boolean;
   servicePreflightOnly: boolean;
   allActiveTenants: boolean;
+  resumeCheckpoint?: string;
 }
 
 interface AzureMatrixOutput {
@@ -217,7 +218,9 @@ async function main(): Promise<void> {
         continue;
       }
     }
-    const run = await executePaymentAutomationRun({
+    let run: PaymentAutomationRunOutput;
+    try {
+    run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
       requestedProviders: effectiveProviders,
@@ -226,6 +229,7 @@ async function main(): Promise<void> {
       headless: options.headless,
       verify: options.verify,
       operatorAssistedEntra: options.operatorAssistedEntra,
+      resumeCheckpoint: options.resumeCheckpoint,
       authPreflightOnly: options.authPreflightOnly,
       sandboxOtpCode: options.sandboxOtpCode,
       tenantTimeoutMs: options.tenantTimeoutMs,
@@ -238,6 +242,15 @@ async function main(): Promise<void> {
       },
       threeDs: normalizedProviders.length > 0 ? false : undefined
     });
+    } catch (error) {
+      matrixOutput.status = "failed";
+      matrixOutput.currentStep = "execution-stopped-review-checkpoint";
+      matrixOutput.finishedUtc = new Date().toISOString();
+      matrixOutput.finishedIst = formatIstTimestamp(new Date());
+      await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(matrixOutput, null, 2), "utf8");
+      await writeFile(currentStepPath, `${matrixOutput.currentStep}\n`, "utf8");
+      throw error;
+    }
 
     targetRuns.push(run);
     await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=completed-automation-run`);
@@ -469,11 +482,16 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   let authPreflightOnly = false;
   let servicePreflightOnly = false;
   let allActiveTenants = false;
+  let resumeCheckpoint: string | undefined;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
 
     switch (argument) {
+      case "--resume-checkpoint":
+        resumeCheckpoint = argumentsList[++index];
+        if (!resumeCheckpoint || resumeCheckpoint.startsWith("--")) throw new Error("--resume-checkpoint requires a file path.");
+        break;
       case "--target":
         if (argumentsList[index + 1]) {
           targets.push(argumentsList[index + 1]);
@@ -545,6 +563,7 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   const normalizedProviders = normalizeRequestedProviders(requestedProviders);
   const providerFixtureMatrixRequested = normalizedProviders.length > 0;
   const allTenantMatrix = providerFixtureMatrixRequested && allActiveTenants && tenantCodes.length === 0;
+  if (resumeCheckpoint && (!allTenantMatrix || !operatorAssistedEntra || authPreflightOnly || servicePreflightOnly)) throw new Error("Resume is restricted to the complete Azure-dev operator provider matrix.");
   if (operatorAssistedEntra && (headless || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || (authPreflightOnly ? tenantCodes.length > 1 || allActiveTenants : tenantCodes.length < 1 && !allTenantMatrix))) {
     throw new Error("--operator-assisted-entra requires --headed and exactly --target azure-dev; payment mode requires an explicit tenant or the complete --all-active-tenants two-provider fixture matrix, while auth-preflight-only accepts zero or one tenant. It cannot run against staging or production.");
   }
@@ -579,7 +598,8 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
     operatorAssistedEntra,
     authPreflightOnly,
     servicePreflightOnly,
-    allActiveTenants
+    allActiveTenants,
+    resumeCheckpoint
   };
 }
 

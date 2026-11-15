@@ -173,6 +173,47 @@ The current Azure CLI principal needs SQL `SELECT` access plus only these column
 
 For a standalone no-charge browser authorization diagnosis, use `-Mode AuthPreflight`. It signs out after testing, so a separate payment-matrix run will require another login. Prefer the single `ProviderMatrix` run when the goal is end-to-end coverage and you can remain present for the initial Entra login. Razorpay may ask for a contact phone before card entry; that is contact capture, not payment OTP/3DS. An ambiguous payment result is never retried. This local operator evidence does not convert a hosted `04` run into a payment PASS, and service-preflight PASS alone never means payments passed.
 
+##### Read-only Razorpay order investigation (workflow 04, dev only)
+
+An interrupted checkout can have a Razorpay `order_*` reference without a `pay_*` payment ID. The application status adapter accepts payment IDs only; do not feed it an order ID, fabricate a callback/signature or retry the charge to get a payment ID. Workflow `04` has an explicit `razorpayOrderLookupOnly` diagnostic selection, off by default. It is restricted to branch/environment `dev`, is mutually exclusive with service-preflight-only mode, and skips browser installation and the payment matrix. Existing topology/resource preflights and OIDC permissions remain intact; no new principal, role assignment or local-user Key Vault access is introduced.
+
+After the reviewed workflow changes are committed/pushed with authorization, select these inputs:
+
+| Input | Existing TenantB investigation |
+|---|---|
+| Branch / environment | `dev` / `dev` |
+| `razorpayOrderLookupOnly` | `true` |
+| `servicePreflightOnly` | `false` |
+| `lookupTenantCode` | `TenantB` |
+| `lookupOrderId` | `order_U044q4vHIUIQhZ` |
+| `lookupAmountMinor` | `20000` (INR 200 in paise) |
+
+The diagnostic verifies the subscription and active registry tenant, uses the existing `Razorpay--MerchantId` sandbox key-ID contract plus the exact tenant private-key alias, and issues bounded GET-only requests for the order and its payments. It refuses live keys, redirects, mismatched order/amount/currency, duplicate payments, inconsistent accounting and incomplete pagination. No charge, capture, refund or SQL status update occurs. The current shared key-ID contract is reused, not a new per-tenant credential model; provider authentication failure must block rather than fall back to another credential.
+
+Sanitized output: `TestResults/Playwright/azure-https/razorpay-order-lookup/<tenant>-<order>.json` in the workflow artifact. `LOOKUP_COMPLETE` means the lookup completed, **not payment acceptance**. `NO_PAYMENT_ATTEMPTS` is not a paid or cancelled result; leave the old checkout untouched. `AUTHORIZED_NOT_CAPTURED` and `UNRESOLVED` block the diagnostic gate. A `PAID` result still requires matching SQL/order projection and callback evidence. Never automatically capture or resubmit based on this report. Failure retains a BLOCKED packet where the diagnostic has started; earlier input/subscription failures remain workflow failures. No raw provider payload, Authorization header, contact/card details or secrets are published.
+
+Local mock tests: `pwsh -NoProfile -File scripts/tests/phase10-razorpay-order-lookup.test.ps1`; existing Azure static tests also execute this suite without network access.
+
+##### Local launch and resume procedure
+
+Run the wrapper from PowerShell 7 in your signed-in Windows desktop, not through a hosted job or the chat browser plugin. Install the automation dependencies and Playwright Chromium using the existing local setup before running it. `BROWSER_LAUNCH_FAILED` is a local launch problem; `WAITING_FOR_SIGN_IN`, `AUTHENTICATED`, `SIGN_IN_TIMEOUT` and `SESSION_EXPIRED` describe authentication separately. Remain available for initial normal MFA; after authenticated preflight, the serial matrix can continue without interaction unless the identity provider or payment provider requires it. Unattended completion is not guaranteed. No MFA bypass, saved browser credentials or workload-identity API path is introduced.
+
+The executor writes `checkpoint.json` atomically in its child `payment-automation-*` directory, plus a per-case `partial-summary.json`. Intent is persisted **before** fixture/order mutation. An interrupted or failed case remains unresolved even if its fixture was restored. Do not retry its charge. Inspect provider/SQL state and recovery manifests read-only first. Legacy runs without checkpoints cannot be automatically resumed.
+
+After reviewing the checkpoint, a separately approved continuation can use:
+
+```powershell
+pwsh -NoProfile -File scripts/run-phase10-azure-dev-operator-matrix.ps1 `
+  -Mode ProviderMatrix -ExpectedSubscriptionId $expectedSubscriptionId `
+  -ResumeCheckpoint '<absolute path under TestResults/Playwright to checkpoint.json>'
+```
+
+Resume requires the same source-content identity (including dirty files), live Container Apps templates/revisions, immutable image references, tenant topology and inspected route/3DS/sandbox baseline. Missing identity, escaped paths, duplicate/unknown cases, failed verification or interrupted intent blocks new submissions. Resume only carries forward cases already recorded as sandbox-completed, verified and restored; their original `runId` remains visible and they are **not newly executed payment evidence**. A new browser process still needs one normal sign-in. The checkpoint is local evidence, not an authentication credential or proof against operator tampering. Do not edit it to force acceptance.
+
+`TestResults/Playwright/azure-operator-session.lock` serializes local operator runs. A hard process kill may leave it behind. Review the previous process, checkpoint and fixture recovery before any separately approved stale-lock removal; startup never deletes it automatically. Resume does not reconcile interrupted payments, refresh prior provider verification, or prove an uninterrupted fresh acceptance run. Those remain explicit follow-up checks. Source/deployment changes require new acceptance rather than reuse.
+
+Safe local implementation checks (no Azure queries or charges): `npm --prefix automation run test:azure-operator-safety` and `npx --prefix automation tsc --noEmit -p automation/tsconfig.json`.
+
 ### Workflow Catalog
 
 These are the numbered Phase 10 workflows and their responsibilities:
