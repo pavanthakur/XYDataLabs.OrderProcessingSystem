@@ -16,6 +16,7 @@
       "file": "src/verification/payment-verification-report.test.ts",
       "tests": [
         "complete versioned check inventory passes for an arbitrary tenant",
+        "positive callback proof cannot be waived by a green check or a disabled 3DS flag",
         "FAIL status fails closed",
         "INCONCLUSIVE status fails closed",
         "SKIP status fails closed",

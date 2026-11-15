@@ -4,6 +4,16 @@ import { readFile } from 'node:fs/promises';
 
 const readRepoFile = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
+test('both positive verifiers require tenant-scoped callback evidence independently of 3DS', async () => {
+  for(const file of ['scripts/verify-payment-run-physical.ps1','scripts/verify-payment-run-azure.ps1']) {
+    const script=await readRepoFile(file);
+    const assignments=[...script.matchAll(/UiCallbackExpected\s*=\s*([^\r\n]+)/g)];
+    assert.ok(assignments.length>0);
+    assert.ok(assignments.every(match=>match[1].trim()==='$true'));
+    assert.match(script,/\$uiMatches = @\(\$callback(?:Ui)?Events \| Where-Object \{ \$_\.Tenant -eq \$chargeEvent\.Tenant -and/);
+  }
+});
+
 test('Azure SQL verifier keeps Key Vault auth as default and supports Entra token auth without SQL password retrieval', async () => {
   const script = await readRepoFile('scripts/verify-payment-run-azure.ps1');
 

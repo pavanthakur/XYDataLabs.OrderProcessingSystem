@@ -1276,11 +1276,11 @@ $fallbackReportedUiEvents = @()
 $chargeCorrelation = @(
     foreach ($chargeEvent in $apiChargeEvents) {
         $callbackEvents = @($selectedUiEvents | Where-Object { Test-IsCallbackEvent -Event $_ })
-        $uiMatches = @($callbackEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ChargeId) -and $_.ChargeId -eq $chargeEvent.ChargeId })
+        $uiMatches = @($callbackEvents | Where-Object { $_.Tenant -eq $chargeEvent.Tenant -and -not [string]::IsNullOrWhiteSpace($_.ChargeId) -and $_.ChargeId -eq $chargeEvent.ChargeId })
         $uiCorrelationMode = if ($uiMatches.Count -gt 0) { 'charge-id' } else { 'none' }
 
         if ($uiMatches.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($chargeEvent.ResolvedCustomerOrderId)) {
-            $uiMatches = @($callbackEvents | Where-Object { $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId })
+            $uiMatches = @($callbackEvents | Where-Object { $_.Tenant -eq $chargeEvent.Tenant -and $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId })
             if ($uiMatches.Count -gt 0) {
                 $uiCorrelationMode = 'customer-order'
             }
@@ -1338,7 +1338,7 @@ $chargeCorrelation = @(
             DbStatus = if ($null -ne $dbRow) { [string] $dbRow.Status } else { '' }
             DbStage = if ($null -ne $dbRow) { [string] $dbRow.ThreeDSecureStage } else { '' }
             ThreeDSEnabled = $threeDsByTenant[$chargeEvent.Tenant]
-            UiCallbackExpected = ($threeDsByTenant[$chargeEvent.Tenant] -eq 1)
+            UiCallbackExpected = $true
             UiCallbackLogged = ($uiMatches.Count -gt 0)
             UiCorrelationMode = $uiCorrelationMode
             UiEventNames = @($uiEventNames)
@@ -1409,7 +1409,7 @@ if ($chargeCorrelation.Count -eq 0) {
                     DbStatus = if ($null -ne $dbRow) { [string](Get-ObjectPropertyValue -InputObject $dbRow -PropertyName 'Status') } else { '' }
                     DbStage = if ($null -ne $dbRow) { [string](Get-ObjectPropertyValue -InputObject $dbRow -PropertyName 'ThreeDSecureStage') } else { '' }
                     ThreeDSEnabled = $resolvedThreeDSEnabled
-                    UiCallbackExpected = $false
+                    UiCallbackExpected = $true
                     UiCallbackLogged = $true
                     UiCorrelationMode = if ($null -ne $dbRow) { 'ui-charge-id' } else { 'ui-charge-id-only' }
                     UiEventNames = @([string](Get-ObjectPropertyValue -InputObject $uiEvent -PropertyName 'UiEventName'))

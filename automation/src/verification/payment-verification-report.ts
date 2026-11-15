@@ -15,6 +15,10 @@ export function validatePaymentVerificationReport(value: unknown, request: Verif
   const correlation=report.ChargeCorrelation;
   if(!Array.isArray(correlation)||!correlation.length||correlation.some(item=>!item||typeof item!=="object"
     ||item.Tenant!==request.tenantCode||item.CustomerOrderId!==request.customerOrderId||item.InDb!==true||item.DbStatus!=="completed")) findings.push("Charge correlation is missing, pending, cross-tenant or belongs to another order.");
+  if(Array.isArray(correlation)&&correlation.length){
+    if(correlation.some(item=>item?.UiCallbackExpected!==true)) findings.push("Positive callback requirement was waived or omitted.");
+    if(correlation.some(item=>item?.UiCallbackLogged!==true)) findings.push("Required UI callback proof is missing.");
+  }
   const checks = report.Checks;
   if (!checks || typeof checks !== "object" || Array.isArray(checks) || Object.keys(checks).length === 0) return [...findings, "Required checks are absent or empty."];
   const required = ["Q8 bleed", "Q9 bleed", "API log -> DB charge IDs", "UI telemetry -> callbacks present where expected"];
@@ -40,5 +44,5 @@ export function verificationSafetyEstablished(value:unknown,request:Verification
   const findings=validatePaymentVerificationReport(value,request);
   const permitted=["App Insights query execution","Provider payment IDs -> request/dependency correlation","UI telemetry -> callbacks present where expected",`Q5 steps [${request.tenantCode}]`]
     .map(name=>`Required check did not pass: ${name}.`);
-  return findings.every(item=>permitted.includes(item));
+  return findings.every(item=>item==="Required UI callback proof is missing."||permitted.includes(item));
 }

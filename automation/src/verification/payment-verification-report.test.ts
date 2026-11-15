@@ -5,9 +5,19 @@ import type { VerificationRequest } from "../contracts/verification-adapter.js";
 const request: VerificationRequest = { runtimeTarget:"azure-dev",runtime:"azure",environment:"dev",profile:"https",runPrefix:"fixture",tenantCode:"TenantD",providerPaymentId:"pay_fixture",customerOrderId:"ORDER-1",orderReferenceId:"reference",startedUtc:new Date(Date.now()-300000).toISOString() };
 function valid() {
   const names=["Q8 bleed","Q9 bleed","API log -> DB charge IDs","UI telemetry -> callbacks present where expected","App Insights query execution","Provider payment IDs -> request/dependency correlation",...["Pre-flight 3DS","Q2 rows","Q5 steps","Successful charge","Paid order"].map(name=>`${name} [TenantD]`)];
-  return {SchemaVersion:1,EvidenceKind:"payment-correlation",Runtime:"azure",Environment:"dev",RunPrefix:"fixture",GeneratedUtc:new Date().toISOString(),ChargeCorrelation:[{Tenant:"TenantD",CustomerOrderId:"ORDER-1",InDb:true,DbStatus:"completed"}],Checks:Object.fromEntries(names.map(name=>[name,{Expected:"fixture",Actual:"fixture",Outcome:"PASS"}]))};
+  return {SchemaVersion:1,EvidenceKind:"payment-correlation",Runtime:"azure",Environment:"dev",RunPrefix:"fixture",GeneratedUtc:new Date().toISOString(),ChargeCorrelation:[{Tenant:"TenantD",CustomerOrderId:"ORDER-1",InDb:true,DbStatus:"completed",UiCallbackExpected:true,UiCallbackLogged:true}],Checks:Object.fromEntries(names.map(name=>[name,{Expected:"fixture",Actual:"fixture",Outcome:"PASS"}]))};
 }
+
 test("complete versioned check inventory passes for an arbitrary tenant",()=>assert.deepEqual(validatePaymentVerificationReport(valid(),request),[]));
+
+test("positive callback proof cannot be waived by a green check or a disabled 3DS flag",()=>{
+  const report=valid();report.ChargeCorrelation[0].UiCallbackExpected=false;
+  assert.ok(validatePaymentVerificationReport(report,request).length);
+  assert.equal(verificationSafetyEstablished(report,request),false);
+  report.ChargeCorrelation[0].UiCallbackExpected=true;report.ChargeCorrelation[0].UiCallbackLogged=false;
+  assert.ok(validatePaymentVerificationReport(report,request).length);
+  assert.equal(verificationSafetyEstablished(report,request),true);
+});
 function rejectsStatus(status:string){
   const report=valid(); report.Checks["Q8 bleed"].Outcome=status;
   assert.ok(validatePaymentVerificationReport(report,request).length);

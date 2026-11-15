@@ -1843,7 +1843,7 @@ $callbackUiEvents = @($selectedUiEvents | Where-Object { Test-IsCallbackEvent -E
 
 $chargeCorrelation = @(
 foreach ($chargeEvent in $apiChargeEvents) {
-    $uiMatches = @($callbackUiEvents | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId })
+    $uiMatches = @($callbackUiEvents | Where-Object { $_.Tenant -eq $chargeEvent.Tenant -and $_.ChargeId -eq $chargeEvent.ChargeId })
     foreach ($uiMatch in $uiMatches) {
         $null = $matchedUiEventKeys.Add($uiMatch.EventKey)
     }

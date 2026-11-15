@@ -46,7 +46,8 @@ describe("Sandbox never silently simulates localhost payments",()=>{
       getPaymentConfiguration:vi.fn().mockResolvedValue({activeProviderType:"OpenPay",activeProviderName:"OpenPay",collectionMode:"direct_card_form",adapterMode:mode,isProduction:false,isThreeDSecure:true,browserKey:"fixture",browserMerchantId:"fixture"})} as unknown as OrderProcessingApiClient;
     render(<MemoryRouter initialEntries={["/customers/7/orders/42/payment"]}><Routes><Route path="/customers/:customerId/orders/:orderId/payment" element={<PaymentPage activeTenantCode="TenantA" apiClient={api}/>}/></Routes></MemoryRouter>);
     await waitFor(()=>expect(screen.getByTestId("payment-runtime-mode")).toHaveTextContent(`Payment mode: ${mode}`));
-    if(mode==="sandbox") expect(setup).toHaveBeenCalledWith("payment-form","deviceIdHiddenFieldName");
+    await waitFor(()=>expect(screen.getByText("Device session").nextElementSibling).toHaveTextContent("Ready"));
+    if(mode==="sandbox") await waitFor(()=>expect(setup).toHaveBeenCalledWith("payment-form","deviceIdHiddenFieldName"));
     else expect(setup).not.toHaveBeenCalled();
   });
 });
