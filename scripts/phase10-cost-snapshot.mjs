@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -9,6 +10,52 @@ function runAz(args) {
     : spawnSync('az', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
   if (result.error || result.status !== 0) throw new Error(`Read-only Azure query failed: az ${args.slice(0, 3).join(' ')} (exit ${result.status ?? 'unavailable'}).`);
   try { return JSON.parse(result.stdout); } catch { throw new Error(`Read-only Azure query returned invalid JSON: az ${args.slice(0, 3).join(' ')}.`); }
+}
+
+export async function queryCostManagement(subscriptionId, invoke = runAz) {
+  if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(subscriptionId ?? '')) {
+    throw new Error('A valid explicitly selected subscription ID is required.');
+  }
+  const directory = await mkdtemp(path.join(tmpdir(), 'phase10-cost-query-'));
+  const requestPath = path.join(directory, 'query.json');
+  try {
+    // A file avoids Windows az.cmd stripping the quotes from inline JSON.
+    await writeFile(requestPath, JSON.stringify({
+      type: 'ActualCost', timeframe: 'MonthToDate', dataset: {
+        granularity: 'None', aggregation: { totalCost: { name: 'PreTaxCost', function: 'Sum' } },
+        grouping: [{ type: 'Dimension', name: 'ServiceName' }, { type: 'Dimension', name: 'ResourceId' }],
+      },
+    }), { flag: 'wx', mode: 0o600 });
+    return await invoke(['rest', '--method', 'post', '--url', `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2025-03-01`,
+      '--headers', 'Content-Type=application/json', '--body', `@${requestPath}`, '--output', 'json']);
+  } finally {
+    await unlink(requestPath).catch((error) => { if (error.code !== 'ENOENT') throw error; });
+    await rmdir(directory); // Only this newly owned empty directory; never recursive cleanup.
+  }
+}
+
+export function normalizeLogAnalyticsUsage(result) {
+  let values;
+  if (Array.isArray(result)) {
+    values = result.map((row) => [row?.DataType, row?.ingestionMB]);
+  } else {
+    const table = result?.tables?.[0] ?? result;
+    const columns = table?.columns?.map((column) => column.name);
+    if (!columns?.includes('DataType') || !columns.includes('ingestionMB') || !Array.isArray(table.rows)) {
+      throw new Error('Log Analytics response is missing DataType or ingestionMB observations.');
+    }
+    values = table.rows.map((row) => [row[columns.indexOf('DataType')], row[columns.indexOf('ingestionMB')]]);
+  }
+  const rows = values.map(([label, rawAmount]) => {
+    const amount = typeof rawAmount === 'string' && /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(rawAmount.trim())
+      ? Number(rawAmount) : rawAmount;
+    if (typeof label !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,127}$/.test(label)
+      || (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0))) {
+      throw new Error('Log Analytics returned malformed usage observations.');
+    }
+    return [label, amount];
+  });
+  return { columns: [{ name: 'DataType' }, { name: 'ingestionMB' }], rows };
 }
 
 function rowsFromCostQuery(result) {
@@ -27,12 +74,12 @@ function rowsFromCostQuery(result) {
 }
 
 export function buildCostSnapshot({ capturedAt = new Date().toISOString(), subscriptionId, resourceGroup, costQuery, resources, containerApps, acrUsage, logAnalyticsByTable, sqlStorage, functionsStorage }) {
-  if (!subscriptionId || !resourceGroup || !Array.isArray(resources) || !Array.isArray(containerApps) || !Array.isArray(acrUsage)
-    || !Array.isArray(sqlStorage) || !Array.isArray(functionsStorage) || !Array.isArray(logAnalyticsByTable?.columns) || !Array.isArray(logAnalyticsByTable?.rows)) {
+  const registryUsage = Array.isArray(acrUsage) ? acrUsage : acrUsage?.value;
+  if (!subscriptionId || !resourceGroup || !Array.isArray(resources) || !Array.isArray(containerApps) || !Array.isArray(registryUsage)
+    || !Array.isArray(sqlStorage) || !Array.isArray(functionsStorage) || !logAnalyticsByTable) {
     throw new Error('Subscription, resource group, resource, Container Apps, ACR, Log Analytics, SQL and Functions observations are required.');
   }
-  const logColumns = logAnalyticsByTable.columns.map((column) => column.name);
-  if (!logColumns.includes('DataType') || !logColumns.includes('ingestionMB')) throw new Error('Log Analytics response is missing DataType or ingestionMB columns.');
+  const usage = normalizeLogAnalyticsUsage(logAnalyticsByTable);
   return {
     schemaVersion: 1,
     readOnly: true,
@@ -50,8 +97,8 @@ export function buildCostSnapshot({ capturedAt = new Date().toISOString(), subsc
       maxReplicas: app.properties?.template?.scale?.maxReplicas ?? null,
       configuredReplicas: (app.properties?.template?.scale?.rules ?? []).length ? 'event-driven' : 'min/max only',
     })),
-    acrUsage: acrUsage.map(({ name, currentValue, limit, unit }) => ({ name, currentValue, limit, unit })),
-    logAnalyticsByTable,
+    acrUsage: registryUsage.map(({ name, currentValue, limit, unit }) => ({ name, currentValue, limit, unit })),
+    logAnalyticsByTable: usage,
     sqlStorage,
     functionsStorage,
     limitations: [
@@ -121,7 +168,7 @@ export function compareCostSnapshots(before, after) {
     const tableIndex = columns.indexOf('DataType');
     const amountIndex = columns.indexOf('ingestionMB');
     if (tableIndex < 0 || amountIndex < 0) return new Map();
-    return new Map(snapshot.logAnalyticsByTable.rows.map((row) => [String(row[tableIndex]), Number(row[amountIndex])]));
+    return new Map(snapshot.logAnalyticsByTable.rows.map((row) => [String(row[tableIndex]), row[amountIndex] === null ? null : Number(row[amountIndex])]));
   };
   const logBefore = tableUsage(before);
   const logAfter = tableUsage(after);
@@ -226,7 +273,7 @@ async function main(args) {
     }
   }
   const acrUsage = runAz(['acr', 'show-usage', '--name', acrName, '--output', 'json']);
-  const costQuery = runAz(['rest', '--method', 'post', '--url', `https://management.azure.com/subscriptions/${account.id}/providers/Microsoft.CostManagement/query?api-version=2025-03-01`, '--headers', 'Content-Type=application/json', '--body', JSON.stringify({ type: 'ActualCost', timeframe: 'MonthToDate', dataset: { granularity: 'None', aggregation: { totalCost: { name: 'PreTaxCost', function: 'Sum' } }, grouping: [{ type: 'Dimension', name: 'ServiceName' }, { type: 'Dimension', name: 'ResourceId' }] } }), '--output', 'json']);
+  const costQuery = await queryCostManagement(account.id);
   const workspace = runAz(['monitor', 'log-analytics', 'workspace', 'show', '--resource-group', resourceGroup, '--workspace-name', workspaceName, '--query', 'customerId', '--output', 'json']);
   const logAnalyticsByTable = runAz(['monitor', 'log-analytics', 'query', '--workspace', String(workspace), '--analytics-query', 'Usage | where TimeGenerated > ago(7d) | summarize ingestionMB=sum(Quantity) by DataType | order by ingestionMB desc', '--output', 'json']);
 
@@ -251,8 +298,7 @@ async function main(args) {
     }
     functionsStorage.push({ functionApp: app.name, storageAccount: storage?.name ?? null, usedCapacityBytes });
   }
-  const logTable = logAnalyticsByTable?.tables?.[0];
-  const snapshot = buildCostSnapshot({ subscriptionId: account.id, resourceGroup, costQuery, resources, containerApps, acrUsage, logAnalyticsByTable: { columns: logTable?.columns ?? [], rows: logTable?.rows ?? [] }, sqlStorage, functionsStorage });
+  const snapshot = buildCostSnapshot({ subscriptionId: account.id, resourceGroup, costQuery, resources, containerApps, acrUsage, logAnalyticsByTable, sqlStorage, functionsStorage });
   await mkdir(path.dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(snapshot, null, 2)}\n`, { flag: 'wx' });
   process.stdout.write(`Read-only cost snapshot written: ${output}\n`);

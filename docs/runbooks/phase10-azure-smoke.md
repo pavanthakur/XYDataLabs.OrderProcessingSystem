@@ -196,6 +196,8 @@ Local mock tests: `pwsh -NoProfile -File scripts/tests/phase10-razorpay-order-lo
 
 ##### Local launch and resume procedure
 
+Recorded bounded acceptance: automation candidate `b434672a` passed Docker A/B/C × both providers and the six-positive Azure-dev operator matrix on 15 November, using one normal Entra login/MFA and final sign-out. Evidence is in `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261115-194923198/` and `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-15T15-14-59-368Z/`. Matching client source-content identity is not a claim that Azure deployed image source equals the runner revision. Remaining transport/Functions, regular-user isolation/expiry, negatives/recovery and NFR/rollback gates remain open. Do not repeat successful charges for documentation freshness. The test window expired 15 November 22:30 IST; further runtime mutations require renewed scoped approval.
+
 **Tenant/provider parity repair:** Docker and Azure baseline positives share `automation/src/contracts/payment-scenarios.ts`: Razorpay hosted/INR and OpenPay 3DS-off/MXN, both using customer directory → customer → create order → initiate payment. Fresh customer data may be provisioned through the existing API. Azure's normal assigned-provider workflow does not acquire permission to switch providers from this contract; alternate-provider fixtures remain separately selected, dev-only and serialized.
 
 Current verification requires `SchemaVersion=1`, `EvidenceKind=payment-correlation`, exact runtime/environment and the mandatory named check inventory. Empty/missing/skipped/unknown checks fail closed. Charge completion, unique successful charge, Paid-order projection, matching SQL amount/currency and required UI callback telemetry are distinct from history integrity. Callback proof is required for positive baseline payments even when configured 3DS is false. Dry-run packets use `dry-run-complete`, show **DRY-RUN — NOT PAYMENT ACCEPTANCE EVIDENCE**, and write separate dry-run pointers; they do not replace live pointers.
@@ -677,7 +679,7 @@ node scripts/phase10-cost-snapshot.mjs `
   --subscription-id <approved-subscription-id> `
   --resource-group rg-orderprocessing-dev `
   --acr-name <platform-acr-name> `
-  --workspace-name loganalytics-phase10-dev `
+  --workspace-name <deployed-log-analytics-workspace-name> `
   --output TestResults/AzureCost/dev-snapshot-<unique-id>.json
 ```
 

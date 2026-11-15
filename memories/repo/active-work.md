@@ -2,45 +2,31 @@
 
 Session navigation, not proof. Verify Git, runtime and referenced evidence before acting.
 
-## Historical local acceptance — 12 November 2026
+## Latest checkpoint — 16 November 2026
 
-- Review revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
-- Worktree state: `UNKNOWN`
+- Review revision: `b434672aacff9284a4646f0a75fca2ce0374625f`
+- Worktree state: `DIRTY`
 - Evidence status: `HISTORICAL`
-- Evidence revision: `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe`
-- Evidence environment: `LOCAL DOCKER DESKTOP ON G:`
-- Evidence scope: bounded non-Azure local Docker acceptance; not full Phase 10 or Azure acceptance
-- Evidence reference: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`
-- Candidate `494ab4fdf0d7027bf9a506931fe903d4cea1fdbe` (`dev`) passed bounded non-Azure Docker acceptance; this does not certify later candidates, full Phase 10 or Azure.
-- Evidence: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`; E2E `phase10-docker-http-20261111-230915653`, NFR `phase10-docker-nfr-20261111-234505649`.
-- Recorded scope included all A/B/C × Razorpay/OpenPay deterministic and sandbox journeys, isolated integration, identity, messaging/Functions, persistence, settings restoration and NFR recovery/rollback. L6 A/B passed; L6 C passed under DW-028 Option A (workflow 99 local-only). See Phase 10 checklist for run links and limits.
-- DW-023/DW-024 and payment/order continuation capabilities remain Phase 11 deferrals. Visible OpenPay 3DS, Razorpay S2S and ACA revision rollback are not certified by this historical packet.
+- Evidence revision: `b434672aacff9284a4646f0a75fca2ce0374625f`
+- Evidence environment: `LOCAL DOCKER DESKTOP ON G: AND AZURE DEV`
+- Evidence scope: bounded Docker acceptance and six Azure sandbox positives; not full Phase 10
+- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261115-194923198/acceptance-packet.json`
 
-## Historical Azure dev checkpoint — 14 November 2026
+- Tested automation revision: `b434672aacff9284a4646f0a75fca2ce0374625f`, clean during acceptance. Historical recorded evidence, not live revalidation of all runtime settings.
+- Docker `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261115-194923198/`: packet, completion and offline HTML passed. Backend 374, frontend 61, automation 62 cases/12 suites, isolated integration 75 passed. Six deterministic positives, six sandbox positives and six Razorpay negatives passed across A/B/C and both providers. Identity, messaging/Functions, persistence and all 18 fixture restorations passed. Integration databases cleaned; application metadata unchanged.
+- Azure `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-15T15-14-59-368Z/summary.json`: six fresh sandbox positives, 66/66 required checks, one Entra login/MFA and final sign-out. Provider/SQL/callback/unique charge/Paid projection passed. Final read-only reconciliation confirmed six verified/restored receipts and unchanged source/deployment/settings. Docker/Azure client source identities agree; Azure deployed application image identity is separate. Not hosted unattended workflow 04 acceptance.
+- Hosted build/contracts `43723705879` and AI/docs/prompts/drift checks passed on `b434672a`. ADR skipped by opt-in, not PASS. Preserve earlier failed CI and stopped Docker evidence.
+- Final Docker storage: G: 437.5 GiB free, SQL allocation 0.28 GiB, 13 containers at `10m × 3`, zero mismatches. Build/package warnings and coverage source-line branch limitation remain.
+- Approved cost-only follow-up fixes Windows JSON transport, CLI response normalization and unknown/null handling. Ten cost and nine hosted-contract tests passed. Read-only snapshot `TestResults/AzureCost/phase10-dev-20261116-cost-snapshot.json` captured 16 November 00:20 IST: approximately INR 586.07 subscription month-to-date, lagging and not per-run cost; three SQL size limits unknown. Monthly INR 5,000 budget is an alert, not a cap.
+- Closeout validation: 82 release-contract tests and nine hosted-contract tests passed (the ten cost tests are included in the 82); secret hygiene, documentation links, AI customization, 211 environment checks and diff whitespace checks passed. Application build/integration reruns are not applicable to this cost/CI/docs-only follow-up; runtime evidence remains bound to `b434672a`.
+- Next: commit/push only reviewed cost/CI/docs files and verify hosted checks on the new revision (pending at this checkpoint). New cost-only commits do not inherit exact-revision payment acceptance. No further login or payment rerun needed.
+- Azure testing window expired 15 November 22:30 IST. No new charges/runtime mutations, deployment, access changes or cleanup without renewed scoped approval; resources may continue billing.
+- Broader current-candidate Azure transport/Functions, regular-user isolation/expiry, negatives/recovery, NFR/rollback and unified reporting remain open. Historical L6 C PASS on `494ab4fd` under DW-028 Option A remains valid only in its recorded scope. Current-image NFR/rollback was not rerun.
+- DW-023/DW-024 fulfillment, installments/unresolved-payment recovery, Razorpay S2S and visible OpenPay challenge capabilities remain uncertified. Never retry uncertain history blindly: preserve old TenantA ORDER-1/4/5 and TenantB shared ORDER-2 (provider `order_U044q4vHIUIQhZ`, zero attempts at diagnostic `43698126336`). Dedicated numeric IDs overlap: correlate tenant/database/reference/provider.
+- Local Docker SQL loopback14330 only; native Windows SQL1433 excluded. Preserve volumes/settings/unrelated backups. No reset/prune/compaction. Owner deleted F: retention; not a recovery option. Do not broaden Key Vault permissions.
 
-Azure acceptance was PARTIAL; revision/image binding was UNKNOWN. Historical evidence is not current-candidate proof:
-- One-login A/B/C preflight: `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-14T12-29-52-606Z/summary.json`. No regular-user, expiry or full payment certification.
-- Interrupted payments: `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-14T12-59-46-515Z/operator-stop-note.md`. TenantA ORDER-1 was provider-confirmed; TenantB ORDER-2 reached checkout. Never retry either blindly; see the later read-only provider lookup below.
-- OIDC service-preflight-only run `43623386488` on `815be4d38a593c8fe3f9c80cf64083d55f472746`: `TestResults/Playwright/azure-https/hosted-service-preflight-43623386488/`. Zero payment journeys; not image acceptance.
-- Operator Key Vault `secrets/get` was Forbidden. Do not grant broad user access; use approved OIDC/managed-identity paths. Local SQL Entra verification requires the scoped firewall lease. Earlier Functions publishing/indexing failures and deployment history remain in the Phase 10 checklist/Git history; do not infer current runtime state from them.
+## Historical reference and navigation
 
-## Next action
+Historical bounded Docker acceptance on `494ab4fd`: `TestResults/Phase10/accepted/phase10-local-acceptance-494ab4fd.json`. It does not certify changed images. Preserve failed/partial reports and successful payment history.
 
-### 15 November operator-runner implementation checkpoint
-
-Parity implementation `9d18c41c` is committed/pushed. Its preserving Docker run `phase10-docker-http-20261115-194126444` was stopped during startup, before E2E/payment execution: review found the physical verifier still waived callbacks with 3DS off. Follow-up makes callback proof mandatory in both verifier paths and the TypeScript contract, tenant-scopes event matching, and adds regressions. Hosted CI `43722972805` failed a frontend device-setup assertion race; its test now awaits actual readiness, without changing application behavior. The stopped Docker run and failed CI are not acceptance. New full runtime/hosted evidence is pending on the follow-up candidate.
-
-Current parity repair (prepared on `47dadbf4`; owner authorized commit/push to `dev` after review/checks): shared Docker/Azure UI scenarios; fail-closed versioned checks; separate dry-run packets/pointers; durable case ledger; read-only Azure checkpoint reconciliation; safe independent-case continuation; completed charge/Paid-order/terms/callback gates. Full precommit foundations passed (`TestResults/Phase10/payment-parity-precommit-20261115`), as did 28 report tests, 33 Azure static checks, 211 environment checks, secret scan, scoped local/Docker/Azure-dev dry runs, AI/docs and PowerShell parsing. Source-inventory, recovery and strict-verifier regressions passed. Coverage HTML retains its existing source-line branch limitation; Windows symlink test remains skipped. Docker seed/storage audits passed. No new charges yet. Next: commit/push, then rebuild/start Docker without reset and run clean-candidate deterministic/sandbox acceptance before Azure-dev. See the checklist's parity-repair checkpoint; full acceptance remains open. Earlier paragraphs below are historical evidence, not current acceptance or remaining-action authority.
-
-Historical no-charge preflight `payment-automation-azure-matrix-2026-11-15T08-23-42-227Z` passed one-login A/B/C access, switching, sandbox routes and logout. No order/payment was created. TenantC OpenPay reported 3DS enabled; preserve settings. Expiry and live interrupted-run recovery remain NOT TESTED. Legacy runs lack resumable anchors. This is dirty-candidate evidence, not current committed acceptance.
-
-Earlier TenantA ORDER-4/5 reconciliation is in `TestResults/Playwright/azure-https/reconciliation-20261115-readonly/summary.json`. During parity repair, stricter read-only checks additionally found the Razorpay callback (1 required/1 observed); OpenPay Paid order, unique successful charge/matching terms and callback passed. No payment was retried; this is not a fresh full-matrix packet or a new provider-status lookup. Preserve the interrupted matrix. B/C payment acceptance remains pending. Legacy cases lack resumable anchors; workload-identity API testing remains separate/unimplemented.
-
-Historical code `dbe264bc1fdf1bdde194f93ed90225d1f3a1fed9` is pushed. OIDC diagnostic `43698126336` confirms TenantB provider order `order_U044q4vHIUIQhZ` (ORDER-2): zero attempts/payments, INR 200 due, zero paid (`NO_PAYMENT_ATTEMPTS`). Leave its old checkout untouched. Artifact: `TestResults/Playwright/azure-https/hosted-provider-lookup-43698126336/`. No charge, browser run, access grant or forced status. Retain the SSMS helper. Payment `04`, Functions replay, regular-user isolation, expiry and current image binding remain open; Azure acceptance is NOT COMPLETE.
-
-## Safety and navigation
-
-- Local Docker SQL uses loopback `14330`; native Windows SQL `1433` is out of scope. Verify physical identity before any DB work.
-- The owner deleted `F:\DockerRetained\DockerDesktopWSL-before-G`; it is not recoverable from that location. Do not touch unrelated F: backups.
-- Preserve Docker volumes, provider settings and payment history. No reset, global prune, VHDX compaction, charge/refund, Azure/directory mutation or Git write without explicit scoped approval. Never resolve uncertain payment state by forcing status or resubmitting.
-- Phase 10 source of truth: `docs/internal/phase10-implementation-checklist.md`; design/gates: `docs/internal/phase10-preazure-lld.md`; Azure sequence: `docs/runbooks/phase10-azure-smoke.md`.
+Canonical owners: `docs/internal/phase10-implementation-checklist.md`, `docs/internal/phase10-preazure-lld.md`, `docs/runbooks/phase10-azure-smoke.md`. Raw TestResults remain ignored. No new workstream automatically.

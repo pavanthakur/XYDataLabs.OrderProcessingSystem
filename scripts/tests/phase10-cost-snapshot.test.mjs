@@ -1,6 +1,53 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCostSnapshot, compareCostSnapshots } from '../phase10-cost-snapshot.mjs';
+import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { buildCostSnapshot, compareCostSnapshots, normalizeLogAnalyticsUsage, queryCostManagement } from '../phase10-cost-snapshot.mjs';
+
+test('cost request uses a complete JSON file and cleans its owned file/directory after success', async () => {
+  let requestPath;
+  const response = await queryCostManagement('11111111-1111-4111-8111-111111111111', async (args) => {
+    assert.deepEqual(args.slice(0, 3), ['rest', '--method', 'post']);
+    const body = args[args.indexOf('--body') + 1];
+    assert.ok(body.startsWith('@')); requestPath = body.slice(1);
+    const json = JSON.parse(await readFile(requestPath, 'utf8'));
+    assert.equal(json.dataset.aggregation.totalCost.name, 'PreTaxCost');
+    assert.deepEqual(json.dataset.grouping.map((item) => item.name), ['ServiceName', 'ResourceId']);
+    return { properties: { rows: [] } };
+  });
+  assert.deepEqual(response, { properties: { rows: [] } });
+  await assert.rejects(access(requestPath));
+  await assert.rejects(access(path.dirname(requestPath)));
+});
+
+test('cost request cleans up after transport failure and rejects invalid subscription before invocation', async () => {
+  let requestPath;
+  await assert.rejects(queryCostManagement('11111111-1111-4111-8111-111111111111', (args) => {
+    requestPath = args[args.indexOf('--body') + 1].slice(1);
+    throw new Error('controlled read-only transport failure');
+  }), /controlled/);
+  await assert.rejects(access(path.dirname(requestPath)));
+  await assert.rejects(queryCostManagement('../other-scope', () => assert.fail('must not invoke Azure')), /subscription/);
+});
+
+test('Log Analytics accepts CLI rows and REST tables without copying arbitrary payload fields', () => {
+  const cli = normalizeLogAnalyticsUsage([{ DataType: 'AppTraces', ingestionMB: '1.25', TableName: 'PrimaryResult', secret: 'must-not-copy' }]);
+  const rest = normalizeLogAnalyticsUsage({ tables: [{ columns: [{ name: 'ingestionMB' }, { name: 'DataType' }], rows: [[1.25, 'AppTraces']] }] });
+  assert.deepEqual(cli, rest);
+  assert.equal(JSON.stringify(cli).includes('must-not-copy'), false);
+  for (const value of [{}, [{ DataType: 'AppTraces' }], [{ DataType: 'AppTraces', ingestionMB: '' }], [{ DataType: 'AppTraces', ingestionMB: 'not-a-number' }], [{ DataType: 'invalid label', ingestionMB: 1 }]]) {
+    assert.throws(() => normalizeLogAnalyticsUsage(value), /observations/);
+  }
+});
+
+test('missing Log Analytics amounts remain unknown in snapshot comparisons, never zero', () => {
+  const before = comparisonFixture(3.25, 2, 1, null, 10, 1000);
+  const after = comparisonFixture(7.5, 2, 1, 31, 10, 1000);
+  const diff = compareCostSnapshots(before, after);
+  assert.equal(diff.logAnalyticsByTable[0].lastSevenDaysIngestionMB.before, null);
+  assert.equal(diff.logAnalyticsByTable[0].lastSevenDaysIngestionMB.delta, null);
+  assert.equal(diff.comparisonStatus, 'INCOMPLETE');
+});
 
 function comparisonFixture(cost, acr, replicas, logMb, sqlPercent, storageBytes, subscriptionId = 'sub-id') {
   return buildCostSnapshot({
@@ -13,6 +60,13 @@ function comparisonFixture(cost, acr, replicas, logMb, sqlPercent, storageBytes,
     functionsStorage: [{ functionApp: 'fn', storageAccount: 'storage', usedCapacityBytes: storageBytes }],
   });
 }
+
+test('cost snapshot accepts the ACR CLI value envelope and refuses missing usage', () => {
+  const base = comparisonFixture(3.25, 2, 1, 22, 10, 1000);
+  const input = { ...base, costQuery: { columns: [{ name: 'ServiceName' }, { name: 'ResourceId' }, { name: 'PreTaxCost' }], rows: [['Registry', '/resource/acr', 1]] } };
+  assert.deepEqual(buildCostSnapshot({ ...input, acrUsage: { value: base.acrUsage } }).acrUsage, base.acrUsage);
+  assert.throws(() => buildCostSnapshot({ ...input, acrUsage: {} }), /required/);
+});
 
 test('cost snapshot normalizes cost, container configuration, ACR and resource inventory without passing through raw payloads', () => {
   const snapshot = buildCostSnapshot({
