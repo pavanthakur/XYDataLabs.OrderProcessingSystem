@@ -1,5 +1,7 @@
 # Phase 10 Azure Smoke Runbook
 
+Azure replay approval evidence uses a separate `<summary>.owner.json` reservation and numbered immutable JSON records under `<summary>.checkpoints/`. Each checkpoint is flushed and closed before publication; the convenience summary is replaced with no open summary handle. If summary replacement fails, inspect the checkpoints as well as the stale summary. `SUBMISSION_OUTCOME_UNKNOWN` means reconcile the protected API/SQL state before any retry; it never authorizes another approval. Do not automatically delete reservations or temporary checkpoint files. Local identity approval preserves a single-document JSON summary for the .NET probe and a `<summary>.jsonl` append-only recovery journal. The probe requires explicit APPROVED status plus matching response metadata; an interrupted submission is not acceptance. Local evidence tests and probe build pass. Executable sign-out finalization and mocked NFR restart/readiness/restoration tests pass; process-tree cancellation coverage remains open. Linux and live approval acceptance remain NOT TESTED.
+
 This runbook covers the first live check for the Phase 10 pre-Azure baseline defined in [docs/internal/phase10-preazure-lld.md](../internal/phase10-preazure-lld.md), with the execution slices expanded in [docs/internal/phase10-implementation-checklist.md](../internal/phase10-implementation-checklist.md).
 
 ## Scope
@@ -170,6 +172,19 @@ The wrapper checks the active subscription, resolves and validates the current U
 Only after that preflight succeeds, complete one Entra login when the headed browser opens. Before changing any fixture or creating an order, the payment runner performs an authenticated no-charge tenant-switch/configuration preflight in that same session. If it fails, all payment cases are blocked. If it passes, the runner preserves the session in memory and performs the complete active-tenant × provider matrix serially: for every active tenant, Razorpay hosted checkout and OpenPay, both with the configured 3DS flag false. It uses fresh persisted orders and provider-currency rules, verifies the provider and database outcome after each case, restores the exact original registry route and per-provider 3DS flags after each case, and signs out once at the end. A failed restore keeps its recovery manifest/lock and stops the matrix. The matrix rejects missing, duplicate, skipped or extra tenant/provider pairs; its summary records the no-charge Entra preflight, coverage and restoration outcomes separately.
 
 The current Azure CLI principal needs SQL `SELECT` access plus only these column-scoped `UPDATE` permissions: `dbo.Tenants.PaymentProviderCode` in the shared registry database, and `payments.PaymentProviders.Use3DSecure` in each active tenant's business database (shared-pool or dedicated). Do not grant table-wide `UPDATE` or use SQL-admin credentials for this test. These database grants are a prerequisite; this implementation does not create them. If not provisioned, the read-only fixture preflight fails safely before payments. Dedicated DB discovery requires exactly one matching Azure SQL tenant tag. The provider credential aliases are checked by the hosted OIDC service preflight, not read by the local user.
+
+##### Regular-user isolation identities (required before the security gate)
+
+The global `platform-admin` account is suitable for the serial tenant-switch/payment run, but it cannot prove regular-user isolation. Before marking the Azure identity gate passed, prepare one named Entra test account for each active application tenant and verify that its **API access token** carries that tenant's configured application-tenant claim and does not carry `platform-admin`:
+
+| Test persona | Required authorization | Expected access | State |
+|---|---|---|---|
+| Platform administrator | Explicit API `platform-admin` app role | Select any active tenant; still subject to endpoint permissions | Existing account assignment was historically verified; reread before a new acceptance window |
+| TenantA regular user | Application tenant claim = `TenantA`; no `platform-admin` | TenantA allowed; every other active tenant denied | Account and assignment pending |
+| TenantB regular user | Application tenant claim = `TenantB`; no `platform-admin` | TenantB allowed; every other active tenant denied | Account and assignment pending |
+| TenantC regular user | Application tenant claim = `TenantC`; no `platform-admin` | TenantC allowed; every other active tenant denied | Account and assignment pending |
+
+For additional active tenants, extend the same rule; do not treat A/B/C as the complete tenant universe. For every account, test own-tenant access, cross-tenant API denial, forged `X-Tenant-Code`, unauthorized deep links, tenant-filtered discovery, missing/expired/wrong-audience token rejection, same-browser logout/login, cross-tab logout and stale-response isolation. Read the assignment from the API token—not only SPA configuration or directory metadata. Do not store account email addresses, passwords, tokens or MFA codes in the repository or test evidence. Directory assignments require separately approved changes. Entra SSO may reduce repeated prompts, but the test must not depend on a shared admin session or bypass normal MFA. Until these accounts and claims are verified, regular-user isolation is **BLOCKED**, even if the administrator's all-tenant matrix passes.
 
 For a standalone no-charge browser authorization diagnosis, use `-Mode AuthPreflight`. It signs out after testing, so a separate payment-matrix run will require another login. Prefer the single `ProviderMatrix` run when the goal is end-to-end coverage and you can remain present for the initial Entra login. Razorpay may ask for a contact phone before card entry; that is contact capture, not payment OTP/3DS. An ambiguous payment result is never retried. This local operator evidence does not convert a hosted `04` run into a payment PASS, and service-preflight PASS alone never means payments passed.
 
@@ -1190,6 +1205,27 @@ The smoke verifies:
 7. A second valid smoke message is published and Inventory and Notifications persist its durable effects under the same run correlation.
 
 This does **not** invoke `DlqReplayFunction` or prove approved replay. The current “second-fanout” flow is not replay. Keep Function replay acceptance separately NOT RUN until a safe, explicitly scoped Azure-dev replay proof is implemented and executed.
+
+Workflow `03` now has an opt-in `prepareReplayCandidate` input, default `false`. It is Azure-dev-only and also requires an explicit active `replayTenantCode`. When selected, the transport tool sends one uniquely identified, valid transient `OrderCreatedV1` envelope to the dedicated DLQ intake topic, then performs a read-only SQL poll for the exact tenant, source-message ID, correlation ID, transient failure reason, `Quarantined` state, and zero replay attempts. The candidate JSON artifact is separate from the normal transport summary. Default workflow `03` behavior is unchanged. This preparation is a cloud data mutation; select it only during a currently approved dev window. Do not select it for staging or production.
+
+The candidate artifact is **not replay acceptance**. Review its `tenantCode`, `quarantineId`, `sourceMessageId`, and `correlationId`; only a `ready-for-separately-approved-replay` status is eligible. Then invoke the existing operator-assisted gate once, which performs normal Entra sign-in, calls the protected application approval endpoint, and verifies Functions processing and durable SQL effects:
+
+```powershell
+$env:EXPECTED_AZURE_SUBSCRIPTION_ID = '<approved Azure-dev subscription ID>'
+npm --prefix automation run run:azure:dlq-replay-approval -- `
+  --tenant-code '<candidate tenantCode>' `
+  --quarantine-id '<candidate quarantineId>' `
+  --source-message-id '<candidate sourceMessageId>' `
+  --correlation-id '<candidate correlationId>' `
+  --confirm-approval `
+  --confirm-firewall-lease
+```
+
+The CLI does not retry the approval POST. If it times out or the browser/session is interrupted, reconcile the API and SQL state before another attempt. `--confirm-firewall-lease` is separately required because read-only SQL evidence uses a temporary, narrowly owned firewall rule. The approval runner currently records duplicate-delivery proof as pending; it must not be treated as a full replay-acceptance PASS until both duplicate cases below are verified.
+
+The replay proof must use the authenticated application approval route `POST /api/v1/admin/dlq/{quarantineId}/approve`; it must not update `operations.DlqQuarantineRecords` or insert `operations.DlqReplayRequests` directly. The route requires the `phase10-operator` role. The current payment-matrix `platform-admin` assignment is not evidence of that role. Before a live replay run, establish an explicitly approved test principal with the required application role (or obtain an approved operator session), then verify Function invocation, persisted processed state and exactly-once downstream effects. Do not weaken the endpoint policy or use Azure SQL admin credentials to simulate an approval.
+
+Do not reuse workflow `03`'s malformed/poison quarantine as the replay candidate: `DlqReplayFunction` intentionally rejects payloads that fail deserialization, validation, unresolved-type or poison checks. The opt-in candidate path creates a separate unique valid envelope with a recoverable/transient reason and binds the quarantine to its tenant/source/correlation IDs. Quarantine and replay records are read from the shared operations database; downstream effects are read from the selected tenant's business database, including a dedicated database when applicable. The approved operator gate must bind the replay request, Function processing, and downstream SQL evidence to the same identifiers. Require two separate duplicate cases: (1) deliver the same replay-request ID after `ProcessedUtc` is set and confirm the Function completes without republishing; (2) inject a controlled failure after the replayed business event is accepted but before the request is durably marked processed/queue completion, then verify broker redelivery and consumer inbox idempotency leave exactly one durable business effect. A local SQL-backed regression now simulates accepted publish followed by sender-ack loss and checks stable business-message identity on redelivery; `InboxDeduplicationTests` separately checks consumer inbox behavior. Neither was run on this candidate, and they are not a combined runtime or Azure proof. The live controlled fault-injection/redelivery harness remains unimplemented; complete and test it before a separately approved Azure-dev run. Never update SQL state directly to simulate approval, and never run these mutations against staging or production.
 
 Expected workflow summary:
 

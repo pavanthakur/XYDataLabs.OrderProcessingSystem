@@ -15,6 +15,8 @@ import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
 import { launchLocalBrowser } from "./local-browser-launch.js";
 import {paymentCurrency} from "../contracts/payment-scenarios.js";
 import type {PaymentCaseProgress} from "../support/payment-case-ledger.js";
+import { approveDlqReplay } from "../verification/dlq-replay-approval.js";
+import type { DlqReplayApproval } from "../verification/dlq-replay-approval.js";
 
 type AutomationScope = import("playwright").Page | import("playwright").Frame;
 type ScopeLocatorFactory = (scope: AutomationScope) => import("playwright").Locator;
@@ -60,6 +62,7 @@ export interface PaymentJourneyRequest {
   reuseEntraSession?: boolean;
   authPreflightOnly?: boolean;
   retainOperatorSessionAfterAuthPreflight?: boolean;
+  dlqReplayApprovalQuarantineId?: string;
   manualEntry?: boolean;
   diagnosticsDirectory?: string;
   logger?: (message: string) => void;
@@ -83,10 +86,11 @@ export interface PaymentJourneyResult {
   orderCurrencyCode: string;
   finalUrl: string;
   statusMessage: string;
-  adapterMode: "sandbox" | "deterministic" | "live";
+  adapterMode: "sandbox" | "deterministic" | "live" | "unknown";
   collectionMode: string;
   observedChallenge: "presented" | "not-presented" | "not-applicable";
   providerVerification: string;
+  dlqReplayApproval?: DlqReplayApproval;
   tenantPreflightResults?: Array<{ tenantCode: string; paymentProvider: string; adapterMode: string; collectionMode: string; threeDsSetting: ThreeDsSetting }>;
 }
 
@@ -96,6 +100,11 @@ export class PaymentJourneyRunner {
 
   public async execute(request: PaymentJourneyRequest): Promise<PaymentJourneyResult> {
     const log = (message:string) => request.logger?.(safePaymentDiagnostic(message));
+    if (request.dlqReplayApprovalQuarantineId && (request.target.key !== "azure-dev"
+        || request.target.runtime !== "azure" || request.target.environment !== "dev"
+        || request.operatorAssistedEntra !== true || request.headless)) {
+      throw new Error("DLQ replay approval requires an explicitly selected headed Entra session on azure-dev.");
+    }
     log(`Launching browser for ${request.tenantCode} on ${request.target.key}.`);
     const reuseOperatorSession = request.target.runtime === "azure" && request.operatorAssistedEntra === true
       && request.reuseEntraSession === true
@@ -195,6 +204,35 @@ export class PaymentJourneyRunner {
       if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) {
         authenticatedEntra = true;
         log("AUTHENTICATED: Entra token available; authorization and sandbox preflight must still pass before payment.");
+      }
+      if (request.dlqReplayApprovalQuarantineId) {
+        if (!accessToken) throw new Error("An Entra API token is required before DLQ replay approval; no request was sent.");
+        const approval = await approveDlqReplay({
+          environment: request.target.environment,
+          apiBaseUrl: request.target.apiBaseUrl ?? request.target.baseUrl,
+          tenantCode: request.tenantCode,
+          quarantineId: request.dlqReplayApprovalQuarantineId,
+          accessToken
+        });
+        log(`DLQ approval accepted for quarantine ${approval.quarantineId}; replay request ${approval.replayRequestId}; alreadyApproved=${approval.alreadyApproved}. Functions processing is not yet verified.`);
+        return {
+          journeyOutcome: "dlq-replay-approved-pending-verification",
+          challengeOutcome: "not-applicable",
+          threeDsSetting: "unknown",
+          paymentProvider: "not-applicable",
+          customerOrderId: "not-created",
+          orderId: 0,
+          orderReferenceId: "not-created",
+          orderAmount: 0,
+          orderCurrencyCode: "not-applicable",
+          finalUrl: (() => { const url = new URL(page.url()); return `${url.origin}${url.pathname}`; })(),
+          statusMessage: "Application accepted the DLQ replay approval. This is not proof of Functions processing or downstream effects.",
+          adapterMode: "unknown",
+          collectionMode: "not-applicable",
+          observedChallenge: "not-applicable",
+          providerVerification: "not-applicable",
+          dlqReplayApproval: approval
+        };
       }
       await page.getByRole("heading", { name: /Take a card payment|Collect payment/i }).waitFor({ timeout: 30000 });
       log("Payment page is ready.");

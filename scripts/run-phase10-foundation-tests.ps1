@@ -208,6 +208,9 @@ try{
     Run-Test 'fixture-regression' 'pwsh' @('-NoProfile','-File','scripts/test-phase10-payment-fixture.ps1')
     Run-Test 'dotnet-inventory-regression' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-dotnet-inventory.ps1')
     Run-Test 'paid-order-evidence' 'pwsh' @('-NoProfile','-File','scripts/tests/phase10-paid-order-evidence.test.ps1')
+    Run-Test 'local-dlq-approval-evidence' 'node' @('--test','scripts/tests/phase10-local-dlq-approval-evidence.test.mjs')
+    Run-Test 'nfr-drill-contract' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-drill-contract.ps1')
+    Run-Test 'nfr-drill-orchestration' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-drill-orchestration.ps1')
     foreach($name in @('Domain','Application','API','Gateway','Architecture')){
         $testCoverageRoot = Join-Path (Join-Path $artifact 'backend-coverage') $name
         if (Test-Path -LiteralPath $testCoverageRoot) { throw "Backend coverage output already exists for $name; refusing to overwrite evidence." }

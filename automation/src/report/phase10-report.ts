@@ -10,6 +10,8 @@ import { normalizeAutomationSuites, normalizeDiscoveredDotnetSuite } from "./pha
 import type { AutomationSuiteReport } from "./phase10-automation.js";
 import { phase10ImageSetsMatch, validatePhase10ImageManifest } from "./phase10-images.js";
 import type { Phase10ImageRecord } from "./phase10-images.js";
+import { normalizeAzureEvidence } from "./phase10-azure-evidence.js";
+import type { AzureEvidenceReport } from "./phase10-azure-evidence.js";
 
 export const PHASE10_REPORT_VERSION = 14 as const;
 
@@ -45,6 +47,7 @@ export interface Phase10Report {
   dotnetTests: AutomationSuiteReport[];
   git: { start: GitSnapshot; finish: GitSnapshot };
   imageIdentities: { status: "PASS" | "FAIL" | "BLOCKED"; detail: string; services: Phase10ImageRecord[] };
+  azureEvidence: AzureEvidenceReport;
   steps: PacketStep[];
   issues: string[];
   overall: "FAIL" | "BLOCKED";
@@ -90,7 +93,7 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
     backendCoverage?: Partial<Record<TrxProject, { xml: string; modifiedUtc: number }>>;
     automation?: Partial<Record<string, unknown>>; automationInventorySha256?: string;
     dotnetTests?: Partial<Record<TrxSuite, unknown>>; reportInputIssues?: string[];
-    dockerImageBefore?: unknown; dockerImageAfter?: unknown }): Phase10Report {
+    dockerImageBefore?: unknown; dockerImageAfter?: unknown; azureEvidence?: Parameters<typeof normalizeAzureEvidence>[0] }): Phase10Report {
   const issues: string[] = [];
   if (additional?.reportInputIssues?.length) issues.push(...additional.reportInputIssues);
   const packet = record(packetInput);
@@ -228,6 +231,7 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
   const storageFailure = (validExit(packetStorage) && packetStorage !== 0) || (validExit(summaryStorage) && summaryStorage !== 0);
   const storage: EvidenceStatus = storageFailure ? "FAIL"
     : packetStorage === 0 && summaryStorage === 0 ? "PASS" : "BLOCKED";
+  const azureEvidence = normalizeAzureEvidence(additional?.azureEvidence);
   if (!validExit(packetStorage) || !validExit(summaryStorage)) issues.push("Storage exit evidence missing or invalid.");
   if (validExit(packetStorage) && validExit(summaryStorage) && packetStorage !== summaryStorage) issues.push("Storage exit codes disagree.");
   if (packetStatus === "PASS" && hasFailedStep) {
@@ -241,7 +245,7 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
     ? "FAIL" : "BLOCKED";
   return { version: PHASE10_REPORT_VERSION, runId, packetStatus: packetStatus ?? "BLOCKED", profile, paymentSuite,
     startedUtc, finishedUtc, restoration, storage, foundations, trx, integration, integrationCoverage, frontend, frontendCoverage,
-    backendCoverage, automation, dotnetTests, git, imageIdentities, steps, issues, overall };
+    backendCoverage, automation, dotnetTests, git, imageIdentities, azureEvidence, steps, issues, overall };
 }
 
 function escapeHtml(value: string): string {
@@ -330,6 +334,11 @@ export function renderPhase10Report(report: Phase10Report, coverageSummaryAvaila
 <p>These are Git observations only. They do not identify built or running images, prove the contents of a dirty worktree, or establish that files remained unchanged during the run.</p>
 <p>Profile: ${report.profile}; payment suite: ${report.paymentSuite}; started: ${report.startedUtc ?? "UNKNOWN"}; finished: ${report.finishedUtc ?? "UNKNOWN"}.</p>
 <p>Fixture restoration: ${report.restoration}; storage exit evidence: ${report.storage}.</p>
+<h2>Azure operational evidence</h2>
+<p>Azure evidence scope: ${report.azureEvidence.environment}; completeness: ${report.azureEvidence.completeness}; verdict: ${report.azureEvidence.verdict}. This is independent of the local Docker packet result. Runner revisions: ${escapeHtml(report.azureEvidence.runnerRevisions.join(", ") || "UNKNOWN")}. Azure acceptance is not certified by this preview.</p>
+<table><thead><tr><th>Azure gate</th><th>Status</th><th>Source status</th><th>Deployment provenance</th></tr></thead><tbody>${report.azureEvidence.gates.map(gate =>
+    `<tr><td>${escapeHtml(gate.id)}</td><td>${gate.status}</td><td>${escapeHtml(gate.sourceStatus)}</td><td>${gate.provenance}</td></tr>`
+  ).join("\n")}</tbody></table>
 <p>Raw test names, durations, failure details, raw artifact links, integration expected-test discovery, and the complete Phase 10 inventory: NOT COLLECTED.</p>
 ${coverageSummaryAvailable ? '<p><a href="phase10-coverage-summary.json">Sanitized aggregate coverage summary (JSON)</a>. This file is provisional; verify the completion record before using it.</p>' : ''}
 <h2>Inventory reconciliation</h2>

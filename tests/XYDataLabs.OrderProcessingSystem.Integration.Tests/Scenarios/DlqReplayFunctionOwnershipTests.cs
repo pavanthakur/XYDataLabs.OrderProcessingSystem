@@ -41,10 +41,10 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
         await using var verifyContext = CreateContext();
         var persistedRequest = await verifyContext.DlqReplayRequests.SingleAsync(item => item.Id == request.Id);
         var persistedQuarantine = await verifyContext.DlqQuarantineRecords.SingleAsync(item => item.Id == quarantine.Id);
+        persistedRequest.ProcessedUtc.Should().Be(request.ProcessedUtc);
+        persistedRequest.LastError.Should().BeNull();
         persistedQuarantine.State.Should().Be(DlqQuarantineStates.Approved);
         persistedQuarantine.ReplayAttemptCount.Should().Be(1);
-        persistedRequest.ProcessedUtc.Should().BeNull();
-        persistedRequest.LastError.Should().BeNull();
     }
 
     [Fact]
@@ -184,6 +184,57 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
         messageActions.Abandoned.Should().BeFalse();
         messageActions.DeadLetterReason.Should().BeNull();
         publisher.PublishedMessages.Should().BeEmpty();
+
+        await using var verifyContext = CreateContext();
+        var persistedRequest = await verifyContext.DlqReplayRequests.SingleAsync(item => item.Id == request.Id);
+        var persistedQuarantine = await verifyContext.DlqQuarantineRecords.SingleAsync(item => item.Id == quarantine.Id);
+        persistedQuarantine.State.Should().Be(DlqQuarantineStates.Replayed);
+        persistedQuarantine.ReplayAttemptCount.Should().Be(2);
+        persistedRequest.ProcessedUtc.Should().Be(request.ProcessedUtc);
+        persistedRequest.LastError.Should().BeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "InfrastructureIntegration")]
+    public async Task RunCoreAsync_WhenPublisherAcceptedButCheckpointFailed_RedeliveryKeepsStableBusinessMessageId()
+    {
+        await using var seedContext = CreateContext();
+        var quarantine = await AddQuarantineAsync(seedContext, DlqQuarantineStates.Approved, replayAttemptCount: 1);
+        var request = await AddReplayRequestAsync(seedContext, quarantine.Id, processedUtc: null);
+        var publisher = new FakeDlqReplayPublisher { FailAfterFirstAcceptedPublish = true };
+        var firstMessageActions = new FakeReplayMessageActions();
+        using var provider = BuildProvider(replayEnabled: true, publisher, maxReplayAttempts: 5);
+        var function = new DlqReplayFunction(provider, TimeProvider.System, NullLogger<DlqReplayFunction>.Instance);
+        var redeliveredRequest = CreateReplayRequestMessage(request.Id, quarantine.Id, attemptCount: 1);
+
+        // Model the broker accepting the event while the sender observes an error before
+        // the Function checkpoints SQL state or completes the replay-request delivery.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => function.RunCoreAsync(redeliveredRequest, firstMessageActions, CancellationToken.None));
+
+        firstMessageActions.Completed.Should().BeFalse();
+        publisher.PublishedMessages.Should().ContainSingle();
+        var firstBusinessMessageId = publisher.PublishedMessages[0].MessageId;
+        await using (var afterInterruptedAttempt = CreateContext())
+        {
+            var pendingRequest = await afterInterruptedAttempt.DlqReplayRequests.SingleAsync(item => item.Id == request.Id);
+            var pendingQuarantine = await afterInterruptedAttempt.DlqQuarantineRecords.SingleAsync(item => item.Id == quarantine.Id);
+            pendingRequest.ProcessedUtc.Should().BeNull();
+            pendingQuarantine.State.Should().Be(DlqQuarantineStates.Approved);
+            pendingQuarantine.ReplayAttemptCount.Should().Be(1);
+        }
+
+        var redeliveryActions = new FakeReplayMessageActions();
+        await function.RunCoreAsync(redeliveredRequest, redeliveryActions, CancellationToken.None);
+
+        redeliveryActions.Completed.Should().BeTrue();
+        publisher.PublishedMessages.Should().HaveCount(2);
+        publisher.PublishedMessages[1].MessageId.Should().Be(firstBusinessMessageId);
+        await using var finalContext = CreateContext();
+        var processedRequest = await finalContext.DlqReplayRequests.SingleAsync(item => item.Id == request.Id);
+        var replayedQuarantine = await finalContext.DlqQuarantineRecords.SingleAsync(item => item.Id == quarantine.Id);
+        processedRequest.ProcessedUtc.Should().NotBeNull();
+        replayedQuarantine.State.Should().Be(DlqQuarantineStates.Replayed);
     }
 
     [Fact]
@@ -413,9 +464,16 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
     {
         public List<ServiceBusMessage> PublishedMessages { get; } = [];
 
+        public bool FailAfterFirstAcceptedPublish { get; init; }
+
         public Task PublishAsync(ServiceBusMessage message, CancellationToken cancellationToken)
         {
             PublishedMessages.Add(message);
+            if (FailAfterFirstAcceptedPublish && PublishedMessages.Count == 1)
+            {
+                throw new InvalidOperationException("Simulated sender acknowledgement lost after broker acceptance.");
+            }
+
             return Task.CompletedTask;
         }
     }

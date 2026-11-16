@@ -757,7 +757,14 @@ test("CLI reads the same-run foundation summary without changing input", async (
         observedCount: 1, missingCount: 0, unexpectedCount: 0, duplicateCount: 0, tests: [{ id, status: "passed" }]
       }));
     }
-    await execFileAsync(process.execPath, ["--import", "tsx", "src/cli/render-phase10-preview.ts", root]);
+    const azureEvidenceRoot = join(root, "azure-evidence");
+    await mkdir(azureEvidenceRoot);
+    await writeFile(join(azureEvidenceRoot, "runtime-smoke.json"), JSON.stringify({
+      schema: "phase10-azure-runtime-smoke-v1", status: "passed", environment: "dev",
+      sourceRevision: "b".repeat(40), checks: [{ name: "gateway-health", status: "passed" }]
+    }));
+    await execFileAsync(process.execPath, ["--import", "tsx", "src/cli/render-phase10-preview.ts", root,
+      "--azure-evidence", azureEvidenceRoot]);
     const html = await readFile(join(root, "phase10-preview.html"), "utf8");
     assert.match(html, /Foundation checks/);
     assert.match(html, /Domain-tests<\/td><td>PASS/);
@@ -775,6 +782,8 @@ test("CLI reads the same-run foundation summary without changing input", async (
     assert.match(html, /Lines: 3\/4 \(75\.00%\); branches: 1\/2 \(50\.00%\)/);
     assert.match(html, /Domain<\/td><td>3\/4 \(75\.00%\)<\/td><td>1\/2 \(50\.00%\)/);
     assert.match(html, /Overall: BLOCKED/);
+    assert.match(html, /Azure operational evidence/);
+    assert.match(html, /runtime-smoke<\/td><td>BLOCKED/);
     assert.equal(await readFile(join(root, "index.html"), "utf8"), html);
     const coverage = await readFile(join(root, "phase10-coverage-summary.json"), "utf8");
     assert.match(coverage, /"covered": 3/);
@@ -791,7 +800,8 @@ test("CLI reads the same-run foundation summary without changing input", async (
     await rm(join(root, "phase10-preview.html"));
     await rm(join(root, "index.html"));
     await rm(join(root, "phase10-coverage-summary.json"));
-    await execFileAsync(process.execPath, ["--import", "tsx", "src/cli/render-phase10-preview.ts", root]);
+    await execFileAsync(process.execPath, ["--import", "tsx", "src/cli/render-phase10-preview.ts", root,
+      "--azure-evidence", azureEvidenceRoot]);
     const duplicateHtml = await readFile(join(root, "phase10-preview.html"), "utf8");
     assert.match(duplicateHtml, /Domain<\/td><td>UNAVAILABLE<\/td><td>UNAVAILABLE/);
     assert.match(duplicateHtml, /Integration test-process coverage<\/h2><p>UNAVAILABLE/);
@@ -799,4 +809,20 @@ test("CLI reads the same-run foundation summary without changing input", async (
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("offline report keeps Azure evidence separate from the local Docker verdict and blocks unbound smoke results", () => {
+  const azureRuntime = {
+    schema: "phase10-azure-runtime-smoke-v1", status: "passed", environment: "dev",
+    sourceRevision: "b".repeat(40), deploymentIdentitySha256: "c".repeat(64),
+    checks: [{ name: "gateway-health", status: "passed" }]
+  };
+  const report = normalizePhase10Packet(packet, summary, foundations, trxInputs,
+    { ...additional, azureEvidence: { runtime: azureRuntime } });
+  const html = renderPhase10Report(report);
+  assert.match(html, /Azure operational evidence/);
+  assert.match(html, /runtime-smoke<\/td><td>BLOCKED/);
+  assert.match(html, /Azure acceptance is not certified by this preview/);
+  assert.equal(report.overall, "BLOCKED");
+  assert.doesNotMatch(html, /deploymentIdentitySha256|"checks"/);
 });

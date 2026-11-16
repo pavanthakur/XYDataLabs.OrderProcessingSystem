@@ -1,6 +1,8 @@
 import { chromium, request as playwrightRequest } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { validateLocalDlqApprovalResponse, validateLocalOperatorClaims } from "./phase10-local-dlq-approval-contract.mjs";
+import { reserveLocalDlqApprovalEvidence } from "./phase10-local-dlq-approval-evidence.mjs";
 
 const argumentsMap = parseArguments(process.argv.slice(2));
 const appBaseUrl = argumentsMap.get("url") ?? "http://localhost:5022";
@@ -10,12 +12,57 @@ const ordersApiBaseUrl = argumentsMap.get("orders-api-url") ?? legacyApiBaseUrl 
 const paymentsApiBaseUrl = argumentsMap.get("payments-api-url") ?? legacyApiBaseUrl ?? "http://localhost:5084";
 const approvalApiBaseUrl = argumentsMap.get("approval-api-url") ?? ordersApiBaseUrl;
 const outputPath = argumentsMap.get("output");
+const approvalQuarantineId = argumentsMap.get("approve-quarantine-id");
+const approvalTenantCode = argumentsMap.get("approval-tenant-code") ?? "TenantA";
+const approvalOutputPath = argumentsMap.get("approval-output");
 const password = process.env.KEYCLOAK_TENANT_ADMIN_PASSWORD
   ?? process.env.LOCAL_KEYCLOAK_TEST_PASSWORD;
+
+if (Boolean(approvalQuarantineId) !== Boolean(approvalOutputPath)) {
+  throw new Error("--approve-quarantine-id and --approval-output must be supplied together.");
+}
+if (approvalQuarantineId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(approvalQuarantineId)) {
+  throw new Error("DLQ approval requires a valid quarantine ID.");
+}
+if (approvalQuarantineId && !/^[A-Za-z0-9_-]{1,64}$/.test(approvalTenantCode)) {
+  throw new Error("DLQ approval requires a valid tenant code.");
+}
+let resolvedApprovalOutput;
+let approvalEvidenceReservation;
+if (approvalOutputPath) {
+  resolvedApprovalOutput = path.resolve(approvalOutputPath);
+  const testResultsRoot = await fs.realpath(path.resolve("TestResults"));
+  const lexicalTestResultsRoot = path.resolve("TestResults") + path.sep;
+  if (!resolvedApprovalOutput.toLowerCase().startsWith(lexicalTestResultsRoot.toLowerCase())) {
+    throw new Error("Local replay approval evidence must be written under TestResults.");
+  }
+  const realApprovalParent = await fs.realpath(path.dirname(resolvedApprovalOutput));
+  if (realApprovalParent.toLowerCase() !== testResultsRoot.toLowerCase()
+      && !realApprovalParent.toLowerCase().startsWith((testResultsRoot + path.sep).toLowerCase())) {
+    throw new Error("Local replay approval evidence cannot traverse a symlink outside TestResults.");
+  }
+  try {
+    await fs.access(resolvedApprovalOutput);
+    throw new Error("The local replay approval evidence path already exists; refusing to mutate the replay again.");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
 
 if (!password) {
   throw new Error(
     "KEYCLOAK_TENANT_ADMIN_PASSWORD or LOCAL_KEYCLOAK_TEST_PASSWORD is required.");
+}
+
+if (resolvedApprovalOutput) {
+  await fs.mkdir(path.dirname(resolvedApprovalOutput), { recursive: true });
+  approvalEvidenceReservation = await reserveLocalDlqApprovalEvidence(resolvedApprovalOutput, {
+    status: "NOT_RUN",
+    stage: "reserved-before-authentication",
+    tenantCode: approvalTenantCode,
+    quarantineId: approvalQuarantineId,
+    startedAtIst: formatIst(new Date())
+  });
 }
 
 const evidence = {
@@ -120,10 +167,13 @@ try {
   const operator = await login("tenant-admin", "TenantA");
   try {
     const operatorClaims = decodeJwtPayload(operator.token);
-    record("tenant-admin-has-operator-role", (operatorClaims.realm_access?.roles ?? []).includes("phase10-operator"), {
+    const operatorRoles = operatorClaims.realm_access?.roles ?? [];
+    const hasOperatorRole = operatorRoles.includes("phase10-operator");
+    record("tenant-admin-has-operator-role", hasOperatorRole, {
       tenantCode: operatorClaims.tenant_code ?? null,
-      roles: operatorClaims.realm_access?.roles ?? []
+      roles: operatorRoles
     });
+    if (approvalQuarantineId) validateLocalOperatorClaims(operatorClaims, approvalTenantCode);
 
     const approvalResponse = await operator.context.request.post(
       `${approvalApiBaseUrl}/api/v1/admin/dlq/${crypto.randomUUID()}/approve`,
@@ -133,6 +183,22 @@ try {
       actual: approvalResponse.status(),
       meaning: "Authorization passed and the random quarantine record was not found."
     });
+
+    if (approvalQuarantineId) {
+      await approvalEvidenceReservation.append({ status: "SUBMISSION_OUTCOME_UNKNOWN", stage: "submission-intended" });
+      const approval = await operator.context.request.post(
+        `${approvalApiBaseUrl}/api/v1/admin/dlq/${approvalQuarantineId}/approve`,
+        { headers: authorizationHeaders(operator.token, approvalTenantCode) });
+      if (!approval.ok()) {
+        throw new Error(`Authorized local replay approval returned HTTP ${approval.status()}; no retry was attempted.`);
+      }
+      const approvalMetadata = validateLocalDlqApprovalResponse(approvalQuarantineId, await approval.json());
+      await approvalEvidenceReservation.append({ status: "APPROVED", stage: "response-validated", ...approvalMetadata });
+      record("authorized-local-replay-approval", true, {
+        tenantCode: approvalTenantCode,
+        ...approvalMetadata
+      });
+    }
   }
   finally {
     await operator.context.close();
@@ -144,12 +210,14 @@ try {
 }
 catch (error) {
   evidence.status = "failed";
-  evidence.error = error instanceof Error ? error.message : String(error);
-  throw error;
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  evidence.error = password ? errorMessage.replaceAll(password, "[REDACTED]") : errorMessage;
+  throw new Error(evidence.error);
 }
 finally {
   evidence.completedAtIst = formatIst(new Date());
   await browser.close();
+  if (approvalEvidenceReservation) await approvalEvidenceReservation.close();
   if (outputPath) {
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
     await fs.writeFile(outputPath, JSON.stringify(evidence, null, 2), "utf8");

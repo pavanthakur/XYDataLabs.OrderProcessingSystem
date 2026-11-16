@@ -22,8 +22,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$script:Phase10NfrRestorationFailed = $false
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-nfr-aggregate.ps1')
+. (Join-Path $PSScriptRoot 'phase10-nfr-drill-contract.ps1')
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
@@ -365,6 +367,13 @@ function Invoke-ConsumerOutageBacklogDrill {
     $previousSql = $env:PHASE10_NFR_SQL_CONNECTION_STRING
     $previousBus = $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING
     $probe = $null
+    $executionPassed = $false
+    $primaryFailure = $null
+    $probeStopped = $true
+    $consumerStartExitCode = -1
+    $consumersReady = $false
+    $environmentRestored = $false
+    $restorationFailures = [System.Collections.Generic.List[string]]::new()
     try {
         & docker @composeArgs stop @consumers
         if ($LASTEXITCODE -ne 0) { throw "Stopping consumers failed with exit code $LASTEXITCODE." }
@@ -422,24 +431,87 @@ function Invoke-ConsumerOutageBacklogDrill {
         if ($drill.backlogRecoverySeconds -gt $RecoveryLimitSeconds) {
             throw "Recovery took $($drill.backlogRecoverySeconds)s, above the $RecoveryLimitSeconds s limit."
         }
-        $drill.status = 'passed'
+        $executionPassed = $true
     }
     catch {
-        $drill.error = $_.Exception.Message
-        throw
+        $primaryFailure = $_.Exception
+        $drill.errorType = $_.Exception.GetType().FullName
     }
     finally {
-        if ($null -ne $probe -and -not $probe.HasExited) { Stop-Process -Id $probe.Id -Force -ErrorAction SilentlyContinue }
-        & docker @composeArgs start @consumers
-        $drill.consumersRestoredExitCode = $LASTEXITCODE
-        if ($null -eq $previousSql) { Remove-Item Env:PHASE10_NFR_SQL_CONNECTION_STRING -ErrorAction SilentlyContinue }
-        else { $env:PHASE10_NFR_SQL_CONNECTION_STRING = $previousSql }
-        if ($null -eq $previousBus) { Remove-Item Env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING -ErrorAction SilentlyContinue }
-        else { $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING = $previousBus }
-        $drill | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $drillPath -Encoding utf8
+        if ($null -ne $probe) {
+            try {
+                $probe.Refresh()
+                if (-not $probe.HasExited) { $probe.Kill($true) }
+                if (-not $probe.WaitForExit(10000)) { throw 'Probe process tree did not exit within 10 seconds.' }
+                $probeStopped = $true
+            }
+            catch {
+                $probeStopped = $false
+                $restorationFailures.Add('probe-stop')
+            }
+        }
+
+        try {
+            & docker @composeArgs start @consumers
+            $consumerStartExitCode = $LASTEXITCODE
+            if ($consumerStartExitCode -ne 0) {
+                $restorationFailures.Add('consumer-start')
+            }
+            else {
+                try {
+                    Wait-ForUrl -Url 'http://localhost:5082/health/ready' -TimeoutSeconds 600
+                    Wait-ForUrl -Url 'http://localhost:5083/health/ready' -TimeoutSeconds 600
+                    $consumersReady = $true
+                }
+                catch {
+                    $restorationFailures.Add('consumer-readiness')
+                }
+            }
+        }
+        catch {
+            $consumerStartExitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { -1 }
+            $restorationFailures.Add('consumer-start')
+        }
+
+        $sqlRestored = $false
+        $busRestored = $false
+        try {
+            [Environment]::SetEnvironmentVariable('PHASE10_NFR_SQL_CONNECTION_STRING', $previousSql, 'Process')
+            $sqlRestored = [Environment]::GetEnvironmentVariable('PHASE10_NFR_SQL_CONNECTION_STRING', 'Process') -ceq $previousSql
+        }
+        catch { $restorationFailures.Add('sql-environment-restore') }
+        try {
+            [Environment]::SetEnvironmentVariable('PHASE10_NFR_SERVICEBUS_CONNECTION_STRING', $previousBus, 'Process')
+            $busRestored = [Environment]::GetEnvironmentVariable('PHASE10_NFR_SERVICEBUS_CONNECTION_STRING', 'Process') -ceq $previousBus
+        }
+        catch { $restorationFailures.Add('servicebus-environment-restore') }
+        $environmentRestored = $sqlRestored -and $busRestored
+        if (-not $environmentRestored -and $restorationFailures.Count -eq 0) { $restorationFailures.Add('environment-restoration') }
+
+        $finalStatus = Complete-Phase10NfrDrillResult -Drill $drill `
+            -ExecutionPassed ($executionPassed -and $null -eq $primaryFailure) `
+            -ProbeStopped $probeStopped `
+            -ConsumersStartExitCode $consumerStartExitCode `
+            -ConsumersReady $consumersReady `
+            -EnvironmentRestored $environmentRestored `
+            -ExecutionFailureType $(if ($null -ne $primaryFailure) { $primaryFailure.GetType().FullName } elseif (-not $executionPassed) { 'UnknownExecutionFailure' } else { $null }) `
+            -RestorationFailures $restorationFailures.ToArray()
+        if (-not (Test-Phase10NfrMutationsAllowed -Drill $drill)) { $script:Phase10NfrRestorationFailed = $true }
+        try {
+            $drill | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $drillPath -Encoding utf8
+        }
+        catch {
+            $global:LASTEXITCODE = 1
+            throw "Failed to persist the consumer outage drill evidence at $drillPath."
+        }
     }
 
     Get-Content -LiteralPath $drillPath -Raw | Write-Host
+    if ($finalStatus -ne 'passed') {
+        $global:LASTEXITCODE = 1
+        $failureTags = @($drill.restorationFailures) -join ', '
+        throw "Consumer outage/backlog drill failed. Execution=$(-not $executionPassed); restoration findings=[$failureTags]. See $drillPath and the probe logs."
+    }
     $global:LASTEXITCODE = 0
 }
 
@@ -742,8 +814,20 @@ else {
 
     if ($operationalPassed) {
         $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Approved replay visibility (60s limit)' -Command {
-            & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-local-messaging.ps1') `
-                -ArtifactDirectory (Join-Path $nfrRoot 'replay-proof')
+            $restorePath = Join-Path $nfrRoot 'replay-proof/replay-restoration.json'
+            $restoreStart = [DateTime]::UtcNow
+            $restored = $false
+            try {
+                if (Test-Path -LiteralPath $restorePath) { throw 'Replay restoration evidence already exists; use a fresh run directory.' }
+                & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-local-messaging.ps1') `
+                    -ArtifactDirectory (Join-Path $nfrRoot 'replay-proof')
+                $replayExit = $LASTEXITCODE
+                $restored = Test-Phase10ReplayRestorationEvidence -Path $restorePath -NotBeforeUtc $restoreStart
+                if (-not $restored) { throw 'Replay restoration is not proven; later mutations are blocked.' }
+                if ($replayExit -ne 0) { throw 'Replay failed despite verified restoration; no replay acceptance is claimed.' }
+            } finally {
+                if (-not $restored) { $script:Phase10NfrRestorationFailed = $true }
+            }
         }
     }
 
@@ -756,7 +840,12 @@ else {
     $categories.operational.status = if ($operationalPassed) { 'passed' } else { 'failed' }
     Write-CategorySummaryFile -Category 'operational'
 
-    if ([string]::IsNullOrWhiteSpace($previousImageTag)) {
+    if ($script:Phase10NfrRestorationFailed) {
+        $recoveryPassed = $false
+        $recoveryBlocked = $true
+        $categories.recovery.error = 'BLOCKED: earlier operational restoration failed or is unproven; no rollback mutation was attempted.'
+    }
+    elseif ([string]::IsNullOrWhiteSpace($previousImageTag)) {
         $recoveryPassed = $false
         $recoveryBlocked = $true
         $categories.recovery.error =
@@ -800,7 +889,11 @@ else {
 }
 
 $securityPrerequisites = Test-Path -LiteralPath (Join-Path $workspaceRoot 'frontend\apps\web\scripts\phase10-identity-proof.mjs')
-if (-not $securityPrerequisites) {
+if ($script:Phase10NfrRestorationFailed) {
+    $categories.security.status = 'blocked'
+    $categories.security.error = 'BLOCKED: an earlier outage-drill restoration failed; later identity actions were not attempted.'
+}
+elseif (-not $securityPrerequisites) {
     $categories.security.status = 'failed'
     $categories.security.error = 'The local identity proof script is missing.'
 }

@@ -8,6 +8,8 @@ Non-Azure local acceptance **PASSED** on clean committed candidate `494ab4fdf0d7
 
 The cold build completed without build errors but retained analyzer/package warnings (CA1062, CA1825, CA2000, MA0005, MA0047, MA0074, NU1701); they were not suppressed and remain for separate review, so this run is not warning-free.
 
+The 16 November dirty-candidate NFR runner follow-up hardens outage-drill finalization: terminate the probe process tree, restart inventory/notifications, require both readiness endpoints, verify exact prior process-environment values, and persist sanitized results, including cancellation type. A failed restoration prevents later rollback and identity actions. The contract test and 27-step foundation suite passed; report-only output is BLOCKED. This is **not** live Docker/NFR acceptance and does not replace same-image runtime evidence.
+
 This procedure replaces disposable local Docker state, not Azure resources. Keep the old disk offline until acceptance passes. Do not migrate a 642 GB disk onto a drive with 471 GB free.
 
 ## Safety and prerequisites
@@ -135,8 +137,14 @@ For the focused live-emulator acceptance without the broader rollback/performanc
 
 ```powershell
 dotnet build tools/Phase10.NfrProbe --no-restore
-pwsh -NoProfile -File scripts/test-local-messaging.ps1 -ArtifactDirectory TestResults/DockerStorage/messaging-acceptance
+$runId = Get-Date -Format 'yyyyMMdd-HHmmssfff'
+$artifact = "TestResults/DockerStorage/messaging-acceptance-$runId"
+pwsh -NoProfile -File scripts/test-local-messaging.ps1 -ArtifactDirectory $artifact
 ```
+
+The messaging proof refuses to overwrite any of its three existing result files. Use a new run-specific artifact directory for every attempt; preserve failed and partial evidence.
+
+The Functions replay proof now uses the existing local Keycloak PKCE operator session and the protected approval API. It does not directly update quarantine or replay-request rows. Runtime replay still requires a separately approved local Docker test; source/build checks alone are not acceptance evidence.
 
 This publishes three events and verifies both consumers' inbox/effect rows. A malformed message must be broker-dead-lettered and forwarded into Functions quarantine; a separate approved replay must finish with persisted replay state and downstream effects. Replay enablement is temporary and restored afterward. Probe tenant IDs are resolved from the active registry, never assumed to be `1`. Functions explicitly registers event-contract assemblies so cold-worker replay does not depend on incidental assembly loading.
 
@@ -214,6 +222,17 @@ To render an existing, unrendered run without starting tests or accessing Docker
 ```powershell
 npm --prefix automation run report:phase10-preview -- TestResults/Playwright/phase10-docker-http/<run-id>
 npm --prefix automation run verify:phase10-completion -- TestResults/Playwright/phase10-docker-http/<run-id>
+```
+
+When reviewed Azure artifacts have been copied into a separate sanitized directory, pass it with `--azure-evidence <directory>`. The renderer reads only the fixed filenames `deployment-identity.json`, `runtime-smoke.json`, `identity.json`, `payment-matrix-summary.json`, `transport-smoke.json`, `functions-replay.json`, `recovery-nfr.json`, `rollback.json`, and `restoration.json`, plus `evidence-manifest.json` and the flat files named by that manifest. The manifest must hash all nine fixed contracts as well as every detailed source file, and maps each of the six supplemental gates (`identity`, `payments`, `transport-functions`, `recovery-nfr`, `rollback`, `restoration`) to its source filenames. The report computes each listed digest from the actual file bytes, parses fixed contract JSON from those same bytes, and requires each gate's `sourceEvidenceSha256` list to match its gate-specific source-file hashes. Missing, altered, duplicate, unsafe-path or unlisted evidence stays BLOCKED. This is integrity/reconciliation, not a signature or proof of who produced the files. The renderer performs no tests or runtime/cloud calls. The new runtime/transport smoke summaries alone do not bind the observed deployment digest, and the payment runner summary alone is not provider/SQL proof, so these inputs cannot certify Azure acceptance.
+
+The deployment identity input must describe the dev source revision, immutable digests for all six application images, Functions package SHA-256, and a non-secret configuration identity hash. Its canonical identity hash is validated by `automation/src/report/phase10-azure-evidence.ts`. Runtime and transport smoke JSON must echo that hash to bind their result to the deployed artifacts. Each gate must also point to raw evidence digests included in the manifest. The smoke producers do not yet emit all required deployment/evidence bindings, so their current results remain BLOCKED in the combined report until producer wiring and tests are completed.
+
+The identity evidence contract requires one regular-user isolation result for every ordered pair of active assigned/requested tenants: each account must be allowed its own tenant and denied every other tenant. A single “isolation passed” result per account is insufficient for a multi-tenant security PASS.
+
+```powershell
+npm --prefix automation run report:phase10-preview -- TestResults/Playwright/phase10-docker-http/<run-id> `
+  --azure-evidence TestResults/Phase10/azure-evidence/<reviewed-package>
 ```
 
 For reviewed sharing, first verify the completion record and inspect the exact allowlisted report files. Do not ZIP the entire run folder: raw logs, screenshots and provider artifacts may need separate sanitization. From the repository root, create a ZIP containing only the sanitized summary set:

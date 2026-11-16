@@ -14,6 +14,7 @@ param(
     [ValidateSet('true', 'false', 'True', 'False')]
     [string]$GeneratedUrlIsExpected = 'false',
     [string]$SummaryPath,
+    [string]$SummaryJsonPath,
     [int]$Attempts = 18,
     [int]$DelaySeconds = 10
 )
@@ -356,6 +357,36 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
     }
 
     $summaryText | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
+}
+
+if (-not [string]::IsNullOrWhiteSpace($SummaryJsonPath)) {
+    $jsonDirectory = Split-Path -Parent $SummaryJsonPath
+    if (-not [string]::IsNullOrWhiteSpace($jsonDirectory)) {
+        New-Item -ItemType Directory -Path $jsonDirectory -Force | Out-Null
+    }
+
+    $sourceRevision = if ($env:GITHUB_SHA -match '^(?:[0-9a-f]{40}|[0-9a-f]{64})$') { $env:GITHUB_SHA } else { $null }
+    $structuredSummary = [ordered]@{
+        schema = 'phase10-azure-runtime-smoke-v1'
+        status = $status.ToLowerInvariant()
+        deploymentVerdict = $deploymentVerdict.ToLowerInvariant()
+        environment = $Environment
+        sourceRevision = $sourceRevision
+        workflowRunId = $env:GITHUB_RUN_ID
+        workflowRunAttempt = $env:GITHUB_RUN_ATTEMPT
+        startedUtc = $startedUtc.ToString('O')
+        completedUtc = $completedUtc.ToString('O')
+        generatedUrlExpected = $isGeneratedAzureUrlExpected
+        generatedUrlFallbackUsed = $fallbackUsed
+        checks = @($checks | ForEach-Object {
+            [ordered]@{
+                name = [string]$_.Name
+                status = if ($_.Passed) { 'passed' } else { 'failed' }
+                httpStatus = [string]$_.Status
+            }
+        })
+    }
+    $structuredSummary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $SummaryJsonPath -Encoding UTF8
 }
 
 if ($failed.Count -gt 0) {

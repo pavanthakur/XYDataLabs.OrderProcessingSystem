@@ -12,6 +12,15 @@ on:
           - dev
           - staging
           - prod
+      prepareReplayCandidate:
+        description: 'Explicitly create one transient Azure-dev Functions replay candidate (separate replay approval is still required)'
+        required: true
+        default: false
+        type: boolean
+      replayTenantCode:
+        description: 'Active Azure-dev tenant for the replay candidate; required only when candidate preparation is selected'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -157,13 +166,33 @@ jobs:
 
           echo "✅ Service Bus topology exists." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Run transport publish consume replay smoke
+      - name: Run transport publish consume and Functions quarantine smoke
         shell: pwsh
+        env:
+          PHASE10_PREPARE_REPLAY_CANDIDATE: ${{ inputs.prepareReplayCandidate }}
+          PHASE10_REPLAY_TENANT_CODE: ${{ inputs.replayTenantCode }}
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-transport-smoke.md'
+          $summaryJsonPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-transport-smoke.json'
+          $replayCandidateJsonPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-dlq-replay-candidate.json'
           $runId = "phase10-transport-${{ steps.topology.outputs.envSuffix }}-${{ github.run_id }}-${{ github.run_attempt }}"
           $leasePath = Join-Path $env:RUNNER_TEMP "phase10-sql-firewall-lease-transport-${{ github.run_id }}-${{ github.run_attempt }}.json"
           "firewallLeaseManifest=$leasePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          $replayArguments = @{}
+          if ($env:PHASE10_PREPARE_REPLAY_CANDIDATE -eq 'true') {
+            if ('${{ inputs.environment }}' -ne 'dev') { throw 'Replay candidate preparation is Azure-dev only.' }
+            if ([string]::IsNullOrWhiteSpace($env:PHASE10_REPLAY_TENANT_CODE) -or $env:PHASE10_REPLAY_TENANT_CODE -notmatch '^[A-Za-z0-9_-]{1,64}$') {
+              throw 'Select an explicit active tenant code for replay candidate preparation.'
+            }
+            $replayArguments = @{
+              PrepareReplayCandidate = $true
+              ReplayTenantCode = $env:PHASE10_REPLAY_TENANT_CODE
+              ReplayCandidateJsonPath = $replayCandidateJsonPath
+            }
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:PHASE10_REPLAY_TENANT_CODE)) {
+            throw 'replayTenantCode must be blank unless prepareReplayCandidate is selected.'
+          }
 
           & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transport-smoke.ps1 `
             -Environment '${{ inputs.environment }}' `
@@ -175,7 +204,8 @@ jobs:
             -RunId $runId `
             -RunAttempt '${{ github.run_attempt }}' `
             -FirewallLeaseManifestPath $leasePath `
-            -SummaryPath $summaryPath
+            -SummaryPath $summaryPath `
+            -SummaryJsonPath $summaryJsonPath @replayArguments
 
           $smokeExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
@@ -203,7 +233,9 @@ jobs:
           name: phase10-azure-transport-smoke-${{ inputs.environment }}
           path: |
             ${{ runner.temp }}/phase10-azure-transport-smoke.md
+            ${{ runner.temp }}/phase10-azure-transport-smoke.json
             ${{ runner.temp }}/phase10-azure-transport-smoke.topology.json
+            ${{ runner.temp }}/phase10-azure-dlq-replay-candidate.json
             ${{ runner.temp }}/phase10-sql-firewall-lease-transport-${{ github.run_id }}-${{ github.run_attempt }}.json
           if-no-files-found: ignore
           retention-days: 14

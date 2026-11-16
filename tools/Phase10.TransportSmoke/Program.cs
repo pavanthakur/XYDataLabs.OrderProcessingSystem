@@ -20,6 +20,7 @@ internal static class Program
         var fanoutMessageId = $"{runId}-fanout";
         var dlqMessageId = Guid.NewGuid().ToString("D");
         var replayMessageId = $"{runId}-replay";
+        ReplayCandidateResult? replayCandidate = null;
 
         try
         {
@@ -48,6 +49,19 @@ internal static class Program
 
             checks.Add(await WaitForQuarantineRecordAsync(options, dlqMessageId));
 
+            if (options.PrepareReplayCandidate)
+            {
+                replayCandidate = await PrepareReplayCandidateAsync(client, options);
+                checks.Add(replayCandidate.Passed
+                    ? SmokeCheck.Pass(
+                        "Prepared transient Functions replay candidate",
+                        $"Candidate `{replayCandidate.Evidence.QuarantineId}` is quarantined for tenant `{replayCandidate.Evidence.TenantCode}` and ready for the separately approved operator replay gate.")
+                    : SmokeCheck.Fail(
+                        "Prepared transient Functions replay candidate",
+                        $"Candidate intake was not verified (source `{replayCandidate.Evidence.SourceMessageId}`, correlation `{replayCandidate.Evidence.CorrelationId}`, status `{replayCandidate.Evidence.Status}`). Do not republish automatically; reconcile this candidate first."));
+                await WriteReplayCandidateAsync(options, replayCandidate.Evidence).ConfigureAwait(false);
+            }
+
             checks.Add(await PublishValidAsync(
                 client,
                 options.TopicName,
@@ -71,9 +85,51 @@ internal static class Program
         }
 
         var completedUtc = DateTimeOffset.UtcNow;
-        WriteMarkdownSummary(options, runId, startedUtc, completedUtc, checks);
+        WriteMarkdownSummary(options, runId, startedUtc, completedUtc, checks, replayCandidate?.Evidence);
+        if (!string.IsNullOrWhiteSpace(options.SummaryJsonPath))
+        {
+            await WriteStructuredSummaryAsync(options, runId, startedUtc, completedUtc, checks).ConfigureAwait(false);
+        }
 
         return checks.All(check => check.Passed) ? 0 : 1;
+    }
+
+    private static async Task WriteStructuredSummaryAsync(
+        SmokeOptions options,
+        string runId,
+        DateTimeOffset startedUtc,
+        DateTimeOffset completedUtc,
+        IReadOnlyList<SmokeCheck> checks)
+    {
+        var outputPath = Path.GetFullPath(options.SummaryJsonPath!);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        var sourceRevision = System.Environment.GetEnvironmentVariable("GITHUB_SHA");
+        if (sourceRevision is not null && !System.Text.RegularExpressions.Regex.IsMatch(sourceRevision, "^(?:[0-9a-f]{40}|[0-9a-f]{64})$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            sourceRevision = null;
+        }
+
+        var summary = new
+        {
+            schema = "phase10-azure-transport-smoke-v1",
+            status = checks.All(check => check.Passed) ? "passed" : "failed",
+            environment = options.Environment,
+            runId,
+            sourceRevision,
+            workflowRunId = System.Environment.GetEnvironmentVariable("GITHUB_RUN_ID"),
+            workflowRunAttempt = System.Environment.GetEnvironmentVariable("GITHUB_RUN_ATTEMPT"),
+            tenantCode = options.TenantCode,
+            startedUtc,
+            completedUtc,
+            checks = checks.Select(check => new { name = check.Name, status = check.Passed ? "passed" : "failed" }).ToArray()
+        };
+
+        await using var stream = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await JsonSerializer.SerializeAsync(stream, summary, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        }).ConfigureAwait(false);
     }
 
     private static async Task<SmokeCheck> PublishValidAsync(
@@ -177,7 +233,7 @@ internal static class Program
         var deadline = DateTimeOffset.UtcNow.AddSeconds(options.SqlTimeoutSeconds);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            await using var connection = new SqlConnection(options.SqlConnectionString);
+            await using var connection = new SqlConnection(options.OperationsSqlConnectionString);
             await connection.OpenAsync().ConfigureAwait(false);
             await using var command = new SqlCommand(sql, connection);
             command.Parameters.Add(new SqlParameter("@sourceMessageId", SqlDbType.NVarChar, 128) { Value = sourceMessageId });
@@ -186,7 +242,7 @@ internal static class Program
             {
                 return SmokeCheck.Pass(
                     "Deployed Functions quarantine intake",
-                    $"Observed source message `{persistedMessageId}` persisted by the Functions intake trigger in `{options.SqlDatabaseName}`.");
+                    $"Observed source message `{persistedMessageId}` persisted by the Functions intake trigger in `{options.OperationsDatabaseName}`.");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
@@ -194,7 +250,169 @@ internal static class Program
 
         return SmokeCheck.Fail(
             "Deployed Functions quarantine intake",
-            $"No quarantine record for source message `{sourceMessageId}` appeared in `{options.SqlDatabaseName}` before the configured timeout.");
+            $"No quarantine record for source message `{sourceMessageId}` appeared in `{options.OperationsDatabaseName}` before the configured timeout.");
+    }
+
+    private static async Task<ReplayCandidateResult> PrepareReplayCandidateAsync(
+        ServiceBusClient client,
+        SmokeOptions options)
+    {
+        var sourceMessageId = Guid.NewGuid().ToString("D");
+        var envelopeMessageId = Guid.NewGuid();
+        var orderReferenceId = Guid.NewGuid();
+        var correlationId = $"phase10-replay-{Guid.NewGuid():N}";
+        var payload = new
+        {
+            customerId = 101,
+            orderDate = DateTime.UtcNow,
+            totalPrice = 1.00m,
+            productCount = 1,
+            orderReferenceId,
+            currencyCode = "MXN"
+        };
+
+        try
+        {
+            await using (var sender = client.CreateSender(options.DeadLetterTopicName))
+            {
+                var message = new ServiceBusMessage(BinaryData.FromObjectAsJson(payload))
+                {
+                    MessageId = sourceMessageId,
+                    CorrelationId = correlationId,
+                    Subject = "OrderCreatedV1",
+                    ContentType = "application/json",
+                    SessionId = options.TenantId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    TimeToLive = TimeSpan.FromDays(7)
+                };
+                message.ApplicationProperties["TenantId"] = options.TenantId;
+                message.ApplicationProperties["TenantCode"] = options.TenantCode;
+                message.ApplicationProperties["EnvelopeMessageId"] = envelopeMessageId.ToString("D");
+                message.ApplicationProperties["EventType"] = "OrderCreatedV1";
+                message.ApplicationProperties["CorrelationId"] = correlationId;
+                message.ApplicationProperties["CausationId"] = correlationId;
+                message.ApplicationProperties["OccurredUtc"] = DateTimeOffset.UtcNow.ToString("O");
+                message.ApplicationProperties["SchemaVersion"] = 1;
+                message.ApplicationProperties["AttemptCount"] = 0;
+                message.ApplicationProperties["FailureCategory"] = "transient-dependency";
+                await sender.SendMessageAsync(message).ConfigureAwait(false);
+            }
+        }
+        catch (Exception error)
+        {
+            return new ReplayCandidateResult(
+                CreateReplayCandidate("publish-outcome-unknown", null, null, error.GetType().Name),
+                Passed: false);
+        }
+
+        const string sql = """
+            SET NOCOUNT ON;
+            SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+            SET LOCK_TIMEOUT 5000;
+
+            SELECT [Id], [TenantId], [CorrelationId], [FailureReason], [State], [ReplayAttemptCount], [CreatedUtc]
+            FROM [operations].[DlqQuarantineRecords] WITH (READUNCOMMITTED)
+            WHERE [SourceMessageId] = @sourceMessageId;
+            """;
+
+        try
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(options.SqlTimeoutSeconds);
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                await using var connection = new SqlConnection(options.OperationsSqlConnectionString);
+                await connection.OpenAsync().ConfigureAwait(false);
+                await using var command = new SqlCommand(sql, connection);
+                command.Parameters.Add(new SqlParameter("@sourceMessageId", SqlDbType.NVarChar, 128) { Value = sourceMessageId });
+                await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+                if (await reader.ReadAsync().ConfigureAwait(false))
+                {
+                    var quarantineId = reader.GetGuid(0);
+                    var tenantId = reader.GetInt32(1);
+                    var persistedCorrelation = reader.GetString(2);
+                    var failureReason = reader.GetString(3);
+                    var state = reader.GetString(4);
+                    var replayAttemptCount = reader.GetInt32(5);
+                    var createdUtc = reader.GetDateTime(6);
+                    if (await reader.ReadAsync().ConfigureAwait(false))
+                    {
+                        throw new InvalidOperationException("Replay candidate source message resolved to multiple quarantine records.");
+                    }
+                    if (tenantId != options.TenantId
+                        || !string.Equals(persistedCorrelation, correlationId, StringComparison.Ordinal)
+                        || !string.Equals(failureReason, "quarantined-transient-dependency", StringComparison.OrdinalIgnoreCase)
+                        || !string.Equals(state, "Quarantined", StringComparison.OrdinalIgnoreCase)
+                        || replayAttemptCount != 0)
+                    {
+                        throw new InvalidOperationException("Functions quarantine evidence does not match the uniquely identified transient replay candidate.");
+                    }
+
+                    return new ReplayCandidateResult(
+                        CreateReplayCandidate("ready-for-separately-approved-replay", quarantineId.ToString("D"), failureReason, null, createdUtc),
+                        Passed: true);
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            }
+        }
+        catch (Exception error)
+        {
+            return new ReplayCandidateResult(
+                CreateReplayCandidate("intake-verification-failed", null, null, error.GetType().Name),
+                Passed: false);
+        }
+
+        return new ReplayCandidateResult(
+            CreateReplayCandidate("intake-not-confirmed", null, null, nameof(TimeoutException)),
+            Passed: false);
+
+        ReplayCandidateEvidence CreateReplayCandidate(
+            string status,
+            string? quarantineId,
+            string? failureReason,
+            string? failureType,
+            DateTime? createdUtc = null)
+            => new(
+                Schema: "phase10-azure-dlq-replay-candidate-v1",
+                Status: status,
+                Environment: options.Environment,
+                TenantCode: options.TenantCode,
+                TenantId: options.TenantId,
+                BusinessDatabase: options.SqlDatabaseName,
+                OperationsDatabase: options.OperationsDatabaseName,
+                QuarantineId: quarantineId,
+                SourceMessageId: sourceMessageId,
+                CorrelationId: correlationId,
+                FailureReason: failureReason,
+                FailureType: failureType,
+                CreatedUtc: createdUtc.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(createdUtc.Value, DateTimeKind.Utc)) : DateTimeOffset.UtcNow);
+    }
+
+    private static async Task WriteReplayCandidateAsync(SmokeOptions options, ReplayCandidateEvidence candidate)
+    {
+        var outputPath = Path.GetFullPath(options.ReplayCandidateJsonPath!);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        var evidence = new
+        {
+            schema = candidate.Schema,
+            status = candidate.Status,
+            environment = candidate.Environment,
+            tenantCode = candidate.TenantCode,
+            tenantId = candidate.TenantId,
+            businessDatabase = candidate.BusinessDatabase,
+            operationsDatabase = candidate.OperationsDatabase,
+            quarantineId = candidate.QuarantineId,
+            sourceMessageId = candidate.SourceMessageId,
+            correlationId = candidate.CorrelationId,
+            failureReason = candidate.FailureReason,
+            failureType = candidate.FailureType,
+            createdUtc = candidate.CreatedUtc
+        };
+        await using var stream = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await JsonSerializer.SerializeAsync(stream, evidence, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        }).ConfigureAwait(false);
     }
 
     private static async Task<EffectCheckResult> WaitForEffectsAsync(
@@ -289,7 +507,8 @@ internal static class Program
         string runId,
         DateTimeOffset startedUtc,
         DateTimeOffset completedUtc,
-        IReadOnlyList<SmokeCheck> checks)
+        IReadOnlyList<SmokeCheck> checks,
+        ReplayCandidateEvidence? replayCandidate)
     {
         var passed = checks.Count(check => check.Passed);
         var failed = checks.Count - passed;
@@ -315,6 +534,7 @@ internal static class Program
         Console.WriteLine($"| Functions Intake Subscription | `{options.DeadLetterSubscriptionName}` |");
         Console.WriteLine($"| Smoke Tenant | `{options.TenantCode}` (`{options.TenantId}`) |");
         Console.WriteLine($"| Verification Database | `{options.SqlDatabaseName}` |");
+        Console.WriteLine($"| Operations Database | `{options.OperationsDatabaseName}` |");
         Console.WriteLine();
         Console.WriteLine("### Checks");
         Console.WriteLine();
@@ -330,7 +550,9 @@ internal static class Program
         Console.WriteLine("### Next Operator Action");
         Console.WriteLine();
         Console.WriteLine(failed == 0
-            ? "Transport publish, live consumer durable effects, broker DLQ forwarding, and deployed Functions quarantine intake are verified. This run does not prove approved Functions replay; that remains a separate acceptance gate."
+            ? replayCandidate is { Status: "ready-for-separately-approved-replay" }
+                ? $"Transport and Functions intake checks passed. Replay candidate `{replayCandidate.QuarantineId}` is recorded separately; it still requires the explicitly approved operator replay and downstream-effect gate."
+                : "Transport publish, live consumer durable effects, broker DLQ forwarding, and deployed Functions quarantine intake are verified. This run does not prove approved Functions replay; that remains a separate acceptance gate."
             : "Review the failed check details, then inspect Azure SQL durable effects, Service Bus message counts, and application logs before rerunning.");
     }
 
@@ -344,6 +566,23 @@ internal sealed record SmokeCheck(string Name, bool Passed, string Detail)
     public static SmokeCheck Fail(string name, string detail) => new(name, false, detail);
 }
 
+internal sealed record ReplayCandidateEvidence(
+    string Schema,
+    string Status,
+    string Environment,
+    string TenantCode,
+    int TenantId,
+    string BusinessDatabase,
+    string OperationsDatabase,
+    string? QuarantineId,
+    string SourceMessageId,
+    string CorrelationId,
+    string? FailureReason,
+    string? FailureType,
+    DateTimeOffset CreatedUtc);
+
+internal sealed record ReplayCandidateResult(ReplayCandidateEvidence Evidence, bool Passed);
+
 internal sealed record SmokeOptions(
     string Environment,
     string NamespaceName,
@@ -354,17 +593,36 @@ internal sealed record SmokeOptions(
     string DeadLetterSubscriptionName,
     string ConnectionString,
     string SqlConnectionString,
+    string OperationsSqlConnectionString,
     string SqlDatabaseName,
+    string OperationsDatabaseName,
     int TenantId,
     string TenantCode,
     int SqlTimeoutSeconds,
-    string? RunId)
+    string? RunId,
+    string? SummaryJsonPath,
+    bool PrepareReplayCandidate,
+    string? ReplayCandidateJsonPath)
 {
     public static SmokeOptions FromArgs(string[] args)
     {
         var values = ParseArgs(args);
         var environment = Get(values, "environment", "dev");
+        var prepareReplayCandidate = values.ContainsKey("prepare-replay-candidate");
+        if (prepareReplayCandidate && !string.Equals(environment, "dev", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Replay-candidate preparation is restricted to Azure dev.", nameof(args));
+        }
+        var replayCandidateJsonPath = values.TryGetValue("replay-candidate-json", out var replayPath) ? replayPath : null;
+        if (prepareReplayCandidate != !string.IsNullOrWhiteSpace(replayCandidateJsonPath))
+        {
+            throw new ArgumentException("Replay candidate preparation requires --replay-candidate-json, and that path is not accepted unless --prepare-replay-candidate is selected.", nameof(args));
+        }
         var suffix = string.Equals(environment, "staging", StringComparison.OrdinalIgnoreCase) ? "stg" : environment;
+        var operationsSqlConnectionString = values.TryGetValue("operations-sql-connection-string", out var operationsConnectionString)
+            ? operationsConnectionString
+            : System.Environment.GetEnvironmentVariable("PHASE10_TRANSPORT_OPERATIONS_SQL_CONNECTION_STRING")
+                ?? GetRequired(values, "sql-connection-string", "PHASE10_TRANSPORT_SQL_CONNECTION_STRING");
 
         return new SmokeOptions(
             Environment: environment,
@@ -376,11 +634,16 @@ internal sealed record SmokeOptions(
             DeadLetterSubscriptionName: Get(values, "dead-letter-subscription", $"dlq-replay-{suffix}"),
             ConnectionString: GetRequired(values, "connection-string", "PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING"),
             SqlConnectionString: GetRequired(values, "sql-connection-string", "PHASE10_TRANSPORT_SQL_CONNECTION_STRING"),
+            OperationsSqlConnectionString: operationsSqlConnectionString,
             SqlDatabaseName: GetRequired(values, "sql-database"),
+            OperationsDatabaseName: Get(values, "operations-database", GetRequired(values, "sql-database")),
             TenantId: int.Parse(GetRequired(values, "tenant-id")),
             TenantCode: GetRequired(values, "tenant-code"),
             SqlTimeoutSeconds: int.Parse(Get(values, "sql-timeout-seconds", "120")),
-            RunId: values.TryGetValue("run-id", out var runId) ? runId : null);
+            RunId: values.TryGetValue("run-id", out var runId) ? runId : null,
+            SummaryJsonPath: values.TryGetValue("summary-json", out var summaryJsonPath) ? summaryJsonPath : null,
+            PrepareReplayCandidate: prepareReplayCandidate,
+            ReplayCandidateJsonPath: replayCandidateJsonPath);
     }
 
     private static Dictionary<string, string> ParseArgs(string[] args)

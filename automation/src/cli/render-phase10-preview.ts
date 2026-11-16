@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizePhase10Packet, renderPhase10CoverageSummary, renderPhase10Report } from "../report/phase10-report.js";
 import { phase10AutomationInventorySha256 } from "../report/phase10-automation.js";
+import { hashAzureManifestFiles } from "../report/phase10-evidence-files.js";
 import { FOUNDATION_TRX_PROJECTS } from "../report/phase10-trx.js";
 import type { TrxProject, TrxSuite } from "../report/phase10-trx.js";
 
@@ -56,10 +57,20 @@ async function readCollectorCoverage(root: string): Promise<{ xml: string; modif
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  if (args.length !== 1) throw new Error("Usage: npm --prefix automation run report:phase10-preview -- <run-directory>");
-  const info = await lstat(args[0]);
+  const runDirectory = args[0];
+  let azureEvidenceRoot: string | undefined;
+  if (args.length === 3 && args[1] === "--azure-evidence") {
+    const azureInfo = await lstat(args[2]);
+    if (!azureInfo.isDirectory() || azureInfo.isSymbolicLink()) throw new Error("Azure evidence path must be a non-symlink directory.");
+    azureEvidenceRoot = await realpath(args[2]);
+  } else if (args.length !== 1) {
+    throw new Error("Usage: npm --prefix automation run report:phase10-preview -- <run-directory> [--azure-evidence <artifact-directory>]");
+  }
+  if (!runDirectory) throw new Error("A Docker report run directory is required.");
+  const info = await lstat(runDirectory);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Run directory must be a non-symlink directory.");
-  const root = await realpath(args[0]);
+  const root = await realpath(runDirectory);
+  const azureIntegrity = azureEvidenceRoot ? await hashAzureManifestFiles(azureEvidenceRoot) : undefined;
   const packet = await readEvidence(root, "acceptance-packet.json");
   const summary = await readEvidence(root, "run-summary.json");
   let foundations: unknown;
@@ -179,7 +190,20 @@ async function main(): Promise<void> {
     { integrationTrx, integrationDuplicate, integrationCoverage, frontend, frontendCoverage, frontendCoverageModifiedUtc,
       backendCoverage, automation, automationInventorySha256, dotnetTests, reportInputIssues,
       dockerImageBefore: await readEvidence(root, "docker-image-identities-before.json"),
-      dockerImageAfter: await readEvidence(root, "docker-image-identities-after.json") });
+      dockerImageAfter: await readEvidence(root, "docker-image-identities-after.json"),
+      azureEvidence: azureEvidenceRoot ? {
+        evidenceManifest: azureIntegrity?.manifest,
+        actualEvidenceFiles: azureIntegrity?.files,
+        deployment: azureIntegrity?.evidence["deployment-identity.json"],
+        runtime: azureIntegrity?.evidence["runtime-smoke.json"],
+        identity: azureIntegrity?.evidence["identity.json"],
+        payments: azureIntegrity?.evidence["payment-matrix-summary.json"],
+        transport: azureIntegrity?.evidence["transport-smoke.json"],
+        transportFunctions: azureIntegrity?.evidence["functions-replay.json"],
+        recovery: azureIntegrity?.evidence["recovery-nfr.json"],
+        rollback: azureIntegrity?.evidence["rollback.json"],
+        restoration: azureIntegrity?.evidence["restoration.json"]
+      } : undefined });
   const output = join(root, "phase10-preview.html");
   const indexOutput = join(root, "index.html");
   const coverageOutput = join(root, "phase10-coverage-summary.json");

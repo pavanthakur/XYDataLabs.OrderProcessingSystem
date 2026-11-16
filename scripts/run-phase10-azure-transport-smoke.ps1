@@ -11,12 +11,47 @@ param(
     [string]$RunId,
     [string]$RunAttempt = '1',
     [string]$FirewallLeaseManifestPath,
-    [string]$SummaryPath
+    [string]$SummaryPath,
+    [string]$SummaryJsonPath,
+    [switch]$PrepareReplayCandidate,
+    [string]$ReplayTenantCode,
+    [string]$ReplayCandidateJsonPath
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'phase10-azure-firewall-lease.ps1')
+
+if ($PrepareReplayCandidate) {
+    if ($Environment -ne 'dev') { throw 'Replay-candidate preparation is restricted to Azure dev.' }
+    if ([string]::IsNullOrWhiteSpace($ReplayTenantCode) -or $ReplayTenantCode -notmatch '^[A-Za-z0-9_-]{1,64}$') {
+        throw 'Replay-candidate preparation requires an explicit active tenant code.'
+    }
+    if ([string]::IsNullOrWhiteSpace($ReplayCandidateJsonPath)) {
+        throw 'Replay-candidate preparation requires a unique ReplayCandidateJsonPath for sanitized candidate evidence.'
+    }
+}
+elseif (-not [string]::IsNullOrWhiteSpace($ReplayTenantCode) -or -not [string]::IsNullOrWhiteSpace($ReplayCandidateJsonPath)) {
+    throw 'ReplayTenantCode and ReplayCandidateJsonPath are valid only with -PrepareReplayCandidate.'
+}
+
+$requestedOutputPaths = @()
+if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
+    $requestedOutputPaths += $SummaryPath
+    $requestedOutputPaths += [System.IO.Path]::ChangeExtension($SummaryPath, '.topology.json')
+}
+if (-not [string]::IsNullOrWhiteSpace($SummaryJsonPath)) { $requestedOutputPaths += $SummaryJsonPath }
+if (-not [string]::IsNullOrWhiteSpace($ReplayCandidateJsonPath)) { $requestedOutputPaths += $ReplayCandidateJsonPath }
+$normalizedOutputPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($requestedOutputPath in $requestedOutputPaths) {
+    $normalizedOutputPath = [System.IO.Path]::GetFullPath($requestedOutputPath)
+    if (-not $normalizedOutputPaths.Add($normalizedOutputPath)) {
+        throw 'Transport smoke output paths must be unique; Markdown, topology, summary JSON and candidate JSON cannot overwrite each other.'
+    }
+    if (Test-Path -LiteralPath $normalizedOutputPath) {
+        throw 'Transport smoke output artifact already exists; choose new run-specific paths before any Azure access.'
+    }
+}
 
 $resourceSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $brokerSuffix = $Environment
@@ -295,6 +330,7 @@ $subscriptionId = Invoke-AzureCliText -Operation 'Resolve active Azure subscript
 
 $previousServiceBusConnectionString = $env:PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING
 $previousSqlConnectionString = $env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING
+$previousOperationsSqlConnectionString = $env:PHASE10_TRANSPORT_OPERATIONS_SQL_CONNECTION_STRING
 $firewallLease = $null
 $transportFailure = $null
 $cleanupError = $null
@@ -317,13 +353,22 @@ Write-Host "Opened owned SQL firewall rule '$($firewallLease.RuleName)' for the 
 
 Write-Step "Resolving runtime tenant topology and validating tenant/provider contracts"
 $tenantTopology = @(Resolve-ValidatedTenantTopology)
-$selectedTenant = @($tenantTopology | Where-Object Tier -eq 'SharedPool' | Select-Object -First 1)[0]
-if ($null -eq $selectedTenant) {
-    $selectedTenant = $tenantTopology[0]
+if ($PrepareReplayCandidate) {
+    $candidateTenants = @($tenantTopology | Where-Object { [string]::Equals([string]$_.TenantCode, $ReplayTenantCode, [StringComparison]::OrdinalIgnoreCase) })
+    if ($candidateTenants.Count -ne 1) { throw "Replay tenant '$ReplayTenantCode' did not resolve to exactly one active tenant." }
+    $selectedTenant = $candidateTenants[0]
+}
+else {
+    $selectedTenant = @($tenantTopology | Where-Object Tier -eq 'SharedPool' | Select-Object -First 1)[0]
+    if ($null -eq $selectedTenant) {
+        $selectedTenant = $tenantTopology[0]
+    }
 }
 
 $sqlConnectionString = "Server=tcp:$sqlServerFqdn,1433;Initial Catalog=$($selectedTenant.VerificationDatabaseName);Persist Security Info=False;User ID=$sqlAdminUser;Password=$sqlAdminPassword;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+$operationsSqlConnectionString = "Server=tcp:$sqlServerFqdn,1433;Initial Catalog=$sharedDbName;Persist Security Info=False;User ID=$sqlAdminUser;Password=$sqlAdminPassword;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 $env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING = $sqlConnectionString
+$env:PHASE10_TRANSPORT_OPERATIONS_SQL_CONNECTION_STRING = $operationsSqlConnectionString
 $env:PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING = $ConnectionString
 
 if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
@@ -344,10 +389,17 @@ $arguments = @(
     '--dead-letter-topic', 'order-events-dlq',
     '--dead-letter-subscription', "dlq-replay-$brokerSuffix",
     '--sql-database', $selectedTenant.VerificationDatabaseName,
+    '--operations-database', $sharedDbName,
     '--tenant-id', $selectedTenant.TenantId,
     '--tenant-code', $selectedTenant.TenantCode,
     '--run-id', $smokeRunId
 )
+if (-not [string]::IsNullOrWhiteSpace($SummaryJsonPath)) {
+    $arguments += @('--summary-json', $SummaryJsonPath)
+}
+if ($PrepareReplayCandidate) {
+    $arguments += @('--prepare-replay-candidate', '--replay-candidate-json', $ReplayCandidateJsonPath)
+}
 
 Write-Host "Using validated smoke tenant '$($selectedTenant.TenantCode)' (Tier=$($selectedTenant.Tier), Provider=$($selectedTenant.ProviderCode), Db=$($selectedTenant.VerificationDatabaseName))." -ForegroundColor DarkGray
 Write-Host "Running Phase 10 Azure transport smoke for '$Environment'..."
@@ -375,6 +427,7 @@ finally {
         catch { $cleanupError = $_; Write-Warning "Owned SQL firewall cleanup failed; manifest retained at '$leaseManifestPath'." }
     }
     $env:PHASE10_TRANSPORT_SQL_CONNECTION_STRING = $previousSqlConnectionString
+    $env:PHASE10_TRANSPORT_OPERATIONS_SQL_CONNECTION_STRING = $previousOperationsSqlConnectionString
     $env:PHASE10_TRANSPORT_SERVICEBUS_CONNECTION_STRING = $previousServiceBusConnectionString
 }
 

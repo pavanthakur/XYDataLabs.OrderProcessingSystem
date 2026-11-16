@@ -5,12 +5,14 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { auditAzureDeployContract, validateAzureRuntimeTargets } from '../phase10-azure-static-preflight.mjs';
+import { validateLocalDlqApprovalResponse, validateLocalOperatorClaims } from '../../frontend/apps/web/scripts/phase10-local-dlq-approval-contract.mjs';
 
 const requireAutomation = createRequire(new URL('../../automation/package.json', import.meta.url));
 const yaml = requireAutomation('js-yaml');
 const verifierSource = await readFile(new URL('../verify-payment-run-azure.ps1', import.meta.url), 'utf8');
 const paymentWorkflowSource = await readFile(new URL('../../.github/workflows/phase10-azure-payment-matrix.yml', import.meta.url), 'utf8');
 const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-azure-matrix.ts', import.meta.url), 'utf8');
+const replaySqlVerifierSource = await readFile(new URL('../verify-phase10-azure-dlq-replay.ps1', import.meta.url), 'utf8');
 
 test('Azure operator checkpoint and launch safety regressions execute in hosted contract CI', () => {
   const environment = { ...process.env };
@@ -384,10 +386,115 @@ test('current repository preflight verifies Functions storage, SQL identity, and
 
 test('Azure transport smoke never competes with the deployed Functions intake subscription', async () => {
   const source = await readFile('tools/Phase10.TransportSmoke/Program.cs', 'utf8');
+  const transportScript = await readFile('scripts/run-phase10-azure-transport-smoke.ps1', 'utf8');
+  const workflow = await readFile('.github/workflows/phase10-azure-transport-smoke.yml', 'utf8');
+  const runtimeScript = await readFile('scripts/run-phase10-azure-runtime-smoke.ps1', 'utf8');
+  const runtimeWorkflow = await readFile('.github/workflows/phase10-azure-runtime-smoke.yml', 'utf8');
+  const approvalController = await readFile('XYDataLabs.OrderProcessingSystem.Orders.API/Controllers/DlqAdminController.cs', 'utf8');
+  const localNfrProbe = await readFile('tools/Phase10.NfrProbe/FunctionsAcceptance.cs', 'utf8');
+  const replayFunctionTests = await readFile('tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/Scenarios/DlqReplayFunctionOwnershipTests.cs', 'utf8');
   assert.match(source, /WaitForQuarantineRecordAsync\(options, dlqMessageId\)/);
   assert.match(source, /\[operations\]\.\[DlqQuarantineRecords\]/);
   assert.doesNotMatch(source, /CreateReceiver\(|ReceiveMessagesAsync\(|CompleteMessageAsync\(/);
   assert.match(source, /does not prove approved Functions replay/);
+  assert.match(workflow, /Run transport publish consume and Functions quarantine smoke/);
+  assert.match(source, /phase10-azure-transport-smoke-v1/);
+  assert.match(source, /SummaryJsonPath/);
+  assert.match(source, /name = check\.Name, status = check\.Passed \? "passed" : "failed"/);
+  assert.doesNotMatch(source, /connectionString\s*=|sqlConnectionString\s*=|detail\s*=\s*check\.Detail/);
+  assert.match(workflow, /prepareReplayCandidate:[\s\S]*?default: false[\s\S]*?type: boolean/);
+  assert.match(workflow, /replayTenantCode:[\s\S]*?type: string/);
+  assert.match(transportScript, /\[switch\]\$PrepareReplayCandidate/);
+  assert.match(transportScript, /Replay-candidate preparation is restricted to Azure dev/);
+  assert.match(transportScript, /Transport smoke output paths must be unique/);
+  assert.match(transportScript, /Transport smoke output artifact already exists; choose new run-specific paths before any Azure access/);
+  assert.match(transportScript, /OrdinalIgnoreCase/);
+  assert.ok(transportScript.indexOf('if ($PrepareReplayCandidate)') < transportScript.indexOf('$subscriptionId = Invoke-AzureCliText'), 'replay-candidate argument validation must precede Azure CLI access');
+  assert.ok(transportScript.indexOf('Transport smoke output artifact already exists') < transportScript.indexOf('New-Phase10FirewallLease'), 'existing output paths must be rejected before firewall mutation');
+  assert.ok(transportScript.indexOf('Transport smoke output paths must be unique') < transportScript.indexOf('New-Phase10FirewallLease'), 'colliding output paths must be rejected before firewall mutation');
+  assert.match(transportScript, /PHASE10_TRANSPORT_OPERATIONS_SQL_CONNECTION_STRING/);
+  assert.match(source, /FailureCategory"\] = "transient-dependency"/);
+  assert.match(source, /phase10-azure-dlq-replay-candidate-v1/);
+  assert.match(source, /OperationsSqlConnectionString/);
+  assert.doesNotMatch(source, /CreateReceiver\(|ReceiveMessagesAsync\(|CompleteMessageAsync\(/);
+  assert.match(transportScript, /ReplayTenantCode and ReplayCandidateJsonPath are valid only with -PrepareReplayCandidate/);
+  assert.match(workflow, /phase10-azure-dlq-replay-candidate\.json/);
+  assert.match(transportScript, /--summary-json/);
+  assert.match(workflow, /phase10-azure-transport-smoke\.json/);
+  assert.match(runtimeScript, /phase10-azure-runtime-smoke-v1/);
+  assert.match(runtimeScript, /SummaryJsonPath/);
+  assert.match(runtimeScript, /httpStatus = \[string\]\$_\.Status/);
+  assert.match(runtimeWorkflow, /phase10-azure-runtime-smoke\.json/);
+  assert.doesNotMatch(workflow, /Run transport publish consume replay smoke/);
+  assert.match(approvalController, /\[Authorize\(Roles = "phase10-operator"\)\]/);
+  assert.match(approvalController, /HttpPost\("\{quarantineId:guid\}\/approve"\)/);
+  assert.match(localNfrProbe, /RequestLocalReplayApprovalAsync/);
+  assert.match(localNfrProbe, /authenticated-local-keycloak-pkce-api/);
+  assert.doesNotMatch(localNfrProbe, /UPDATE\s+operations\.DlqQuarantineRecords|INSERT\s+INTO\s+operations\.DlqReplayRequests/i);
+  assert.match(localNfrProbe, /ProcessedUtc IS NOT NULL AND q\.State='Replayed'/);
+  assert.match(localNfrProbe, /frontend.*phase10-identity-proof\.mjs/);
+  const localIdentityProof = await readFile('frontend/apps/web/scripts/phase10-identity-proof.mjs', 'utf8');
+  assert.match(localIdentityProof, /--approve-quarantine-id/);
+  assert.match(localIdentityProof, /authorized-local-replay-approval/);
+  assert.match(localIdentityProof, /no retry was attempted/);
+  assert.match(localIdentityProof, /hasOperatorRole/);
+  assert.match(localIdentityProof, /cannot traverse a symlink outside TestResults/);
+  assert.match(localIdentityProof, /replaceAll\(password, "\[REDACTED\]"\)/);
+  const localApprovalContract = await readFile('frontend/apps/web/scripts/phase10-local-dlq-approval-contract.mjs', 'utf8');
+  assert.match(localApprovalContract, /alreadyApproved !== false/);
+  assert.match(localIdentityProof, /validateLocalDlqApprovalResponse/);
+  assert.throws(() => validateLocalOperatorClaims({ realm_access: { roles: ["platform-admin"] } }, "TenantA"), /phase10-operator/);
+  assert.throws(() => validateLocalOperatorClaims({ realm_access: { roles: ["phase10-operator"] }, tenant_code: "TenantA" }, "TenantB"), /not assigned/);
+  assert.throws(() => validateLocalDlqApprovalResponse("11111111-1111-4111-8111-111111111111", {
+    quarantineId: "11111111-1111-4111-8111-111111111111", replayRequestId: "22222222-2222-4222-8222-222222222222",
+    state: "approved", approvedUtc: "2026-11-16T10:00:00.000Z", alreadyApproved: true
+  }), /incomplete metadata/);
+  assert.match(replayFunctionTests, /RunCoreAsync_WhenReplayRequestAlreadyProcessed_Completes_Without_Republishing/);
+  assert.match(replayFunctionTests, /persistedQuarantine\.ReplayAttemptCount\.Should\(\)\.Be\(2\)/);
+  assert.doesNotMatch(localIdentityProof, /console\.(?:log|error).*token|writeFile.*token/i);
+});
+
+test('Azure DLQ replay approval is explicit, Azure-dev-only, role-gated, single-attempt, and not misreported as completion', async () => {
+  const [runner, approval, cli, helper, packageJson] = await Promise.all([
+    readFile('automation/src/browser/payment-journey-runner.ts', 'utf8'),
+    readFile('automation/src/verification/dlq-replay-approval.ts', 'utf8'),
+    readFile('automation/src/cli/run-azure-dlq-replay-approval.ts', 'utf8'),
+    readFile('automation/src/verification/dlq-replay-approval.test.ts', 'utf8'),
+    readFile('automation/package.json', 'utf8')
+  ]);
+  assert.match(packageJson, /run:azure:dlq-replay-approval/);
+  assert.match(cli, /--confirm-approval/);
+  assert.match(cli, /resolve\("azure-dev"\)/);
+  assert.match(cli, /REPLAY_EFFECTS_VERIFIED_DUPLICATE_DELIVERY_PENDING/);
+  assert.match(cli, /--confirm-firewall-lease/);
+  assert.match(cli, /closeOperatorAssistedSession/);
+  assert.match(runner, /request\.target\.key !== "azure-dev"/);
+  assert.match(runner, /request\.operatorAssistedEntra !== true \|\| request\.headless/);
+  assert.match(runner, /dlqReplayApprovalQuarantineId/);
+  assert.match(runner, /This is not proof of Functions processing or downstream effects/);
+  assert.match(approval, /tokenHasRoleClaim\(request\.accessToken, "phase10-operator"\)/);
+  assert.match(approval, /new URL\(`\/api\/v1\/admin\/dlq/);
+  assert.match(approval, /method: "POST"/);
+  assert.match(approval, /was not retried/);
+  assert.match(approval, /authorization: `Bearer \$\{request\.accessToken\}`/);
+  assert.doesNotMatch(approval, /console\.(log|error).*accessToken|writeFile.*accessToken/s);
+  assert.match(helper, /does not retry ambiguous approval failures/);
+});
+
+test('Azure replay SQL evidence is read-only, tenant/database-routed, bounded, and firewall-lease guarded', () => {
+  assert.match(replaySqlVerifierSource, /ValidateSet\('dev'\)/);
+  assert.match(replaySqlVerifierSource, /ExpectedSubscriptionId/);
+  assert.match(replaySqlVerifierSource, /ConfirmFirewallLease/);
+  assert.match(replaySqlVerifierSource, /TimeoutSeconds = 120/);
+  assert.match(replaySqlVerifierSource, /Initialize-AzureFixtureTopology/);
+  assert.match(replaySqlVerifierSource, /Resolve-ReplayTenantDatabase/);
+  assert.match(replaySqlVerifierSource, /PublishedUtc/);
+  assert.match(replaySqlVerifierSource, /ProcessedUtc/);
+  assert.match(replaySqlVerifierSource, /InventoryReservations/);
+  assert.match(replaySqlVerifierSource, /NotificationDeliveries/);
+  assert.match(replaySqlVerifierSource, /FirewallLeaseRestored/);
+  assert.doesNotMatch(replaySqlVerifierSource, /\b(?:INSERT|UPDATE|DELETE|MERGE)\s+(?:INTO\s+)?(?:operations\.|inventory\.|notifications\.|dbo\.)/i);
+  assert.doesNotMatch(replaySqlVerifierSource, /-NonQuery/);
 });
 
 test('Azure payment matrix uses a Playwright-supported hosted runner image', async () => {

@@ -215,6 +215,7 @@ jobs:
         shell: pwsh
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-runtime-smoke.md'
+          $summaryJsonPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-runtime-smoke.json'
 
           & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-runtime-smoke.ps1 `
             -Environment '${{ inputs.environment }}' `
@@ -223,7 +224,8 @@ jobs:
             -UiBaseUrl '${{ steps.topology.outputs.uiBaseUrl }}' `
             -AllowGeneratedAzureUrlFallback $${{ steps.topology.outputs.allowGeneratedAzureUrlFallback }} `
             -GeneratedUrlIsExpected $${{ inputs.environment == 'dev' && 'true' || 'false' }} `
-            -SummaryPath $summaryPath
+            -SummaryPath $summaryPath `
+            -SummaryJsonPath $summaryJsonPath
 
           $smokeExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
@@ -244,5 +246,6 @@ jobs:
             ${{ runner.temp }}/phase10-azure-tenant-topology.md
             ${{ runner.temp }}/phase10-azure-tenant-topology.json
             ${{ runner.temp }}/phase10-azure-runtime-smoke.md
+            ${{ runner.temp }}/phase10-azure-runtime-smoke.json
           if-no-files-found: ignore
           retention-days: 14
