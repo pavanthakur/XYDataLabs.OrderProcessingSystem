@@ -35,3 +35,11 @@ test("messaging acceptance refuses to overwrite prior proof artifacts", () => {
   assert.ok(outputGuard > 0 && createDirectory > outputGuard, "artifact collision guard must execute before directory use and runtime mutations");
   assert.match(script, /Messaging artifact '\$artifactName' already exists\. Select a new run-specific ArtifactDirectory; prior evidence is never overwritten/);
 });
+
+test("replay proof enables and restores both publisher and consumer and blocks unrelated pending approvals", () => {
+  assert.match(script, /up -d --no-deps --no-build orders functions/);
+  assert.match(script, /LOCAL_SERVICEBUS_APPROVAL_PUBLISHER_ENABLED=\$originalPublisher/);
+  assert.match(script, /restoredPublisherLine-eq"ServiceBus__ReplayEnabled=\$originalPublisher"/);
+  assert.match(script, /Unrelated pending replay approvals exist/);
+  assert.match(script, /approvalResubmitted=\$false/);
+});

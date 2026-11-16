@@ -160,8 +160,9 @@ services:
       ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
       ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
       ServiceBus__MessageTtl: 01:00:00
-      ServiceBus__ReplayEnabled: "false"
       Phase10__SeedAllActiveTenants: "true"
+      # Approval publication is opt-in for local replay proof; never enabled by normal startup.
+      ServiceBus__ReplayEnabled: ${LOCAL_SERVICEBUS_APPROVAL_PUBLISHER_ENABLED:-false}
       Phase10__LocalOpenPayThreeDsDefault: ${PHASE10_OPENPAY_3DS_DEFAULT:-false}
       OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
       OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}

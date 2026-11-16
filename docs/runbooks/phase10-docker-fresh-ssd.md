@@ -1,5 +1,11 @@
 # Phase 10 fresh Docker storage on G:
 
+## Local replay publisher/consumer proof (16 November follow-up)
+
+Replay requires both Orders approval publication and Functions consumption. Normal Compose keeps `LOCAL_SERVICEBUS_APPROVAL_PUBLISHER_ENABLED` and `LOCAL_SERVICEBUS_REPLAY_ENABLED` false. The local messaging hook snapshots both effective values, refuses unrelated pending approvals, enables both temporarily, and restores/verifies both in `finally`. Do not enable the publisher blindly: it can release every unpublished approved replay request.
+
+For an already approved test request, use the existing hook with `-ReconcileReplayRequestId <request-guid>` and a fresh `-ArtifactDirectory`; this path polls publication, processing and tenant-scoped downstream counts without submitting approval again. Treat its report as reconciliation, not a fresh complete acceptance run. The failed `runtime-d1a0a1b4-replay001` report is preserved. Follow-up `TestResults/Phase10/runtime-d1a0a1b4-replay002-reconcile/` passed reconciliation (6.063 seconds, no resubmission) and settings restoration. The code/Compose correction is uncommitted and still requires broader validation, fresh proof and review.
+
 ## Current non-Azure acceptance evidence (12 November 2026)
 
 **L6 gate C is PASS under DW-028 Option A for `494ab4fd`, not an outstanding Docker/hosted-parity blocker.** The separately named combined `l6-ci-parity-and-azure` report gate remains NOT-RUN for Azure acceptance; do not interpret it as reopening non-Azure L6 C. See the 12 November checkpoint in the [canonical Phase 10 checklist](../internal/phase10-implementation-checklist.md) for same-candidate hosted run links. No-PR CI improvements are implemented and hosted-tested; this does not change the historical Docker evidence or justify repeating accepted payment runs.
