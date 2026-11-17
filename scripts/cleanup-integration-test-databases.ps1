@@ -9,13 +9,9 @@ $manifestFullPath = [IO.Path]::GetFullPath($ManifestPath)
 $resultsRoot = [IO.Path]::GetFullPath((Join-Path $root 'TestResults')).TrimEnd('\') + '\'
 if (-not $manifestFullPath.StartsWith($resultsRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest must be under repository TestResults on Q:.' }
 $manifest = Get-Content -LiteralPath $manifestFullPath -Raw | ConvertFrom-Json
-if ($manifest.schemaVersion -ne 1 -or $manifest.status -notin @('creation-failed-review-required', 'cleanup-failed-review-required')) {
-    throw 'Only an interrupted run-owned database manifest can be recovered.'
-}
-if ($manifest.databases.Count -ne 2) { throw 'Recovery manifest must contain exactly the shared/dedicated database pair.' }
+Assert-IntegrationDatabaseRecoveryManifest -Manifest $manifest
 $shared = [string]$manifest.databases[0].name
 $dedicated = [string]$manifest.databases[1].name
-Assert-IntegrationTestDatabaseNames -SharedDatabase $shared -DedicatedDatabase $dedicated
 $connectionString = [Environment]::GetEnvironmentVariable('PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING')
 if ([string]::IsNullOrWhiteSpace($connectionString)) { throw 'Set PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING privately for the exact local SQL server; no credentials are accepted as parameters.' }
 $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($connectionString)

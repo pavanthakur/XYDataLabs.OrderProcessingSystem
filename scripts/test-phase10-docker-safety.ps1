@@ -81,6 +81,27 @@ try {
         Assert-True ($first.shared -ne $second.shared -and $first.dedicated -eq $expectedDedicated) 'Run database pair contract is not unique.'
         Assert-IntegrationTestDatabaseNames -SharedDatabase $first.shared -DedicatedDatabase $first.dedicated
     }
+    Test-Case 'Interrupted fully-created Docker database pair is recoverable only for its exact run' {
+        $runId = [Guid]::NewGuid().ToString('N')
+        $names = Get-IntegrationTestDatabaseNames -RunId $runId
+        $manifest = [pscustomobject]@{
+            schemaVersion = 1; runId = $runId; runtime = 'docker-phase10'; serverAddress = 'tcp:127.0.0.1,14330'
+            status = 'created'; cleanupPending = $false
+            databases = @(
+                [pscustomobject]@{ name = $names.shared; preExisting = $false; createPending = $false; cleanupPending = $false; createdByRun = $true },
+                [pscustomobject]@{ name = $names.dedicated; preExisting = $false; createPending = $false; cleanupPending = $false; createdByRun = $true }
+            )
+        }
+        Assert-IntegrationDatabaseRecoveryManifest -Manifest $manifest
+        $manifest.databases[1].createdByRun = $false
+        Assert-Throws { Assert-IntegrationDatabaseRecoveryManifest -Manifest $manifest } 'fully run-owned'
+        $manifest.databases[1].createdByRun = $true
+        $manifest.serverAddress = 'tcp:remote.invalid,14330'
+        Assert-Throws { Assert-IntegrationDatabaseRecoveryManifest -Manifest $manifest } 'exact Docker loopback SQL target'
+        $manifest.serverAddress = 'tcp:127.0.0.1,14330'
+        $manifest.databases[0].name = 'OrderProcessingSystem_Dev'
+        Assert-Throws { Assert-IntegrationDatabaseRecoveryManifest -Manifest $manifest } 'do not match its run ID'
+    }
     Test-Case 'Application, system, and malformed integration targets fail before SQL access' {
         Assert-Throws { Assert-IntegrationTestDatabaseNames -SharedDatabase 'OrderProcessingSystem_Dev' -DedicatedDatabase 'OrderProcessingSystem_TenantC_Dev' } 'run-owned'
         Assert-Throws { Assert-IntegrationTestDatabaseNames -SharedDatabase 'master' -DedicatedDatabase 'master_TenantC' } 'run-owned'

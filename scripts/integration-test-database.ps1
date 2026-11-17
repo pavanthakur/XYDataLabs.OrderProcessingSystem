@@ -15,6 +15,30 @@ function Assert-IntegrationTestDatabaseNames {
     }
 }
 
+function Assert-IntegrationDatabaseRecoveryManifest {
+    param([Parameter(Mandatory)]$Manifest)
+    if ($Manifest.schemaVersion -ne 1 -or $Manifest.status -notin @('creation-failed-review-required', 'cleanup-failed-review-required', 'created')) {
+        throw 'Only an interrupted run-owned database manifest can be recovered.'
+    }
+    if ([string]$Manifest.runId -notmatch '^[0-9a-f]{32}$' -or @($Manifest.databases).Count -ne 2) {
+        throw 'Recovery manifest must contain one valid run ID and exactly the shared/dedicated database pair.'
+    }
+
+    $expectedNames = Get-IntegrationTestDatabaseNames -RunId ([string]$Manifest.runId)
+    if ([string]$Manifest.databases[0].name -cne $expectedNames.shared -or
+        [string]$Manifest.databases[1].name -cne $expectedNames.dedicated) {
+        throw 'Recovery manifest database names do not match its run ID.'
+    }
+    Assert-IntegrationTestDatabaseNames -SharedDatabase $expectedNames.shared -DedicatedDatabase $expectedNames.dedicated
+
+    if ($Manifest.status -eq 'created') {
+        if ($Manifest.runtime -ne 'docker-phase10' -or $Manifest.serverAddress -ine 'tcp:127.0.0.1,14330' -or
+            $Manifest.cleanupPending -or @($Manifest.databases | Where-Object { $_.preExisting -or $_.createPending -or $_.cleanupPending -or -not $_.createdByRun }).Count -gt 0) {
+            throw 'A created-state recovery requires the exact Docker loopback SQL target and two fully run-owned databases.'
+        }
+    }
+}
+
 function Test-IntegrationSqlDatabaseExists {
     param([Parameter(Mandatory)][System.Data.SqlClient.SqlConnection]$Connection, [Parameter(Mandatory)][string]$Name)
     $command = $Connection.CreateCommand()
