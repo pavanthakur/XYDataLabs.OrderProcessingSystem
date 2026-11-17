@@ -65,6 +65,15 @@ test("order continuation without a recorded DW-023 deferral blocks", () => {
   assert.equal(reconcilePhase10Acceptance(input).verdict, "INCOMPLETE");
 });
 
+test("an explicit order-continuation failure is not hidden by its DW-023 deferral", () => {
+  const input = passing();
+  const steps = (input.e2e.packet as { steps: { name: string; status: string }[] }).steps;
+  steps.find(step => step.name === "order-continuation")!.status = "failed";
+  const result = reconcilePhase10Acceptance(input);
+  assert.equal(result.gates.find(item => item.name === "e2e-order-continuation")?.status, "FAIL");
+  assert.equal(result.verdict, "FAIL");
+});
+
 test("a skipped, blocked or missing NFR category is never a pass", () => {
   for (const status of ["skipped", "blocked", "running"]) {
     const input = passing();

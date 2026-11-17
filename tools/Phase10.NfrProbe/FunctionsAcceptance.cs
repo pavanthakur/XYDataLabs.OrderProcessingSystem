@@ -13,6 +13,9 @@ internal static class FunctionsAcceptance
     public static async Task<int> RunAsync(ProbeOptions options)
     {
         var result = new Dictionary<string, object?> { ["status"]="failed",["runtime"]="local-docker",["startedUtc"]=DateTime.UtcNow };
+        var approvalLifecycle = new ReplayApprovalLifecycle();
+        result["approvalStatus"] = approvalLifecycle.Status;
+        result["approvalReconciliationRequired"] = approvalLifecycle.RequiresReconciliation;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(options.ResultPath))!);
@@ -75,9 +78,14 @@ internal static class FunctionsAcceptance
             var quarantine=(Guid)await Poll("SELECT Id FROM operations.DlqQuarantineRecords WHERE SourceMessageId=@id AND TenantId=@tenant",("@id",messageId.ToString("D")),("@tenant",tenantId));
             result["intake"]="passed"; result["quarantineId"]=quarantine;
             var approvalPath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(options.ResultPath))!, $"{Path.GetFileNameWithoutExtension(options.ResultPath)}.approval.json");
-            result["approvalStatus"]="pending-reconciliation";
+            approvalLifecycle.MarkSubmissionIntended();
+            result["approvalStatus"] = approvalLifecycle.Status;
+            result["approvalReconciliationRequired"] = approvalLifecycle.RequiresReconciliation;
             var approval=await RequestLocalReplayApprovalAsync(options,quarantine,approvalPath);
             var replayRequestId=approval.ReplayRequestId;
+            approvalLifecycle.MarkApproved();
+            result["approvalStatus"] = approvalLifecycle.Status;
+            result["approvalReconciliationRequired"] = approvalLifecycle.RequiresReconciliation;
             result["approvalOutcome"]="approved";
             result["approvalMethod"]="authenticated-local-keycloak-pkce-api";
             result["replayRequestId"]=replayRequestId;
@@ -85,14 +93,27 @@ internal static class FunctionsAcceptance
             result["approvedUtc"]=approval.ApprovedUtc;
             var replayClock=System.Diagnostics.Stopwatch.StartNew();
             await Poll("SELECT 1 FROM operations.DlqReplayRequests r JOIN operations.DlqQuarantineRecords q ON q.Id=r.QuarantineId WHERE r.Id=@r AND r.QuarantineId=@q AND q.TenantId=@tenant AND r.ProcessedUtc IS NOT NULL AND q.State='Replayed'",("@r",replayRequestId),("@q",quarantine), ("@tenant",tenantId));
+            approvalLifecycle.MarkProcessingConfirmed();
+            result["approvalStatus"] = approvalLifecycle.Status;
+            result["approvalReconciliationRequired"] = approvalLifecycle.RequiresReconciliation;
             var replaySeconds=Math.Round(replayClock.Elapsed.TotalSeconds,3);
             result["replayVisibilitySeconds"]=replaySeconds; result["replayVisibilityLimitSeconds"]=MaximumReplayVisibilitySeconds;
             if(replaySeconds>MaximumReplayVisibilitySeconds){result["replay"]="threshold-exceeded"; throw new InvalidOperationException("Approved replay was not visible within the limit.");}
             result["replay"]="passed";
             await Poll("SELECT 1 WHERE (SELECT COUNT(*) FROM inventory.InventoryReservations WHERE CorrelationId=@c)=1 AND (SELECT COUNT(*) FROM notifications.NotificationDeliveries WHERE CorrelationId=@c)=1",("@c",correlation));
-            result["downstreamEffects"]="passed";result["status"]="passed";
+            result["downstreamEffects"]="passed";
+            if (!approvalLifecycle.CanReportSuccess)
+                throw new InvalidOperationException("Functions proof cannot pass before replay processing is confirmed.");
+            result["status"]="passed";
         }
         catch(Exception error){result["errorType"]=error.GetType().Name; result["message"]="Functions proof incomplete. Inspect local service readiness and replay enablement; no credentials recorded.";}
+        if (!ReplayApprovalLifecycle.IsConsistent(
+                Convert.ToString(result["status"], CultureInfo.InvariantCulture) ?? "failed",
+                approvalLifecycle.Status))
+        {
+            result["status"] = "failed";
+            result["message"] = "Functions proof has contradictory approval and terminal status evidence.";
+        }
         result["finishedUtc"]=DateTime.UtcNow;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(options.ResultPath))!);
         await File.WriteAllTextAsync(options.ResultPath,JsonSerializer.Serialize(result,new JsonSerializerOptions{WriteIndented=true}));

@@ -211,6 +211,9 @@ try{
     Run-Test 'local-dlq-approval-evidence' 'node' @('--test','scripts/tests/phase10-local-dlq-approval-evidence.test.mjs')
     Run-Test 'nfr-drill-contract' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-drill-contract.ps1')
     Run-Test 'nfr-drill-orchestration' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-drill-orchestration.ps1')
+    Run-Test 'nfr-operational-only-contract' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-operational-only-contract.ps1')
+    Run-Test 'nfr-probe-approval-lifecycle' 'dotnet' @('test','tools/Phase10.NfrProbe.Tests/Phase10.NfrProbe.Tests.csproj','--no-restore','--logger','console;verbosity=minimal')
+    Run-Test 'phase10-local-followup-report' 'npm' @('--prefix','automation','run','test:phase10-local-followup')
     foreach($name in @('Domain','Application','API','Gateway','Architecture')){
         $testCoverageRoot = Join-Path (Join-Path $artifact 'backend-coverage') $name
         if (Test-Path -LiteralPath $testCoverageRoot) { throw "Backend coverage output already exists for $name; refusing to overwrite evidence." }

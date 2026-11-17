@@ -18,10 +18,18 @@ param(
 
     [switch]$UseCleanReset,
 
-    [switch]$SkipOperationalChecks
+    [switch]$SkipOperationalChecks,
+
+    [switch]$OperationalOnly
 )
 
 $ErrorActionPreference = 'Stop'
+if ($OperationalOnly -and $UseCleanReset) {
+    throw '-OperationalOnly cannot be combined with -UseCleanReset; this lane never resets the Service Bus emulator.'
+}
+if ($OperationalOnly -and $SkipOperationalChecks) {
+    throw '-OperationalOnly cannot be combined with -SkipOperationalChecks.'
+}
 $script:Phase10NfrRestorationFailed = $false
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-nfr-aggregate.ps1')
@@ -38,6 +46,9 @@ $istZone = [TimeZoneInfo]::FindSystemTimeZoneById('India Standard Time')
 $startedAt = [TimeZoneInfo]::ConvertTime([DateTimeOffset]::UtcNow, $istZone)
 
 New-Item -ItemType Directory -Path $nfrRoot -Force | Out-Null
+if (Test-Path -LiteralPath $summaryPath -PathType Leaf) {
+    throw "Refusing to overwrite existing NFR evidence: $summaryPath"
+}
 Set-Content -LiteralPath $progressPath -Value '' -Encoding utf8
 Set-Content -LiteralPath $currentStepPath -Value 'initializing' -Encoding utf8
 Set-Content -LiteralPath (Join-Path $nfrRoot 'run-plan.txt') -Encoding utf8 -Value @(
@@ -45,14 +56,15 @@ Set-Content -LiteralPath (Join-Path $nfrRoot 'run-plan.txt') -Encoding utf8 -Val
     "Started (IST): $($startedAt.ToString('o'))",
     'Functional: focused durability, DLQ, and replay integration tests.',
     "Performance: 1-message canary, then $BurstMessageCount OrderCreatedV1 messages; consumer P95 <= $MaximumP95Seconds seconds.",
-    "Clean reset: $(if ($UseCleanReset) { 'enabled' } else { 'available via -UseCleanReset' }).",
+    "Clean reset: $(if ($OperationalOnly) { 'prohibited in the operational-only lane' } elseif ($UseCleanReset) { 'enabled' } else { 'available via -UseCleanReset' }).",
     "Operational checks: $(if ($SkipOperationalChecks) { 'skipped via -SkipOperationalChecks' } else { 'enabled' }).",
     'Tenant: dedicated/shared routing and tenant registry behavior are reported independently.',
     'Payments: provider seed/reconciliation checks plus dynamic provider reassignment matrix are reported independently.',
     'Security: local Keycloak-backed API auth tests, browser PKCE/operator authorization proof, and artifact secret scan.',
     'Operational: Compose controls and restart diagnostics are reported independently from recovery.',
     'Recovery: retained image evidence and executed previous-image rollback/restore are reported independently.',
-    'Policy: categories are reported independently; the aggregate is passed only when every category passed. Failed => failed; skipped/blocked => incomplete (nonzero exit).'
+    "Selection: $(if ($OperationalOnly) { 'operational-only; payments and other functional suites are not run' } else { 'full NFR suite' }).",
+    'Policy: categories are reported independently; the aggregate is passed only when every category passed. Failed/not-run/blocked => incomplete (nonzero exit).'
 )
 
 $categories = [ordered]@{
@@ -296,6 +308,71 @@ function Assert-DockerImageExists {
     }
 }
 
+function Get-Phase10RollbackPreflight {
+    param(
+        [Parameter(Mandatory = $true)][string]$CurrentImage,
+        [Parameter(Mandatory = $true)][string]$PreviousImage,
+        [Parameter(Mandatory = $true)][string]$EvidencePath
+    )
+
+    $manifestPath = Join-Path $workspaceRoot 'TestResults/Phase10/rollback-baseline/290d0fba/provenance.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw 'Rollback provenance manifest is missing; previous-image rollback is blocked.'
+    }
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($manifest.schema -ne 'phase10-rollback-baseline-v1' -or
+        $manifest.previousImage -cne $PreviousImage -or
+        [string]$manifest.sourceCommit -notmatch '^[0-9a-f]{40}$' -or
+        [string]$manifest.previousImageId -notmatch '^sha256:[0-9a-f]{64}$') {
+        throw 'Rollback provenance does not identify the selected image with a valid source revision and immutable ID.'
+    }
+    & git -C $workspaceRoot cat-file -e "$($manifest.sourceCommit)^{commit}"
+    if ($LASTEXITCODE -ne 0) { throw 'Rollback source commit is not available in this checkout.' }
+
+    $changedFiles = @(& git -C $workspaceRoot diff --name-only "$($manifest.sourceCommit)..HEAD")
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot compare the rollback source revision with the reviewed candidate.' }
+    $changedFiles += @(& git -C $workspaceRoot diff --name-only HEAD)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect uncommitted changes before rollback.' }
+    $changedFiles += @(& git -C $workspaceRoot ls-files --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect untracked files before rollback.' }
+    $relevantPattern = '(?i)(^|/)(XYDataLabs\.OrderProcessingSystem\.(Inventory\.|SharedKernel/|ServiceDefaults/|Eventing\.Abstractions/)|Resources/Database/|.*Migrations?/|.*\.sql$|Directory\.(Build|Packages)\.props)'
+    $incompatibleChanges = @($changedFiles | Sort-Object -Unique | Where-Object { $_ -match $relevantPattern })
+    if ($incompatibleChanges.Count -gt 0) {
+        throw 'Application persistence/Inventory contracts changed after the rollback baseline; schema compatibility needs review before rollback.'
+    }
+
+    $previousId = ([string](& docker image inspect $PreviousImage --format '{{.Id}}')).Trim()
+    if ($LASTEXITCODE -ne 0 -or $previousId -cne [string]$manifest.previousImageId) {
+        throw 'Retained rollback image ID does not match its provenance manifest.'
+    }
+    $currentId = ([string](& docker image inspect $CurrentImage --format '{{.Id}}')).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $currentId.StartsWith('sha256:', [StringComparison]::Ordinal)) {
+        throw 'Current Inventory image identity could not be established.'
+    }
+    $containerName = Resolve-ComposeServiceContainerName -ServiceName 'inventory'
+    $runningId = ([string](& docker inspect --format '{{.Image}}' $containerName)).Trim()
+    if ($LASTEXITCODE -ne 0 -or $runningId -cne $currentId) {
+        throw 'Running Inventory image differs from the selected current image tag; rollback/restore is blocked.'
+    }
+
+    $evidence = [ordered]@{
+        status = 'preflight-passed'
+        sourceCommit = [string]$manifest.sourceCommit
+        previousImage = $PreviousImage
+        previousImageId = $previousId
+        currentImage = $CurrentImage
+        currentImageId = $currentId
+        runningImageIdBefore = $runningId
+        relevantSourceChangesSinceBaseline = $incompatibleChanges
+        comparedCandidateCommit = (& git -C $workspaceRoot rev-parse HEAD).Trim()
+        databaseRollback = $false
+        rollbackObserved = $false
+        currentImageRestored = $false
+    }
+    $evidence | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $EvidencePath -Encoding utf8
+    return [pscustomobject]$evidence
+}
+
 function Invoke-Phase10IdentityChecks {
     param(
         [Parameter(Mandatory = $true)]
@@ -346,7 +423,8 @@ function Invoke-ConsumerOutageBacklogDrill {
         [Parameter(Mandatory = $true)][string]$SqlConnectionString,
         [Parameter(Mandatory = $true)][string]$ServiceBusConnectionString,
         [ValidateRange(5, 100)][int]$MessageCount = 25,
-        [int]$RecoveryLimitSeconds = 1800
+        [int]$RecoveryLimitSeconds = 1800,
+        [ValidateRange(1, 120)][double]$MaximumP95Seconds = 30
     )
 
     $composeArgs = Get-Phase10ComposeArguments
@@ -386,7 +464,7 @@ function Invoke-ConsumerOutageBacklogDrill {
                 'run', '--project', 'tools/Phase10.NfrProbe/Phase10.NfrProbe.csproj', '--no-build', '--',
                 '--sql-read-mode', 'docker-compose', '--topic', $TopicName, '--tenant-code', 'TenantA',
                 '--message-count', "$MessageCount", '--timeout-seconds', "$RecoveryLimitSeconds",
-                '--settle-seconds', '20', '--maximum-p95-seconds', "$RecoveryLimitSeconds",
+                '--settle-seconds', '20', '--maximum-p95-seconds', "$MaximumP95Seconds",
                 '--run-id', $runId, '--result-path', $probeResultPath)
         $null = $probe.Handle
 
@@ -422,11 +500,18 @@ function Invoke-ConsumerOutageBacklogDrill {
         $drill.notificationEffects = $probeResult.NotificationEffectCount
         $drill.inventoryInbox = $probeResult.InventoryInboxCount
         $drill.notificationsInbox = $probeResult.NotificationsInboxCount
+        $drill.p95Seconds = $probeResult.P95Seconds
         $drill.lostMessages = [math]::Max(0, $MessageCount - [math]::Min($probeResult.InventoryEffectCount, $probeResult.NotificationEffectCount))
         $drill.duplicateEffects = [math]::Max(0, $probeResult.InventoryEffectCount - $MessageCount) +
             [math]::Max(0, $probeResult.NotificationEffectCount - $MessageCount)
         if ($drill.lostMessages -ne 0 -or $drill.duplicateEffects -ne 0) {
             throw "Loss or duplicate effects detected: lost=$($drill.lostMessages) duplicates=$($drill.duplicateEffects)."
+        }
+        if ($probeResult.InventoryInboxCount -ne $MessageCount -or $probeResult.NotificationsInboxCount -ne $MessageCount) {
+            throw 'Consumer inbox counts do not reconcile to the outage drill message count.'
+        }
+        if ($probeResult.P95Seconds -ge $MaximumP95Seconds) {
+            throw "Outage-drill consumer P95 $($probeResult.P95Seconds)s is not below $MaximumP95Seconds seconds."
         }
         if ($drill.backlogRecoverySeconds -gt $RecoveryLimitSeconds) {
             throw "Recovery took $($drill.backlogRecoverySeconds)s, above the $RecoveryLimitSeconds s limit."
@@ -476,13 +561,17 @@ function Invoke-ConsumerOutageBacklogDrill {
         $sqlRestored = $false
         $busRestored = $false
         try {
-            [Environment]::SetEnvironmentVariable('PHASE10_NFR_SQL_CONNECTION_STRING', $previousSql, 'Process')
-            $sqlRestored = [Environment]::GetEnvironmentVariable('PHASE10_NFR_SQL_CONNECTION_STRING', 'Process') -ceq $previousSql
+            if ($null -eq $previousSql) { Remove-Item Env:PHASE10_NFR_SQL_CONNECTION_STRING -ErrorAction SilentlyContinue }
+            else { [Environment]::SetEnvironmentVariable('PHASE10_NFR_SQL_CONNECTION_STRING', $previousSql, 'Process') }
+            $currentSql = [Environment]::GetEnvironmentVariable('PHASE10_NFR_SQL_CONNECTION_STRING', 'Process')
+            $sqlRestored = if ($null -eq $previousSql) { [string]::IsNullOrEmpty($currentSql) } else { $currentSql -ceq $previousSql }
         }
         catch { $restorationFailures.Add('sql-environment-restore') }
         try {
-            [Environment]::SetEnvironmentVariable('PHASE10_NFR_SERVICEBUS_CONNECTION_STRING', $previousBus, 'Process')
-            $busRestored = [Environment]::GetEnvironmentVariable('PHASE10_NFR_SERVICEBUS_CONNECTION_STRING', 'Process') -ceq $previousBus
+            if ($null -eq $previousBus) { Remove-Item Env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING -ErrorAction SilentlyContinue }
+            else { [Environment]::SetEnvironmentVariable('PHASE10_NFR_SERVICEBUS_CONNECTION_STRING', $previousBus, 'Process') }
+            $currentBus = [Environment]::GetEnvironmentVariable('PHASE10_NFR_SERVICEBUS_CONNECTION_STRING', 'Process')
+            $busRestored = if ($null -eq $previousBus) { [string]::IsNullOrEmpty($currentBus) } else { $currentBus -ceq $previousBus }
         }
         catch { $restorationFailures.Add('servicebus-environment-restore') }
         $environmentRestored = $sqlRestored -and $busRestored
@@ -577,6 +666,23 @@ if ([string]::IsNullOrWhiteSpace($topicName)) {
 }
 $sqlConnectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $sqlPassword
 Assert-Phase10HostSqlIdentity -ConnectionString $sqlConnectionString
+if ($OperationalOnly) {
+    Assert-Phase10ComposeProject
+    Assert-Phase10LocalDockerEndpoint
+    $activeLocks = @(
+        (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock'),
+        (Get-ChildItem -LiteralPath (Join-Path $workspaceRoot 'TestResults') -Filter 'integration-active-*.lock' -File -ErrorAction SilentlyContinue | ForEach-Object FullName)
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
+    if ($activeLocks.Count -gt 0) { throw 'Active payment-fixture or integration lock exists; operational mutations are blocked.' }
+    $runningContainerIds = @(& docker ps -q)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect running Docker workloads; operational mutations are blocked.' }
+    foreach ($containerId in $runningContainerIds) {
+        $project = ([string](& docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' $containerId)).Trim()
+        if ($LASTEXITCODE -ne 0 -or $project -cne 'xy-phase10') {
+            throw 'A running container is not owned by xy-phase10; operational mutations are blocked.'
+        }
+    }
+}
 $testProject = 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
 $functionalFilter = 'FullyQualifiedName~Outbox|FullyQualifiedName~Inbox|FullyQualifiedName~Dlq|FullyQualifiedName~Replay'
 $tenantFilter = 'FullyQualifiedName~DedicatedTenant|FullyQualifiedName~TenantMiddleware|FullyQualifiedName~TenantRegistryService|FullyQualifiedName~TenantIsolation'
@@ -596,6 +702,7 @@ if (-not $SkipOperationalChecks) {
     }
 }
 
+if (-not $OperationalOnly) {
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 $previousNfrSqlConnection = $env:PHASE10_NFR_SQL_CONNECTION_STRING
 $previousNfrServiceBusConnection = $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING
@@ -771,6 +878,15 @@ if ($paymentsPassed) {
 $categories.payments.status = if ($paymentsPassed) { 'passed' } else { 'failed' }
 Write-CategorySummaryFile -Category 'payments'
 Write-NfrSummary
+}
+else {
+    foreach ($categoryName in @('functional', 'performance', 'tenant', 'payments')) {
+        $categories[$categoryName].status = 'not-run'
+        $categories[$categoryName].error = 'Not run because -OperationalOnly selected only local transport/recovery checks.'
+        Write-CategorySummaryFile -Category $categoryName
+    }
+    Write-NfrSummary
+}
 
 if ($SkipOperationalChecks) {
     Write-Progress 'Skipping operational checks by request.'
@@ -802,7 +918,7 @@ else {
         docker @composeArgs ps
     }
 
-    if ($operationalPassed) {
+    if ($operationalPassed -and -not $OperationalOnly) {
         $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Consumer restart diagnostics' -Command {
             docker @composeArgs restart inventory notifications
             if ($LASTEXITCODE -ne 0) { throw "Consumer restart failed with exit code $LASTEXITCODE." }
@@ -812,7 +928,7 @@ else {
         }
     }
 
-    if ($operationalPassed) {
+    if ($operationalPassed -and -not $OperationalOnly) {
         $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Approved replay visibility (60s limit)' -Command {
             $restorePath = Join-Path $nfrRoot 'replay-proof/replay-restoration.json'
             $restoreStart = [DateTime]::UtcNow
@@ -822,7 +938,10 @@ else {
                 & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-local-messaging.ps1') `
                     -ArtifactDirectory (Join-Path $nfrRoot 'replay-proof')
                 $replayExit = $LASTEXITCODE
-                $restored = Test-Phase10ReplayRestorationEvidence -Path $restorePath -NotBeforeUtc $restoreStart
+                # Windows filesystems may round LastWriteTimeUtc to whole seconds. The path is
+                # required to be absent before the child starts, so this narrow tolerance cannot
+                # admit prior-run evidence and avoids rejecting a freshly written record.
+                $restored = Test-Phase10ReplayRestorationEvidence -Path $restorePath -NotBeforeUtc $restoreStart.AddSeconds(-2)
                 if (-not $restored) { throw 'Replay restoration is not proven; later mutations are blocked.' }
                 if ($replayExit -ne 0) { throw 'Replay failed despite verified restoration; no replay acceptance is claimed.' }
             } finally {
@@ -831,10 +950,47 @@ else {
         }
     }
 
+    if ($operationalPassed -and $OperationalOnly) {
+        $burstResultPath = Join-Path $nfrRoot 'operational-100-message-burst.json'
+        $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Build NFR probe for operational-only lane' -Command {
+            dotnet build tools/Phase10.NfrProbe/Phase10.NfrProbe.csproj --no-restore
+        }
+        if ($operationalPassed) {
+            $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name '100 message durable consumer burst' -Command {
+                dotnet run `
+                    --project tools/Phase10.NfrProbe/Phase10.NfrProbe.csproj `
+                    --no-build `
+                    -- `
+                    --servicebus-connection-string $serviceBusConnectionString `
+                    --sql-connection-string $sqlConnectionString `
+                    --sql-read-mode docker-compose `
+                    --topic $topicName `
+                    --tenant-code TenantA `
+                    --message-count 100 `
+                    --timeout-seconds $PerformanceTimeoutSeconds `
+                    --maximum-p95-seconds $MaximumP95Seconds `
+                    --result-path $burstResultPath
+            }
+            if ($operationalPassed) {
+                $burst = Get-Content -LiteralPath $burstResultPath -Raw | ConvertFrom-Json
+                if ($burst.ExpectedMessages -ne 100 -or
+                    $burst.InventoryInboxCount -ne 100 -or
+                    $burst.NotificationsInboxCount -ne 100 -or
+                    $burst.InventoryEffectCount -ne 100 -or
+                    $burst.NotificationEffectCount -ne 100 -or
+                    $burst.P95Seconds -ge $MaximumP95Seconds) {
+                    throw 'Operational-only burst did not prove exactly 100 inbox rows and durable effects per consumer within the P95 target.'
+                }
+            }
+        }
+    }
+
     if ($operationalPassed) {
         $operationalPassed = Invoke-CategoryCommand -Category 'operational' -Name 'Consumer outage backlog recovery drill' -Command {
             Invoke-ConsumerOutageBacklogDrill -TopicName $topicName -SqlConnectionString $sqlConnectionString `
-                -ServiceBusConnectionString $serviceBusConnectionString
+                -ServiceBusConnectionString $serviceBusConnectionString `
+                -MessageCount $(if ($OperationalOnly) { 100 } else { 25 }) `
+                -MaximumP95Seconds $MaximumP95Seconds
         }
     }
     $categories.operational.status = if ($operationalPassed) { 'passed' } else { 'failed' }
@@ -852,19 +1008,31 @@ else {
             'BLOCKED: a retained previous inventory image (PHASE10_PREVIOUS_IMAGE_TAG or phase10-prev-*) is required so rollback is executed rather than documented only.'
     }
     else {
+        $rollbackEvidencePath = Join-Path $nfrRoot 'rollback-evidence.json'
         $recoveryPassed = Invoke-CategoryCommand -Category 'recovery' -Name 'Retained image digest evidence' -Command {
-            docker image inspect $currentInventoryImage $previousInventoryImage `
-                --format '{{.RepoTags}} {{.Id}} {{json .RepoDigests}}'
+            $script:phase10RollbackEvidence = Get-Phase10RollbackPreflight `
+                -CurrentImage $currentInventoryImage `
+                -PreviousImage $previousInventoryImage `
+                -EvidencePath $rollbackEvidencePath
+            Write-Host "Rollback baseline verified: source=$($script:phase10RollbackEvidence.sourceCommit) previousId=$($script:phase10RollbackEvidence.previousImageId) currentId=$($script:phase10RollbackEvidence.currentImageId)"
         }
 
         if ($recoveryPassed) {
             $originalTag = $env:PHASE10_IMAGE_TAG
+            $rollbackPassed = $false
+            $restorePassed = $false
             try {
                 $env:PHASE10_IMAGE_TAG = $previousImageTag
                 $rollbackPassed = Invoke-CategoryCommand -Category 'recovery' -Name 'Rollback inventory to previous image' -Command {
                     docker @composeArgs up -d --no-build inventory
                     if ($LASTEXITCODE -ne 0) { throw "Previous image startup failed with exit code $LASTEXITCODE." }
                     Wait-ForUrl -Url 'http://localhost:5082/health/ready'
+                    $activeContainer = Resolve-ComposeServiceContainerName -ServiceName 'inventory'
+                    $activeImageId = ([string](& docker inspect --format '{{.Image}}' $activeContainer)).Trim()
+                    if ($LASTEXITCODE -ne 0 -or $activeImageId -cne $script:phase10RollbackEvidence.previousImageId) {
+                        throw 'Running Inventory image does not match the immutable verified rollback image.'
+                    }
+                    Write-Host "Rollback image active and ready: $activeImageId"
                 }
             }
             finally {
@@ -873,6 +1041,12 @@ else {
                     docker @composeArgs up -d --no-build inventory
                     if ($LASTEXITCODE -ne 0) { throw "Current image restore failed with exit code $LASTEXITCODE." }
                     Wait-ForUrl -Url 'http://localhost:5082/health/ready'
+                    $activeContainer = Resolve-ComposeServiceContainerName -ServiceName 'inventory'
+                    $restoredImageId = ([string](& docker inspect --format '{{.Image}}' $activeContainer)).Trim()
+                    if ($LASTEXITCODE -ne 0 -or $restoredImageId -cne $script:phase10RollbackEvidence.currentImageId) {
+                        throw 'Running Inventory image was not restored to the exact pre-drill image ID.'
+                    }
+                    Write-Host "Original Inventory image restored and ready: $restoredImageId"
                 }
                 if ([string]::IsNullOrWhiteSpace($originalTag)) {
                     Remove-Item Env:PHASE10_IMAGE_TAG -ErrorAction SilentlyContinue
@@ -880,8 +1054,17 @@ else {
                 else {
                     $env:PHASE10_IMAGE_TAG = $originalTag
                 }
+                if (-not $restorePassed) { $script:Phase10NfrRestorationFailed = $true }
             }
             $recoveryPassed = $rollbackPassed -and $restorePassed -and $recoveryPassed
+            $script:phase10RollbackEvidence.status = if ($recoveryPassed) { 'passed' } else { 'failed' }
+            $script:phase10RollbackEvidence.rollbackObserved = $rollbackPassed
+            $script:phase10RollbackEvidence.currentImageRestored = $restorePassed
+            $script:phase10RollbackEvidence | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $rollbackEvidencePath -Encoding utf8
+        }
+        else {
+            $recoveryBlocked = $true
+            $categories.recovery.error = 'BLOCKED: retained image provenance or compatibility preflight did not pass; no rollback mutation was attempted.'
         }
     }
     $categories.recovery.status = if ($recoveryPassed) { 'passed' } elseif ($recoveryBlocked) { 'blocked' } else { 'failed' }
@@ -889,7 +1072,11 @@ else {
 }
 
 $securityPrerequisites = Test-Path -LiteralPath (Join-Path $workspaceRoot 'frontend\apps\web\scripts\phase10-identity-proof.mjs')
-if ($script:Phase10NfrRestorationFailed) {
+if ($OperationalOnly) {
+    $categories.security.status = 'not-run'
+    $categories.security.error = 'Not run because -OperationalOnly excludes browser identity/payment-adjacent checks.'
+}
+elseif ($script:Phase10NfrRestorationFailed) {
     $categories.security.status = 'blocked'
     $categories.security.error = 'BLOCKED: an earlier outage-drill restoration failed; later identity actions were not attempted.'
 }

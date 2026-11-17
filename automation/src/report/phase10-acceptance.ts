@@ -86,7 +86,9 @@ export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceRe
     const status = matches.length === 1 ? String(matches[0].status) : "missing-or-duplicate";
     if (name === "order-continuation") {
       gates.push(status === "passed" ? { name: `e2e-${name}`, status: "PASS", detail: "passed" }
-        : deferrals.includes("DW-023") ? { name: `e2e-${name}`, status: "DEFERRED", detail: `status=${status}; DW-023 deferral recorded; not a PASS` }
+        : status === "failed" ? { name: `e2e-${name}`, status: "FAIL", detail: "status=failed; a DW-023 deferral cannot hide an execution failure" }
+          : matches.length === 1 && deferrals.includes("DW-023") && ["blocked", "deferred", "not-run"].includes(status)
+            ? { name: `e2e-${name}`, status: "DEFERRED", detail: `status=${status}; DW-023 deferral recorded; not a PASS` }
           : { name: `e2e-${name}`, status: "BLOCKED", detail: `status=${status}; no DW-023 deferral recorded` });
       continue;
     }
