@@ -338,6 +338,10 @@ test("suite selection is separate from step outcome and unknown selection is exp
   assert.equal(deterministic.steps.find(step => step.name === "payments-deterministic")?.selection, "SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "persistence")?.selection, "UNKNOWN");
   assert.equal(deterministic.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 8);
+  const noPayment = normalizePhase10Packet({ ...packet, steps }, { ...summary, paymentSuite: "none" }, foundations, trxInputs, additional);
+  assert.equal(noPayment.paymentSuite, "none");
+  assert.equal(noPayment.steps.find(step => step.name === "payments-deterministic")?.selection, "NOT-SELECTED");
+  assert.equal(noPayment.steps.find(step => step.name === "sandbox-payments")?.selection, "NOT-SELECTED");
   const unknown = normalizePhase10Packet(packet, { ...summary, paymentSuite: "unexpected" });
   assert.equal(unknown.paymentSuite, "UNKNOWN");
   assert.equal(unknown.steps.find(step => step.name === "sandbox-payments")?.selection, "UNKNOWN");

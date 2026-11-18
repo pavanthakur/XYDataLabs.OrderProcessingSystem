@@ -8,6 +8,7 @@ import { reconcilePhase10LocalFollowup, renderPhase10LocalFollowupHtml } from ".
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const testResultsRoot = resolve(repoRoot, "TestResults");
 const maxJsonBytes = 2 * 1024 * 1024;
+const loadedHashes = new Map<string, string>();
 
 function inside(base: string, path: string): boolean {
   const rel = relative(base, path);
@@ -37,7 +38,11 @@ async function safePath(path: string, directory = false): Promise<string> {
 
 async function json(path: string): Promise<unknown> {
   const real = await safePath(path);
-  try { return JSON.parse((await readFile(real, "utf8")).replace(/^\uFEFF/, "")) as unknown; }
+  try {
+    const bytes = await readFile(real);
+    loadedHashes.set(real, createHash("sha256").update(bytes).digest("hex"));
+    return JSON.parse(bytes.toString("utf8").replace(/^\uFEFF/, "")) as unknown;
+  }
   catch (error) { if (error instanceof SyntaxError) throw new Error("Evidence JSON is malformed."); throw error; }
 }
 
@@ -48,7 +53,27 @@ function relativeEvidence(path: string): string {
 async function evidence(id: string, path: string): Promise<{ id: string; path: string; sha256: string; realPath: string }> {
   const realPath = await safePath(path);
   const bytes = await readFile(realPath);
-  return { id, path: relativeEvidence(realPath), sha256: createHash("sha256").update(bytes).digest("hex"), realPath };
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  if (loadedHashes.has(realPath) && loadedHashes.get(realPath) !== sha256) throw new Error("Evidence changed while it was being reconciled.");
+  return { id, path: relativeEvidence(realPath), sha256, realPath };
+}
+
+async function optionalEvidence(id: string, path: string): Promise<{ id: string; path: string; sha256: string; realPath: string } | undefined> {
+  const resolved = isAbsolute(path) ? resolve(path) : resolve(repoRoot, path);
+  try { await lstat(resolved); } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  return evidence(id, path);
+}
+
+async function optionalJson(path: string): Promise<unknown | undefined> {
+  const resolved = isAbsolute(path) ? resolve(path) : resolve(repoRoot, path);
+  try { await lstat(resolved); } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  return json(path);
 }
 
 async function main(): Promise<void> {
@@ -58,37 +83,91 @@ async function main(): Promise<void> {
   const foundationArg = option("--foundation");
   const functionsArg = option("--functions");
   const nfrArg = option("--nfr-root");
+  const noPaymentReportArg = option("--no-payment-report");
   const imageArg = option("--image-manifest");
+  const operationalRootArg = option("--operational-root");
+  const operationalImageArg = option("--operational-image-manifest");
+  const persistenceRootArg = option("--persistence-dir");
+  const replayRootArg = option("--replay-dir");
+  const replayImageArg = option("--replay-image-manifest");
   const outputArg = option("--out");
   if (!e2eArg || !foundationArg || !functionsArg || !nfrArg || !imageArg || !outputArg) {
-    throw new Error("Usage: report:phase10-local-followup -- --e2e <run-dir> --foundation <summary.json> --functions <functions-proof.json> --nfr-root <nfr-dir> --image-manifest <after.json> --out <new-TestResults-dir>");
+    throw new Error("Usage: report:phase10-local-followup -- --e2e <run-dir> --no-payment-report <sealed-no-payment-run-dir> --foundation <summary.json> --functions <functions-proof.json> --nfr-root <selected-nfr-dir> --image-manifest <selected-nfr-after.json> --operational-root <ops-nfr-dir> --operational-image-manifest <ops-after.json> --persistence-dir <persistence-run-dir> --replay-dir <replay-evidence-dir> --replay-image-manifest <replay-after.json> --out <new-TestResults-dir>");
   }
 
   const e2eRoot = await safePath(e2eArg, true);
   const nfrRoot = await safePath(nfrArg, true);
+  const noPaymentRoot = noPaymentReportArg ? await safePath(noPaymentReportArg, true) : undefined;
+  const operationalRoot = operationalRootArg ? await safePath(operationalRootArg, true) : nfrRoot;
+  const persistenceRoot = persistenceRootArg ? await safePath(persistenceRootArg, true) : undefined;
+  const replayRoot = replayRootArg ? await safePath(replayRootArg, true) : undefined;
   const e2eFile = (name: string) => join(e2eRoot, name);
   const nfrFile = (name: string) => join(nfrRoot, name);
+  const operationalFile = (name: string) => join(operationalRoot, name);
+  const persistenceFile = (name: string) => persistenceRoot ? join(persistenceRoot, name) : undefined;
+  const replayFile = (name: string) => replayRoot ? join(replayRoot, name) : undefined;
   const e2eCompletion = await verifyPhase10Completion(e2eRoot);
-  const [packet, e2eSummary, e2eImage, foundation, functions, nfr, burst, outage, rollback, currentImage] = await Promise.all([
+  const [packet, e2eSummary, e2eImage, restorationContract, foundation, functions, nfrRaw, burst, outage, rollback, currentImage,
+    paymentSettingsBefore, paymentSettingsAfter, operationsSummary, operationsImage, persistenceSummary, persistenceBefore,
+    persistenceAfter, persistenceImageBefore, persistenceImageAfter, replayMessaging, replayRestoration, replayFunctions, replayImage,
+    noPaymentSummary, noPaymentPacket, noPaymentCoverage] = await Promise.all([
     json(e2eFile("acceptance-packet.json")), json(e2eFile("run-summary.json")), json(e2eFile("docker-image-identities-after.json")),
-    json(foundationArg), json(functionsArg), json(nfrFile("summary.json")), json(nfrFile("operational-100-message-burst.json")),
-    json(nfrFile("consumer-outage-drill.json")), json(nfrFile("rollback-evidence.json")), json(imageArg)
+    json(e2eFile("restoration-contract.json")), json(foundationArg), json(functionsArg), json(nfrFile("summary.json")),
+    optionalJson(operationalFile("operational-100-message-burst.json")), optionalJson(operationalFile("consumer-outage-drill.json")),
+    optionalJson(operationalFile("rollback-evidence.json")), json(imageArg),
+    optionalJson(nfrFile("payment-settings-before.json")), optionalJson(nfrFile("payment-settings-after.json")),
+    optionalJson(operationalFile("summary.json")), operationalImageArg ? optionalJson(operationalImageArg) : Promise.resolve(undefined),
+    persistenceFile("summary.json") ? optionalJson(persistenceFile("summary.json")!) : Promise.resolve(undefined),
+    persistenceFile("before.json") ? optionalJson(persistenceFile("before.json")!) : Promise.resolve(undefined),
+    persistenceFile("after.json") ? optionalJson(persistenceFile("after.json")!) : Promise.resolve(undefined),
+    persistenceFile("docker-image-identities-before.json") ? optionalJson(persistenceFile("docker-image-identities-before.json")!) : Promise.resolve(undefined),
+    persistenceFile("docker-image-identities-after.json") ? optionalJson(persistenceFile("docker-image-identities-after.json")!) : Promise.resolve(undefined),
+    replayFile("messaging-proof.json") ? optionalJson(replayFile("messaging-proof.json")!) : Promise.resolve(undefined),
+    replayFile("replay-restoration.json") ? optionalJson(replayFile("replay-restoration.json")!) : Promise.resolve(undefined),
+    replayFile("functions-proof.json") ? optionalJson(replayFile("functions-proof.json")!) : Promise.resolve(undefined),
+    replayImageArg ? optionalJson(replayImageArg) : Promise.resolve(undefined),
+    noPaymentRoot ? optionalJson(join(noPaymentRoot, "run-summary.json")) : Promise.resolve(undefined),
+    noPaymentRoot ? optionalJson(join(noPaymentRoot, "acceptance-packet.json")) : Promise.resolve(undefined),
+    noPaymentRoot ? optionalJson(join(noPaymentRoot, "phase10-coverage-summary.json")) : Promise.resolve(undefined)
   ]);
-  const evidenceFiles = await Promise.all([
+  const nfrRecord = nfrRaw !== null && typeof nfrRaw === "object" && !Array.isArray(nfrRaw) ? nfrRaw as Record<string, unknown> : {};
+  const nfr = { ...nfrRecord, paymentSettingsBefore, paymentSettingsAfter };
+  const evidenceFiles = (await Promise.all([
     evidence("e2e-acceptance-packet", e2eFile("acceptance-packet.json")),
     evidence("e2e-run-summary", e2eFile("run-summary.json")),
     evidence("e2e-completion", e2eFile("phase10-completion.json")),
     evidence("e2e-image-manifest", e2eFile("docker-image-identities-after.json")),
+    evidence("e2e-restoration-contract", e2eFile("restoration-contract.json")),
     evidence("current-foundation", foundationArg), evidence("current-functions", functionsArg),
-    evidence("current-nfr-summary", nfrFile("summary.json")), evidence("current-burst", nfrFile("operational-100-message-burst.json")),
-    evidence("current-outage", nfrFile("consumer-outage-drill.json")), evidence("current-rollback", nfrFile("rollback-evidence.json")),
-    evidence("current-image-manifest", imageArg)
-  ]);
+    evidence("current-nfr-summary", nfrFile("summary.json")), evidence("current-image-manifest", imageArg),
+    optionalEvidence("current-payment-settings-before", nfrFile("payment-settings-before.json")),
+    optionalEvidence("current-payment-settings-after", nfrFile("payment-settings-after.json")),
+    optionalEvidence("operational-nfr-summary", operationalFile("summary.json")),
+    optionalEvidence("operational-burst", operationalFile("operational-100-message-burst.json")),
+    optionalEvidence("operational-outage", operationalFile("consumer-outage-drill.json")),
+    optionalEvidence("operational-rollback", operationalFile("rollback-evidence.json")),
+    operationalImageArg ? optionalEvidence("operational-image-manifest", operationalImageArg) : Promise.resolve(undefined),
+    ...(["summary.json", "before.json", "after.json", "docker-image-identities-before.json", "docker-image-identities-after.json"] as const)
+      .map((name, index) => persistenceFile(name) ? optionalEvidence(`persistence-${index}`, persistenceFile(name)!) : Promise.resolve(undefined)),
+    ...(["messaging-proof.json", "replay-restoration.json", "functions-proof.json"] as const)
+      .map((name, index) => replayFile(name) ? optionalEvidence(`replay-${index}`, replayFile(name)!) : Promise.resolve(undefined)),
+    replayImageArg ? optionalEvidence("replay-image-manifest", replayImageArg) : Promise.resolve(undefined),
+    ...(noPaymentRoot ? await Promise.all(["run-summary.json", "acceptance-packet.json", "phase10-coverage-summary.json", "phase10-completion.json"]
+      .map(name => optionalEvidence(`no-payment-report-${name}`, join(noPaymentRoot, name)))) : [])
+  ])).filter((item): item is NonNullable<typeof item> => item !== undefined);
+  const noPaymentCompletion = noPaymentRoot ? await verifyPhase10Completion(noPaymentRoot) : undefined;
+  const noPaymentCompletionStatus = noPaymentCompletion?.state === "COMPLETE" ? noPaymentCompletion.status : undefined;
   const report = reconcilePhase10LocalFollowup({
     e2e: { completion: e2eCompletion.state,
       completionStatus: e2eCompletion.state === "COMPLETE" ? e2eCompletion.status : undefined,
-      packet, summary: e2eSummary, imageAfter: e2eImage },
-    current: { imageManifest: currentImage, foundation, functions, nfr, burst, outage, rollback },
+      packet, summary: e2eSummary, imageAfter: e2eImage, restorationContract },
+    noPaymentReport: noPaymentRoot ? { completion: noPaymentCompletion?.state ?? "INCOMPLETE", completionStatus: noPaymentCompletionStatus,
+      packet: noPaymentPacket, summary: noPaymentSummary, coverage: noPaymentCoverage } : undefined,
+    current: { imageManifest: currentImage, foundation, functions, nfr, burst, outage, rollback,
+      operational: { summary: operationsSummary, imageManifest: operationsImage },
+      persistence: { summary: persistenceSummary, before: persistenceBefore, after: persistenceAfter,
+        imageBefore: persistenceImageBefore, imageAfter: persistenceImageAfter },
+      replay: { messaging: replayMessaging, restoration: replayRestoration, functions: replayFunctions, imageManifest: replayImage } },
     evidence: evidenceFiles.map(item => ({ id: item.id, path: item.path, sha256: item.sha256 }))
   });
 

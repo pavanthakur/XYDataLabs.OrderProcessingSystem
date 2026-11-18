@@ -1,5 +1,51 @@
 #Requires -Version 7.0
 
+function Get-Phase10WorktreeContentIdentity {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$WorkspaceRoot, [Parameter(Mandatory = $true)]$GitCommand)
+
+    $changed = @(& $GitCommand.Source -C $WorkspaceRoot diff --name-only HEAD -- 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate tracked worktree changes for image provenance.' }
+    $untracked = @(& $GitCommand.Source -C $WorkspaceRoot ls-files --others --exclude-standard 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate untracked worktree files for image provenance.' }
+    $paths = @(@($changed) + @($untracked) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Sort-Object -Unique)
+    $rootFull = [IO.Path]::GetFullPath($WorkspaceRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $entries = @()
+    foreach ($relativePath in $paths) {
+        $normalized = ([string]$relativePath).Replace([IO.Path]::DirectorySeparatorChar, '/')
+        if ($normalized.StartsWith('/') -or $normalized -match '(^|/)\.\.?(/|$)') { throw 'Git returned an unsafe changed path during provenance capture.' }
+        $fullPath = [IO.Path]::GetFullPath((Join-Path $rootFull ([string]$relativePath)))
+        if (-not $fullPath.StartsWith($rootFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Changed worktree path escaped the repository during provenance capture.'
+        }
+        $state = 'deleted'
+        $contentHash = $null
+        if (Test-Path -LiteralPath $fullPath) {
+            $item = Get-Item -LiteralPath $fullPath -Force
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                $state = 'link'
+                $contentHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+                    [Text.Encoding]::UTF8.GetBytes([string]$item.Target))).ToLowerInvariant()
+            }
+            elseif ($item.PSIsContainer) {
+                $submoduleHead = @(& $GitCommand.Source -C $fullPath rev-parse --verify HEAD 2>$null)
+                if ($LASTEXITCODE -ne 0 -or $submoduleHead.Count -ne 1) { throw 'A changed directory is not a verifiable Git submodule.' }
+                $state = 'submodule'
+                $contentHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+                    [Text.Encoding]::UTF8.GetBytes($submoduleHead[0]))).ToLowerInvariant()
+            }
+            else {
+                $state = 'file'
+                $contentHash = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+        }
+        $entries += [ordered]@{ path = $normalized; state = $state; sha256 = $contentHash }
+    }
+    $canonical = ConvertTo-Json -InputObject @($entries) -Depth 5 -Compress
+    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
+    return [ordered]@{ sha256 = $hash; changedPaths = @($entries | ForEach-Object { $_.path }) }
+}
+
 function Get-Phase10DockerImageManifest {
     [CmdletBinding()]
     param(
@@ -72,6 +118,7 @@ function Get-Phase10DockerImageManifest {
     $dirtyIdentity = if ($worktree -eq 'dirty') {
         [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($statusBytes)).ToLowerInvariant()
     } else { $null }
+    $contentIdentity = if ($worktree -eq 'dirty') { Get-Phase10WorktreeContentIdentity -WorkspaceRoot $WorkspaceRoot -GitCommand $gitCommand } else { $null }
     $buildLogs = [ordered]@{}
     foreach ($name in @('docker-compose-apps-build.log', 'docker-compose-azurite-build.log')) {
         $path = Join-Path $ArtifactRoot $name
@@ -86,7 +133,13 @@ function Get-Phase10DockerImageManifest {
         runId = $RunId
         capturePoint = $CapturePoint
         capturedUtc = [DateTime]::UtcNow.ToString('o')
-        candidate = [ordered]@{ commit = $candidateSha[0]; worktree = $worktree; dirtyStatusSha256 = $dirtyIdentity }
+        candidate = [ordered]@{
+            commit = $candidateSha[0]
+            worktree = $worktree
+            dirtyStatusSha256 = $dirtyIdentity
+            worktreeContentSha256 = if ($contentIdentity) { $contentIdentity.sha256 } else { $null }
+            changedPaths = if ($contentIdentity) { $contentIdentity.changedPaths } else { @() }
+        }
         buildLogsSha256 = $buildLogs
         images = $images
     }
@@ -108,9 +161,12 @@ function Test-Phase10DockerImageManifestShape {
     $expectedServices = @('azurite','functions','gateway','inventory','keycloak-local','notifications','orders','payments','redis','servicebus-emulator','servicebus-sql','sql-server','ui')
     $candidateDirtyValid = ($Manifest.candidate.worktree -eq 'clean' -and $null -eq $Manifest.candidate.dirtyStatusSha256) -or
         ($Manifest.candidate.worktree -eq 'dirty' -and $Manifest.candidate.dirtyStatusSha256 -match '^[0-9a-f]{64}$')
+    $candidateContentValid = ($null -eq $Manifest.candidate.worktreeContentSha256 -or $Manifest.candidate.worktreeContentSha256 -match '^[0-9a-f]{64}$') -and
+        ($null -eq $Manifest.candidate.changedPaths -or ($Manifest.candidate.changedPaths -is [array] -and
+            @($Manifest.candidate.changedPaths | Where-Object { $_ -isnot [string] -or $_ -match '(^|/)\.\.?(/|$)' -or $_.StartsWith('/') }).Count -eq 0))
     if ($Manifest.schema -cne 'phase10-docker-image-identities-v1' -or [string]::IsNullOrWhiteSpace([string]$Manifest.runId) -or
         $Manifest.capturePoint -notin @('before','after') -or ($ExpectedCapturePoint -and $Manifest.capturePoint -cne $ExpectedCapturePoint) -or
-        -not $candidateDirtyValid -or $Manifest.candidate.commit -notmatch '^([0-9a-f]{40}|[0-9a-f]{64})$' -or @($Manifest.images).Count -ne 13) { return $false }
+        -not $candidateDirtyValid -or -not $candidateContentValid -or $Manifest.candidate.commit -notmatch '^([0-9a-f]{40}|[0-9a-f]{64})$' -or @($Manifest.images).Count -ne 13) { return $false }
     $services = @($Manifest.images | ForEach-Object { [string]$_.service } | Sort-Object)
     if (($services -join ',') -cne (@($expectedServices | Sort-Object) -join ',')) { return $false }
     $containerIds = @()
@@ -130,7 +186,9 @@ function Test-Phase10DockerImageManifestsMatch {
         -not (Test-Phase10DockerImageManifestShape -Manifest $After -ExpectedCapturePoint after) -or
         $Before.runId -cne $After.runId -or $Before.candidate.commit -cne $After.candidate.commit -or
         $Before.candidate.worktree -cne $After.candidate.worktree -or
-        $Before.candidate.dirtyStatusSha256 -cne $After.candidate.dirtyStatusSha256) { return $false }
+        $Before.candidate.dirtyStatusSha256 -cne $After.candidate.dirtyStatusSha256 -or
+        $Before.candidate.worktreeContentSha256 -cne $After.candidate.worktreeContentSha256 -or
+        (($Before.candidate.changedPaths | ConvertTo-Json -Compress) -cne ($After.candidate.changedPaths | ConvertTo-Json -Compress))) { return $false }
     $left = @($Before.images | Sort-Object { $_.service })
     $right = @($After.images | Sort-Object { $_.service })
     if ($left.Count -ne 13 -or $right.Count -ne 13 -or $left.Count -ne $right.Count) { return $false }
@@ -149,7 +207,8 @@ function Assert-Phase10DockerImageManifestMatches {
     if (-not (Test-Phase10DockerImageManifestShape -Manifest $Expected -ExpectedCapturePoint before) -or
         -not (Test-Phase10DockerImageManifestShape -Manifest $Actual) -or
         $Expected.candidate.worktree -ne 'clean' -or $Actual.candidate.worktree -ne 'clean' -or
-        $Expected.candidate.commit -cne $Actual.candidate.commit) { throw 'Expected and actual image manifests are not bound to the same clean candidate.' }
+        $Expected.candidate.commit -cne $Actual.candidate.commit -or
+        $Expected.candidate.worktreeContentSha256 -cne $Actual.candidate.worktreeContentSha256) { throw 'Expected and actual image manifests are not bound to the same clean candidate.' }
     $expectedImages = @($Expected.images | Sort-Object { $_.service })
     $actualImages = @($Actual.images | Sort-Object { $_.service })
     if ($expectedImages.Count -ne 13 -or $actualImages.Count -ne 13 -or $expectedImages.Count -ne $actualImages.Count) {

@@ -212,6 +212,10 @@ try{
     Run-Test 'nfr-drill-contract' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-drill-contract.ps1')
     Run-Test 'nfr-drill-orchestration' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-drill-orchestration.ps1')
     Run-Test 'nfr-operational-only-contract' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-operational-only-contract.ps1')
+    Run-Test 'nfr-targeted-selection' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-nfr-selection.ps1')
+    Run-Test 'no-payment-report-profile' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-no-payment-report-profile.ps1')
+    Run-Test 'canonical-run-id' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-run-id.ps1')
+    Run-Test 'phase10-report-finalization' 'pwsh' @('-NoProfile','-File','scripts/tests/test-phase10-report-finalization.ps1')
     Run-Test 'nfr-probe-approval-lifecycle' 'dotnet' @('test','tools/Phase10.NfrProbe.Tests/Phase10.NfrProbe.Tests.csproj','--no-restore','--logger','console;verbosity=minimal')
     Run-Test 'phase10-local-followup-report' 'npm' @('--prefix','automation','run','test:phase10-local-followup')
     foreach($name in @('Domain','Application','API','Gateway','Architecture')){

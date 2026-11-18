@@ -8,7 +8,7 @@ param(
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
     [string]$IntegrationConsoleVerbosity = 'minimal',
 
-    [ValidateSet('sandbox', 'deterministic', 'both')]
+    [ValidateSet('sandbox', 'deterministic', 'both', 'none')]
     [string]$PaymentSuite = 'sandbox',
 
     [ValidateSet('baseline','extended')]
@@ -158,6 +158,7 @@ $summary = [ordered]@{
     startedUtc = (Get-Date).ToUniversalTime().ToString('o')
     finishedUtc = $null
     status = 'running'
+    paymentSuite = $PaymentSuite
     runDir = $runDir
     latestPointerPath = $latestPointerPath
     steps = @()
@@ -270,6 +271,11 @@ try {
         $summary.steps += @{name='sandbox-payments';status=$sandbox.status;rawExitCode=$sandboxCode;primaryPassed=$sandbox.primaryPassed;report='payments/sandbox-gates.json'}
         if ($sandbox.status -eq 'failed') { $runFailed=$true } elseif ($sandbox.status -ne 'passed') { $runPartial=$true }
     }
+    if ($PaymentSuite -eq 'none') {
+        $runPartial = $true
+        $summary.steps += @{name='payments-deterministic';status='not-run';reason='No-payment reporting mode explicitly excludes payment submissions.'}
+        $summary.steps += @{name='sandbox-payments';status='not-run';reason='No-payment reporting mode explicitly excludes provider transactions.'}
+    }
     if (Test-Path (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock')) { throw 'Fixture lock remains; refuse messaging/restart.' }
     # Derived from this run's own evidence: dedicated-tier tenants come from the seed contract, never a hardcoded tenant name.
     $dedicatedTenants = @((Get-Content (Join-Path $runDir 'seed-contract.json') -Raw | ConvertFrom-Json).tenants |
@@ -289,10 +295,11 @@ try {
         }
     }
     $routingFixturePassed = $fixtureCheck.Count -eq 1 -and $fixtureCheck[0].status -eq 'passed'
-    $routingStatus = if ($dedicatedTenants.Count -eq 0) { 'blocked' }
+    $routingStatus = if ($PaymentSuite -eq 'none') { 'not-run' }
+        elseif ($dedicatedTenants.Count -eq 0) { 'blocked' }
         elseif ($routingFixturePassed -and $routingMissing.Count -eq 0) { 'passed' } else { 'failed' }
     $summary.steps += @{name='tenantc-routing-regression';status=$routingStatus;dedicatedTenants=$dedicatedTenants;missingVerifiedJourneys=$routingMissing;fixtureRegression=$routingFixturePassed;derivedFrom='foundations fixture-regression plus dedicated-tenant verified journeys in each selected payment suite'}
-    if ($routingStatus -eq 'failed') { $runFailed = $true } elseif ($routingStatus -eq 'blocked') { $runPartial = $true }
+    if ($routingStatus -eq 'failed') { $runFailed = $true } elseif ($routingStatus -in @('blocked','not-run')) { $runPartial = $true }
     try {
         Invoke-LoggedCommand -Name 'currency-order-entry' -Script { npm --prefix (Join-Path $workspaceRoot 'automation') run test:payment-currency:browser } | Out-Null
         $summary.steps += @{name='currency-order-entry';status='passed'}
@@ -316,6 +323,8 @@ try {
             } catch { $runFailed=$true }
             finally { $env:PHASE10_CONTINUATION_SOURCES=$previousContinuation; $env:PHASE10_CONTINUATION_ARTIFACT=$previousContinuationArtifact }
         } else { $runPartial=$true; $summary.steps += @{name='order-continuation';status='blocked';reason='No completed real-sandbox case exists for order-state evidence.'} }
+    } elseif ($PaymentSuite -eq 'none') {
+        $summary.steps += @{name='order-continuation';status='not-run';reason='No-payment reporting mode has no sandbox payment attempts to continue.'}
     }
     try {
         Invoke-LoggedCommand -Name 'messaging-functions' -Script {

@@ -15,6 +15,12 @@ param(
 
     [switch]$SkipOperationalChecks,
 
+    [switch]$SkipDynamicPaymentMatrix,
+
+    [switch]$OperationalOnly,
+
+    [string[]]$Categories = @(),
+
     [switch]$SkipStartIfNeeded,
 
     [string]$ExpectedImageManifest
@@ -23,6 +29,15 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
+$Categories = @($Categories | ForEach-Object { ([string]$_ -split ',') } | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+$unsupportedCategories = @($Categories | Where-Object { $_ -notin @('functional', 'tenant', 'payments', 'security') })
+if ($unsupportedCategories.Count -gt 0) { throw "Unsupported targeted NFR categories: $($unsupportedCategories -join ', ')." }
+if ($OperationalOnly -and $Categories.Count -gt 0) {
+    throw '-OperationalOnly cannot be combined with -Categories; select one NFR profile.'
+}
+if ($OperationalOnly -and $SkipOperationalChecks) {
+    throw '-OperationalOnly cannot be combined with -SkipOperationalChecks.'
+}
 if (-not [string]::IsNullOrWhiteSpace($ExpectedImageManifest) -and -not $SkipStartIfNeeded) {
     throw '-ExpectedImageManifest requires -SkipStartIfNeeded so NFR cannot start or rebuild a different stack.'
 }
@@ -67,7 +82,7 @@ Set-Content -LiteralPath $planPath -Encoding utf8 -Value @(
     "Started (UTC): $((Get-Date).ToUniversalTime().ToString('o'))",
     'Purpose: reuse the proven local NFR proof engine against the Docker Dev HTTP stack and record Docker-specific evidence.',
     "Clean reset: $(if ($UseCleanReset) { 'enabled' } else { 'available via -UseCleanReset' }).",
-    "Operational checks: $(if ($SkipOperationalChecks) { 'skipped via -SkipOperationalChecks' } else { 'enabled' }).",
+    "Operational checks: $(if ($OperationalOnly) { 'selected via -OperationalOnly' } elseif ($SkipOperationalChecks -or $Categories.Count -gt 0) { 'not selected for this profile' } else { 'enabled' }).",
     "Stack start on demand: $(if ($SkipStartIfNeeded) { 'disabled' } else { 'enabled' })."
 )
 
@@ -105,6 +120,7 @@ Set-Content -LiteralPath $summaryPath -Encoding utf8 -Value (@{
 
 Write-WrapperProgress "Docker NFR wrapper initialized. runDir=$runDir"
 Set-Content -LiteralPath $currentStepPath -Value 'stack-readiness' -Encoding utf8
+$proofIncomplete = $false
 
 try {
     $gatewayReady = Test-UrlReachable -Url 'http://localhost:5080/health/alive'
@@ -144,17 +160,41 @@ try {
 
     Set-Content -LiteralPath $currentStepPath -Value 'local-proof' -Encoding utf8
     Write-WrapperProgress 'Running the shared NFR proof engine against the Docker stack.'
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $localProofScript `
-        -ArtifactRoot $runDir `
-        -ProofName 'Phase 10 docker NFR proof' `
-        -BurstMessageCount $BurstMessageCount `
-        -PerformanceTimeoutSeconds $PerformanceTimeoutSeconds `
-        -MaximumP95Seconds $MaximumP95Seconds `
-        -UseCleanReset:$UseCleanReset `
-        -SkipOperationalChecks:$SkipOperationalChecks
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Phase 10 docker NFR proof failed with exit code $LASTEXITCODE."
+    $localProofArguments = @{
+        ArtifactRoot = $runDir
+        ProofName = 'Phase 10 docker NFR proof'
+        BurstMessageCount = $BurstMessageCount
+        PerformanceTimeoutSeconds = $PerformanceTimeoutSeconds
+        MaximumP95Seconds = $MaximumP95Seconds
+        UseCleanReset = $UseCleanReset
+        SkipOperationalChecks = ($SkipOperationalChecks -or ($Categories.Count -gt 0 -and -not $OperationalOnly))
+        OperationalOnly = $OperationalOnly
+        SkipDynamicPaymentMatrix = $SkipDynamicPaymentMatrix
+        SelectedCategories = @($Categories)
+    }
+    $localProofError = $null
+    try { & $localProofScript @localProofArguments }
+    catch { $localProofError = $_ }
+    $localProofExitCode = $LASTEXITCODE
+    $localProofSummaryPath = Join-Path $runDir 'nfr\summary.json'
+    if (-not (Test-Path -LiteralPath $localProofSummaryPath -PathType Leaf)) {
+        if ($localProofError) {
+            $location = if ($localProofError.ScriptStackTrace) { $localProofError.ScriptStackTrace } else { 'location unavailable' }
+            throw "Local NFR proof did not finalize: $($localProofError.Exception.Message) [$location]"
+        }
+        throw "Local NFR proof did not write its summary (exit $localProofExitCode)."
+    }
+    $localProofSummary = Get-Content -LiteralPath $localProofSummaryPath -Raw | ConvertFrom-Json -ErrorAction Stop
+    if ($localProofSummary.status -eq 'passed' -and $localProofExitCode -eq 0 -and $null -eq $localProofError) {
+        Write-WrapperProgress 'Local NFR proof passed.'
+    }
+    elseif ($localProofSummary.status -eq 'incomplete') {
+        $proofIncomplete = $true
+        Write-WrapperProgress 'Local NFR proof finalized as incomplete; preserving category outcomes and capturing after-image inventory.'
+    }
+    else {
+        $reason = if ($localProofError) { $localProofError.Exception.Message } else { "status=$($localProofSummary.status); exit=$localProofExitCode" }
+        throw "Local NFR proof failed before a valid incomplete/pass finalization: $reason"
     }
 
     $imageAfter = Get-Phase10DockerImageManifest -RunId (Split-Path -Leaf $runDir) -CapturePoint after `
@@ -167,10 +207,12 @@ try {
         Assert-Phase10DockerImageManifestMatches -Expected $expectedImages -Actual $imageAfter
     }
 
-    Set-Content -LiteralPath $currentStepPath -Value 'completed' -Encoding utf8
+    $finalStatus = if ($proofIncomplete) { 'incomplete' } else { 'passed' }
+    Set-Content -LiteralPath $currentStepPath -Value $finalStatus -Encoding utf8
     Set-Content -LiteralPath $summaryPath -Encoding utf8 -Value (@{
         target = 'phase10-docker-nfr'
-        status = 'passed'
+        status = $finalStatus
+        localProofStatus = [string]$localProofSummary.status
         startedUtc = $startedUtc
         completedUtc = (Get-Date).ToUniversalTime().ToString('o')
         runDir = $runDir
@@ -181,8 +223,14 @@ try {
         latestPointerPath = $latestPointerPath
         failurePointerPath = $failurePointerPath
     } | ConvertTo-Json -Depth 8)
-    Remove-Item -LiteralPath $failurePointerPath -Force -ErrorAction SilentlyContinue
-    Write-WrapperProgress 'Phase 10 docker NFR proof passed.'
+    if ($proofIncomplete) {
+        Set-Content -LiteralPath $failurePointerPath -Value $runDir -Encoding utf8
+        Write-WrapperProgress 'Phase 10 docker NFR proof recorded incomplete category results.'
+    }
+    else {
+        Remove-Item -LiteralPath $failurePointerPath -Force -ErrorAction SilentlyContinue
+        Write-WrapperProgress 'Phase 10 docker NFR proof passed.'
+    }
 }
 catch {
     Set-Content -LiteralPath $currentStepPath -Value 'failed' -Encoding utf8
@@ -198,7 +246,13 @@ catch {
         latestPointerPath = $latestPointerPath
         failurePointerPath = $failurePointerPath
         error = $_.Exception.Message
+        errorScriptStackTrace = $_.ScriptStackTrace
     } | ConvertTo-Json -Depth 8)
     Write-WrapperProgress "Phase 10 docker NFR proof failed: $($_.Exception.Message)"
     throw
+}
+
+if ($proofIncomplete) {
+    $global:LASTEXITCODE = 1
+    throw "Phase 10 docker NFR proof is incomplete. Review $(Join-Path $runDir 'nfr\summary.json') and category summaries."
 }

@@ -31,7 +31,7 @@ export interface Phase10Report {
   runId: string | null;
   packetStatus: EvidenceStatus;
   profile: "baseline" | "extended" | "UNKNOWN";
-  paymentSuite: "sandbox" | "deterministic" | "both" | "UNKNOWN";
+  paymentSuite: "sandbox" | "deterministic" | "both" | "none" | "UNKNOWN";
   startedUtc: string | null;
   finishedUtc: string | null;
   restoration: EvidenceStatus;
@@ -112,7 +112,7 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
   }
   const profile = summary?.acceptanceProfile === "baseline" || summary?.acceptanceProfile === "extended"
     ? summary.acceptanceProfile : "UNKNOWN";
-  const paymentSuite = summary?.paymentSuite === "sandbox" || summary?.paymentSuite === "deterministic" || summary?.paymentSuite === "both"
+  const paymentSuite = summary?.paymentSuite === "sandbox" || summary?.paymentSuite === "deterministic" || summary?.paymentSuite === "both" || summary?.paymentSuite === "none"
     ? summary.paymentSuite : "UNKNOWN";
   if (profile === "UNKNOWN") issues.push("Acceptance profile missing or invalid.");
   if (paymentSuite === "UNKNOWN") issues.push("Payment suite selection missing or invalid.");
@@ -145,6 +145,7 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
     const suite = name === "payments-deterministic" ? "deterministic"
       : name === "sandbox-payments" || name === "order-continuation" ? "sandbox" : null;
     const selection = suite === null || paymentSuite === "UNKNOWN" ? "UNKNOWN"
+      : paymentSuite === "none" ? "NOT-SELECTED"
       : paymentSuite === "both" || paymentSuite === suite ? "SELECTED" : "NOT-SELECTED";
     const matches = inputSteps.map(record).filter(step => step?.name === name);
     if (matches.length > 1) {

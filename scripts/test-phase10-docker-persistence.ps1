@@ -3,6 +3,7 @@
 param([switch]$RestartDesktop,[string]$ArtifactDirectory)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+. (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
 Assert-Phase10ComposeProject
 Assert-Phase10LocalDockerEndpoint
 $root=Split-Path -Parent $PSScriptRoot
@@ -20,7 +21,15 @@ $settings=Get-Phase10LocalSettings -Path (Join-Path $root 'Resources/Docker/.env
 Initialize-Phase10LogRedaction -Settings $settings
 $artifact=if($ArtifactDirectory){[IO.Path]::GetFullPath($ArtifactDirectory)}else{Join-Path $root ("TestResults/DockerStorage/persistence-{0}" -f (Get-Date -Format 'yyyyMMdd-HHmmssfff'))}
 if(-not$artifact.StartsWith(([IO.Path]::GetFullPath((Join-Path $root 'TestResults')).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw 'Persistence evidence must stay under TestResults.'}
+if(Test-Path -LiteralPath $artifact){throw 'Persistence evidence output already exists; use a new run directory so previous evidence is preserved.'}
 [void](New-Item -ItemType Directory -Path $artifact)
+$runId="phase10-persistence-$(Get-Date -Format 'yyyyMMdd-HHmmssfff')"
+$composeFile=Join-Path $root 'compose/docker-compose.phase10.yml'
+$envExampleFile=Join-Path $root 'Resources/Docker/.env.local.example'
+$envFile=Join-Path $root 'Resources/Docker/.env.local'
+$manifestArgs=@{RunId=$runId;ComposeFile=$composeFile;EnvExampleFile=$envExampleFile;EnvFile=$envFile;WorkspaceRoot=$root;ArtifactRoot=$artifact}
+$beforeManifestPath=Join-Path $artifact 'docker-image-identities-before.json'
+$beforeManifest=Get-Phase10DockerImageManifest @manifestArgs -CapturePoint before -OutputPath $beforeManifestPath
 function Get-Snapshot {
     $registryCs=New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $settings.LOCAL_SQL_PASSWORD
     Assert-Phase10HostSqlIdentity -ConnectionString $registryCs
@@ -50,7 +59,7 @@ $nativeBefore=@(Get-NetTCPConnection -LocalPort 1433 -State Listen -ErrorAction 
 $mounts=& docker inspect xy-phase10-sql-server-1 --format '{{json .Mounts}}'|ConvertFrom-Json
 $sqlVolume=($mounts|Where-Object Destination -eq '/var/opt/mssql').Name
 if([string]::IsNullOrWhiteSpace($sqlVolume)-or$sqlVolume-notlike'xy-phase10_*'){throw 'Application SQL is not on an explicit project volume.'}
-$report=[ordered]@{status='running';artifact=$artifact;disk=$disk;sqlVolume=$sqlVolume;nativeSqlBefore=$nativeBefore}
+$report=[ordered]@{status='running';artifact=$artifact;disk=$disk;sqlVolume=$sqlVolume;nativeSqlBefore=$nativeBefore;candidate=$beforeManifest.candidate;runId=$runId;imageManifestBefore='docker-image-identities-before.json'}
 try{
     & docker desktop restart --timeout 180 2>&1|Protect-Phase10Log|Out-Host
     if($LASTEXITCODE-ne 0){throw 'Docker Desktop restart did not complete.'}
@@ -75,6 +84,17 @@ try{
     if(($mountsAfter|Where-Object Destination -eq '/var/opt/mssql').Name-ne$sqlVolume){throw 'SQL persistent volume changed.'}
     $nativeAfter=@(Get-NetTCPConnection -LocalPort 1433 -State Listen -ErrorAction SilentlyContinue|Select-Object -ExpandProperty OwningProcess -Unique|Sort-Object)
     if(($nativeBefore-join',')-ne($nativeAfter-join',')){throw 'Native Windows SQL listener changed; investigate separately.'}
+    $afterManifestPath=Join-Path $artifact 'docker-image-identities-after.json'
+    $afterManifest=Get-Phase10DockerImageManifest @manifestArgs -CapturePoint after -OutputPath $afterManifestPath
+    if(-not(Test-Phase10DockerImageManifestsMatch -Before $beforeManifest -After $afterManifest)){throw 'Docker service images or source worktree identity changed during the persistence restart.'}
+    $report.imageManifestAfter='docker-image-identities-after.json'
+    $report.imageIdentitiesUnchanged=$true
+    $report.evidenceSha256=[ordered]@{
+        before=(Get-FileHash -LiteralPath (Join-Path $artifact 'before.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+        after=(Get-FileHash -LiteralPath (Join-Path $artifact 'after.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+        imageBefore=(Get-FileHash -LiteralPath $beforeManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        imageAfter=(Get-FileHash -LiteralPath $afterManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
     $report.status='passed';$report.nativeSqlAfter=$nativeAfter
 }catch{$report.status='failed';$report.error=$_.Exception.Message;throw}
 finally{$report|ConvertTo-Json -Depth 7|Set-Content -LiteralPath (Join-Path $artifact 'summary.json');Write-Output "Persistence evidence: $artifact"}

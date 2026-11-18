@@ -20,7 +20,7 @@ param(
 
     [switch]$VerifyPersistence,
 
-    [ValidateSet('sandbox', 'deterministic', 'both')]
+    [ValidateSet('sandbox', 'deterministic', 'both', 'none')]
     [string]$PaymentSuite = 'sandbox',
 
     [ValidateSet('baseline','extended')]
@@ -29,20 +29,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
+. (Join-Path $PSScriptRoot 'phase10-run-id.ps1')
 Assert-Phase10ComposeProject
 if ($ResetData -and $ReuseExistingStack) { throw '-ResetData cannot be combined with -ReuseExistingStack.' }
 if ($ColdBuild -and $ReuseExistingStack) { throw '-ColdBuild cannot be combined with -ReuseExistingStack; cold build requires the startup path.' }
-if ($WhatIfPreference) { Write-Host "Would start/test xy-phase10 (reset data: $ResetData). No changes made."; return }
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $stackStartScript = Join-Path $PSScriptRoot 'start-phase10-docker-dev.ps1'
 $e2eScript = Join-Path $PSScriptRoot 'run-phase10-local-container-stack-end-to-end.ps1'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
-$resolvedRunId = if ([string]::IsNullOrWhiteSpace($RunId)) {
-    "phase10-docker-http-$(Get-Date -Format 'yyyyMMdd-HHmmssfff')"
-}
-else {
-    $RunId
-}
+$resolvedRunId = Resolve-Phase10DockerE2ERunId -RunId $RunId
+if ($WhatIfPreference) { Write-Host "Would start/test xy-phase10 (reset data: $ResetData; run id: $resolvedRunId). No changes made."; return }
 $runRoot = Join-Path $logRoot $resolvedRunId
 $runSummaryPath = Join-Path $runRoot 'run-summary.md'
 $runSummaryJsonPath = Join-Path $runRoot 'run-summary.json'
@@ -202,14 +198,22 @@ function Write-Phase10Completion {
     }
     $packet = Get-Content -LiteralPath (Join-Path $Directory 'acceptance-packet.json') -Raw | ConvertFrom-Json
     $savedSummary = Get-Content -LiteralPath (Join-Path $Directory 'run-summary.json') -Raw | ConvertFrom-Json
+    $coveragePath = Join-Path $Directory 'phase10-coverage-summary.json'
+    $coverage = Get-Content -LiteralPath $coveragePath -Raw | ConvertFrom-Json
     if ($Summary.status -notin @('passed', 'partial', 'failed') -or
         [string]::IsNullOrWhiteSpace($Summary.runId) -or
         $Summary.runId -cne (Split-Path -Leaf $Directory) -or
         $savedSummary.runId -cne $Summary.runId -or
         $packet.status -cne $Summary.status -or $savedSummary.status -cne $Summary.status -or
-        $packet.runRoot -cne $savedSummary.runRoot -or $savedSummary.runRoot -cne $Directory) {
+        $packet.runRoot -cne $savedSummary.runRoot -or $savedSummary.runRoot -cne $Directory -or
+        $coverage.schema -cne 'phase10-sanitized-coverage-v2' -or $coverage.runId -cne $Summary.runId -or
+        $coverage.provisional -ne $true) {
         throw 'Finalization artifacts have inconsistent run identity or status.'
     }
+    # The preview is provisional. Finalization promotes only a schema-valid coverage
+    # artifact whose run ID matches the packet and summary, then hashes that exact file.
+    $coverage.provisional = $false
+    $coverage | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $coveragePath -Encoding utf8
     $hashes = [ordered]@{}
     foreach ($name in $paths) {
         $hashes[$name] = (Get-FileHash -LiteralPath (Join-Path $Directory $name) -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -276,12 +280,22 @@ try {
 
     Write-Host 'Running Phase 10 Docker dev HTTP end-to-end validation hook...' -ForegroundColor Cyan
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $e2eScript -StabilizationDelaySeconds $StabilizationDelaySeconds -IntegrationConsoleVerbosity $IntegrationConsoleVerbosity -PaymentSuite $PaymentSuite -AcceptanceProfile $AcceptanceProfile -VerifyPersistence:$VerifyPersistence
+    $childSummaryPath = Join-Path $runRoot 'e2e-summary.json'
+    $childSummary = if (Test-Path -LiteralPath $childSummaryPath -PathType Leaf) { Get-Content -LiteralPath $childSummaryPath -Raw | ConvertFrom-Json } else { $null }
     if ($LASTEXITCODE -ne 0) {
-        throw "Phase 10 Docker dev HTTP end-to-end validation hook failed with exit code $LASTEXITCODE."
+        $allowedNoPaymentPartial = $PaymentSuite -eq 'none' -and $childSummary.status -eq 'partial' -and
+            $childSummary.paymentSuite -eq 'none' -and
+            @($childSummary.steps | Where-Object { $_.status -eq 'failed' }).Count -eq 0 -and
+            @($childSummary.steps | Where-Object { $_.name -in @('payments-deterministic','sandbox-payments') -and $_.status -ne 'not-run' }).Count -eq 0
+        if (-not $allowedNoPaymentPartial) {
+            throw "Phase 10 Docker dev HTTP end-to-end validation hook failed with exit code $LASTEXITCODE."
+        }
+        $runSummary.status = 'partial'
+        Write-Host 'No-payment report run completed with payment journeys explicitly NOT RUN; finalization is pending.' -ForegroundColor Yellow
+    } else {
+        $runSummary.status = if ($childSummary.status -eq 'partial') { 'partial' } else { 'passed' }
+        Write-Host 'Phase 10 Docker dev HTTP execution completed; finalization is pending.' -ForegroundColor Cyan
     }
-
-    $runSummary.status = 'passed'
-    Write-Host 'Phase 10 Docker dev HTTP execution completed; finalization is pending.' -ForegroundColor Cyan
 }
 catch {
     $runSummary.status = 'failed'

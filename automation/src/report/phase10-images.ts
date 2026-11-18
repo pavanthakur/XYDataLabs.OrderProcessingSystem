@@ -11,7 +11,8 @@ export interface Phase10ImageManifest {
   schema: "phase10-docker-image-identities-v1";
   runId: string;
   capturePoint: "before" | "after";
-  candidate: { commit: string; worktree: "clean" | "dirty"; dirtyStatusSha256: string | null };
+  candidate: { commit: string; worktree: "clean" | "dirty"; dirtyStatusSha256: string | null;
+    worktreeContentSha256?: string | null; changedPaths?: string[] };
   buildLogsSha256: Record<string, string>;
   images: Phase10ImageRecord[];
 }
@@ -43,6 +44,12 @@ export function validatePhase10ImageManifest(value: unknown, expectedRunId?: str
       (candidate.worktree === "dirty" && (typeof candidate.dirtyStatusSha256 !== "string" || !/^[a-f0-9]{64}$/.test(candidate.dirtyStatusSha256)))) {
     return { status: "BLOCKED", reason: "Manifest candidate identity is missing or malformed." };
   }
+  if ((candidate.worktreeContentSha256 !== undefined && candidate.worktreeContentSha256 !== null &&
+       (typeof candidate.worktreeContentSha256 !== "string" || !/^[a-f0-9]{64}$/.test(candidate.worktreeContentSha256))) ||
+      (candidate.changedPaths !== undefined && (!Array.isArray(candidate.changedPaths) || candidate.changedPaths.some(path =>
+        typeof path !== "string" || path.startsWith("/") || /(^|\/)\.\.?($|\/)/.test(path))))) {
+    return { status: "BLOCKED", reason: "Manifest worktree-content identity is malformed." };
+  }
   if (!Array.isArray(manifest.images) || manifest.images.length !== 13) {
     return { status: "BLOCKED", reason: "Manifest does not cover exactly the 13 expected Phase 10 services." };
   }
@@ -73,7 +80,9 @@ export function validatePhase10ImageManifest(value: unknown, expectedRunId?: str
   return { status: "PASS", manifest: {
     schema: "phase10-docker-image-identities-v1", runId: manifest.runId, capturePoint: manifest.capturePoint,
     candidate: { commit: candidate.commit, worktree: candidate.worktree,
-      dirtyStatusSha256: typeof candidate.dirtyStatusSha256 === "string" ? candidate.dirtyStatusSha256 : null },
+      dirtyStatusSha256: typeof candidate.dirtyStatusSha256 === "string" ? candidate.dirtyStatusSha256 : null,
+      worktreeContentSha256: typeof candidate.worktreeContentSha256 === "string" ? candidate.worktreeContentSha256 : null,
+      changedPaths: Array.isArray(candidate.changedPaths) ? candidate.changedPaths as string[] : [] },
     buildLogsSha256: buildLogs as Record<string, string>, images: images.sort((a, b) => a.service.localeCompare(b.service))
   } };
 }
@@ -81,6 +90,8 @@ export function validatePhase10ImageManifest(value: unknown, expectedRunId?: str
 export function phase10ImageSetsMatch(left: Phase10ImageManifest, right: Phase10ImageManifest): boolean {
   return left.candidate.commit === right.candidate.commit && left.candidate.worktree === right.candidate.worktree &&
     left.candidate.dirtyStatusSha256 === right.candidate.dirtyStatusSha256 &&
+    left.candidate.worktreeContentSha256 === right.candidate.worktreeContentSha256 &&
+    (left.candidate.changedPaths ?? []).join("\n") === (right.candidate.changedPaths ?? []).join("\n") &&
     left.images.length === right.images.length && left.images.every((item, index) =>
       item.service === right.images[index]?.service && item.imageId === right.images[index]?.imageId &&
       item.imageReference === right.images[index]?.imageReference &&

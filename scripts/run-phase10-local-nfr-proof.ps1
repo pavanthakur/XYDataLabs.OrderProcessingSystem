@@ -20,7 +20,11 @@ param(
 
     [switch]$SkipOperationalChecks,
 
-    [switch]$OperationalOnly
+    [switch]$OperationalOnly,
+
+    [switch]$SkipDynamicPaymentMatrix,
+
+    [string[]]$SelectedCategories = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,6 +38,14 @@ $script:Phase10NfrRestorationFailed = $false
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-nfr-aggregate.ps1')
 . (Join-Path $PSScriptRoot 'phase10-nfr-drill-contract.ps1')
+. (Join-Path $PSScriptRoot 'phase10-nfr-selection.ps1')
+$categorySelection = Resolve-Phase10NfrSelection -Categories $SelectedCategories -OperationalOnly:$OperationalOnly -SkipDynamicPaymentMatrix:$SkipDynamicPaymentMatrix
+$targetedNoChargeRun = $categorySelection.mode -eq 'targeted-no-charge'
+$skipOperationalExecution = $SkipOperationalChecks -or $targetedNoChargeRun
+function Test-Phase10NfrCategorySelected {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    return $categorySelection.selectedCategories -contains $Name
+}
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
@@ -57,24 +69,29 @@ Set-Content -LiteralPath (Join-Path $nfrRoot 'run-plan.txt') -Encoding utf8 -Val
     'Functional: focused durability, DLQ, and replay integration tests.',
     "Performance: 1-message canary, then $BurstMessageCount OrderCreatedV1 messages; consumer P95 <= $MaximumP95Seconds seconds.",
     "Clean reset: $(if ($OperationalOnly) { 'prohibited in the operational-only lane' } elseif ($UseCleanReset) { 'enabled' } else { 'available via -UseCleanReset' }).",
-    "Operational checks: $(if ($SkipOperationalChecks) { 'skipped via -SkipOperationalChecks' } else { 'enabled' }).",
+    "Operational checks: $(if ($targetedNoChargeRun) { 'not selected in targeted no-charge mode' } elseif ($SkipOperationalChecks) { 'skipped via -SkipOperationalChecks' } else { 'enabled' }).",
     'Tenant: dedicated/shared routing and tenant registry behavior are reported independently.',
-    'Payments: provider seed/reconciliation checks plus dynamic provider reassignment matrix are reported independently.',
+    "Payments: provider seed/reconciliation checks; dynamic provider matrix $(if ($SkipDynamicPaymentMatrix) { 'explicitly skipped' } else { 'enabled' }).",
     'Security: local Keycloak-backed API auth tests, browser PKCE/operator authorization proof, and artifact secret scan.',
     'Operational: Compose controls and restart diagnostics are reported independently from recovery.',
     'Recovery: retained image evidence and executed previous-image rollback/restore are reported independently.',
-    "Selection: $(if ($OperationalOnly) { 'operational-only; payments and other functional suites are not run' } else { 'full NFR suite' }).",
+    "Selection: $($categorySelection.mode); selected=$($categorySelection.selectedCategories -join ','); dynamic payment matrix=$($categorySelection.dynamicPaymentMatrix).",
     'Policy: categories are reported independently; the aggregate is passed only when every category passed. Failed/not-run/blocked => incomplete (nonzero exit).'
 )
 
 $categories = [ordered]@{
-    functional = [ordered]@{ status = 'running'; checks = @(); error = $null }
-    performance = [ordered]@{ status = 'running'; checks = @(); error = $null }
-    tenant = [ordered]@{ status = 'running'; checks = @(); error = $null }
-    payments = [ordered]@{ status = 'running'; checks = @(); error = $null }
-    operational = [ordered]@{ status = 'running'; checks = @(); error = $null }
-    recovery = [ordered]@{ status = 'running'; checks = @(); error = $null }
-    security = [ordered]@{ status = 'running'; checks = @(); error = $null }
+    functional = [ordered]@{ status = 'not-run'; execution = 'not-selected'; checks = @(); error = 'Not selected.' }
+    performance = [ordered]@{ status = 'not-run'; execution = 'not-selected'; checks = @(); error = 'Not selected.' }
+    tenant = [ordered]@{ status = 'not-run'; execution = 'not-selected'; checks = @(); error = 'Not selected.' }
+    payments = [ordered]@{ status = 'not-run'; execution = 'not-selected'; integrationStatus = 'not-run'; dynamicMatrixStatus = 'not-run'; checks = @(); error = 'Not selected.' }
+    operational = [ordered]@{ status = 'not-run'; execution = 'not-selected'; checks = @(); error = 'Not selected.' }
+    recovery = [ordered]@{ status = 'not-run'; execution = 'not-selected'; checks = @(); error = 'Not selected.' }
+    security = [ordered]@{ status = 'not-run'; execution = 'not-selected'; checks = @(); error = 'Not selected.' }
+}
+foreach ($categoryName in $categorySelection.selectedCategories) {
+    $categories[$categoryName]['status'] = 'running'
+    $categories[$categoryName]['execution'] = 'selected'
+    $categories[$categoryName]['error'] = $null
 }
 $summary = [ordered]@{
     status = 'running'
@@ -83,6 +100,16 @@ $summary = [ordered]@{
     artifactRoot = $nfrRoot
     commitSha = (& git -C $workspaceRoot rev-parse HEAD).Trim()
     worktreeAtStart = $(if ([string]::IsNullOrWhiteSpace((& git -C $workspaceRoot status --porcelain) -join '')) { 'clean' } else { 'dirty' })
+    selection = [ordered]@{
+        mode = $categorySelection.mode
+        requestedCategories = @($categorySelection.requestedCategories)
+        selectedCategories = @($categorySelection.selectedCategories)
+        notSelectedCategories = @($categorySelection.notSelectedCategories)
+        dynamicPaymentMatrix = $categorySelection.dynamicPaymentMatrix
+        carriedForwardEvidence = @()
+    }
+    paymentSettingsIntegrity = 'not-selected'
+    paymentSettingsEvidence = @()
     commitShaAtFinish = $null
     worktreeAtFinish = $null
     categories = $categories
@@ -94,6 +121,33 @@ function Get-IstNow {
 
 function Write-NfrSummary {
     $summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $summaryPath -Encoding utf8
+}
+
+function Write-CategorySummaryFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Category
+    )
+
+    Set-Content -LiteralPath (Join-Path $nfrRoot "$Category-summary.json") `
+        -Value ($categories[$Category] | ConvertTo-Json -Depth 8) -Encoding utf8
+}
+
+if ($targetedNoChargeRun) {
+    foreach ($categoryName in @('operational', 'recovery')) {
+        $categories[$categoryName]['status'] = 'not-run'
+        $categories[$categoryName]['execution'] = 'not-selected'
+        $categories[$categoryName]['error'] = 'Not run because targeted no-charge category selection excludes Docker operational mutations and rollback.'
+        Write-CategorySummaryFile -Category $categoryName
+    }
+    Write-NfrSummary
+}
+elseif ($SkipOperationalChecks) {
+    foreach ($categoryName in @('operational', 'recovery')) {
+        $categories[$categoryName]['status'] = 'skipped'
+        $categories[$categoryName]['execution'] = 'skipped-by-option'
+        $categories[$categoryName]['error'] = 'Skipped by -SkipOperationalChecks.'
+    }
 }
 
 function Write-Progress {
@@ -125,6 +179,75 @@ function Get-EnvValues {
         }
     }
     return $values
+}
+
+function Get-Phase10NfrPaymentSettingsSnapshot {
+    param([Parameter(Mandatory = $true)][hashtable]$Settings)
+
+    $sharedDatabase = 'OrderProcessingSystem_Dev'
+    $sharedConnectionString = New-Phase10HostSqlConnectionString -Database $sharedDatabase -Password $Settings.LOCAL_SQL_PASSWORD -Settings $Settings
+    Assert-Phase10HostSqlIdentity -ConnectionString $sharedConnectionString
+    $sharedConnection = [System.Data.SqlClient.SqlConnection]::new($sharedConnectionString)
+    try {
+        $sharedConnection.Open()
+        $identityCommand = $sharedConnection.CreateCommand()
+        $identityCommand.CommandText = "SELECT CONVERT(nvarchar(128),SERVERPROPERTY('MachineName')) AS Machine"
+        $sqlMachine = [string]$identityCommand.ExecuteScalar()
+        $registryCommand = $sharedConnection.CreateCommand()
+        $registryCommand.CommandText = "SELECT Id,Code,TenantTier,Status,PaymentProviderCode FROM dbo.Tenants WHERE Status='Active' ORDER BY Code"
+        $registryReader = $registryCommand.ExecuteReader()
+        $tenants = @()
+        while ($registryReader.Read()) {
+            $tenants += [ordered]@{
+                id = $registryReader.GetInt32(0)
+                code = $registryReader.GetString(1)
+                tier = $registryReader.GetString(2)
+                status = $registryReader.GetString(3)
+                registryRoute = $registryReader.GetString(4)
+            }
+        }
+        $registryReader.Dispose()
+    }
+    finally { $sharedConnection.Dispose() }
+
+    if ($tenants.Count -eq 0) { throw 'Payment configuration snapshot found no active tenants.' }
+    $databaseMap = Get-Phase10ComposeDedicatedTenantDatabaseMap
+    foreach ($tenant in $tenants) {
+        $businessDatabase = Resolve-Phase10LocalTenantDatabaseFromRegistry -TenantCode $tenant.code -TenantTier $tenant.tier -Status $tenant.status -DedicatedDatabaseMap $databaseMap
+        $connectionString = New-Phase10HostSqlConnectionString -Database $businessDatabase -Password $Settings.LOCAL_SQL_PASSWORD -Settings $Settings
+        Assert-Phase10HostSqlIdentity -ConnectionString $connectionString
+        $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+        try {
+            $connection.Open()
+            $mirrorCommand = $connection.CreateCommand()
+            $mirrorCommand.CommandText = 'SELECT Id,PaymentProviderCode FROM dbo.Tenants WHERE Code=@code'
+            [void]$mirrorCommand.Parameters.AddWithValue('@code', $tenant.code)
+            $mirrorReader = $mirrorCommand.ExecuteReader()
+            if (-not $mirrorReader.Read() -or $mirrorReader.GetInt32(0) -ne $tenant.id) { throw "Business tenant identity mismatch for '$($tenant.code)'." }
+            $tenant.businessRoute = $mirrorReader.GetString(1)
+            $mirrorReader.Dispose()
+
+            $providersCommand = $connection.CreateCommand()
+            $providersCommand.CommandText = 'SELECT Id,ProviderType,Use3DSecure,IsProduction FROM payments.PaymentProviders WHERE TenantId=@tenant ORDER BY ProviderType,Id'
+            [void]$providersCommand.Parameters.AddWithValue('@tenant', $tenant.id)
+            $providersReader = $providersCommand.ExecuteReader()
+            $providers = @()
+            while ($providersReader.Read()) {
+                $providers += [ordered]@{
+                    id = $providersReader.GetInt32(0)
+                    provider = $providersReader.GetString(1)
+                    threeDs = $providersReader.GetBoolean(2)
+                    production = $providersReader.GetBoolean(3)
+                }
+            }
+            $providersReader.Dispose()
+            $tenant.businessDatabase = $businessDatabase
+            $tenant.providers = $providers
+        }
+        finally { $connection.Dispose() }
+    }
+
+    return [ordered]@{ schema = 'phase10-payment-settings-snapshot-v1'; sqlMachine = $sqlMachine; tenants = $tenants }
 }
 
 function Invoke-CategoryCommand {
@@ -604,16 +727,6 @@ function Invoke-ConsumerOutageBacklogDrill {
     $global:LASTEXITCODE = 0
 }
 
-function Write-CategorySummaryFile {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Category
-    )
-
-    Set-Content -LiteralPath (Join-Path $nfrRoot "$Category-summary.json") `
-        -Value ($categories[$Category] | ConvertTo-Json -Depth 8) -Encoding utf8
-}
-
 function Invoke-ArtifactSecretScan {
     param(
         [Parameter(Mandatory = $true)]
@@ -666,6 +779,15 @@ if ([string]::IsNullOrWhiteSpace($topicName)) {
 }
 $sqlConnectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $sqlPassword
 Assert-Phase10HostSqlIdentity -ConnectionString $sqlConnectionString
+$paymentSettingsBefore = $null
+if ($targetedNoChargeRun -and (Test-Phase10NfrCategorySelected -Name 'payments')) {
+    $paymentSettingsBefore = Get-Phase10NfrPaymentSettingsSnapshot -Settings $envValues
+    $beforePath = Join-Path $nfrRoot 'payment-settings-before.json'
+    if (Test-Path -LiteralPath $beforePath) { throw 'Payment settings evidence already exists; use a fresh NFR run directory.' }
+    $paymentSettingsBefore | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $beforePath -Encoding utf8
+    $summary.paymentSettingsIntegrity = 'awaiting-post-run-verification'
+    $summary.paymentSettingsEvidence += [ordered]@{ file = 'payment-settings-before.json'; sha256 = (Get-FileHash -LiteralPath $beforePath -Algorithm SHA256).Hash.ToLowerInvariant() }
+}
 if ($OperationalOnly) {
     Assert-Phase10ComposeProject
     Assert-Phase10LocalDockerEndpoint
@@ -688,7 +810,7 @@ $functionalFilter = 'FullyQualifiedName~Outbox|FullyQualifiedName~Inbox|FullyQua
 $tenantFilter = 'FullyQualifiedName~DedicatedTenant|FullyQualifiedName~TenantMiddleware|FullyQualifiedName~TenantRegistryService|FullyQualifiedName~TenantIsolation'
 $paymentFilter = 'FullyQualifiedName~PaymentProviderSeed|FullyQualifiedName~PaymentReconciliation'
 
-if (-not $SkipOperationalChecks) {
+if ((Test-Phase10NfrCategorySelected -Name 'recovery') -and -not $SkipOperationalChecks) {
     $previousImageTag = Resolve-PreviousInventoryImageTag -ImageOwner $imageOwner
     if ([string]::IsNullOrWhiteSpace($previousImageTag)) {
         Write-Progress 'Rollback prerequisite missing (set PHASE10_PREVIOUS_IMAGE_TAG or retain a phase10-prev-* inventory image). Recovery will be BLOCKED; operational checks continue.'
@@ -703,6 +825,8 @@ if (-not $SkipOperationalChecks) {
 }
 
 if (-not $OperationalOnly) {
+$selectedFunctional = Test-Phase10NfrCategorySelected -Name 'functional'
+if ($selectedFunctional) {
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 $previousNfrSqlConnection = $env:PHASE10_NFR_SQL_CONNECTION_STRING
 $previousNfrServiceBusConnection = $env:PHASE10_NFR_SERVICEBUS_CONNECTION_STRING
@@ -740,7 +864,9 @@ finally {
 $categories.functional.status = if ($functionalPassed) { 'passed' } else { 'failed' }
 Write-CategorySummaryFile -Category 'functional'
 Write-NfrSummary
+}
 
+if (Test-Phase10NfrCategorySelected -Name 'performance') {
 $performancePrerequisites = -not [string]::IsNullOrWhiteSpace($sqlPassword) `
     -and $sqlPassword -notmatch '^<' `
     -and -not [string]::IsNullOrWhiteSpace($serviceBusConnectionString) `
@@ -827,7 +953,9 @@ else {
 }
 Write-CategorySummaryFile -Category 'performance'
 Write-NfrSummary
+}
 
+if (Test-Phase10NfrCategorySelected -Name 'tenant') {
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 try {
     $previousProvisioningConnection = $env:PHASE10_INTEGRATION_PROVISIONING_CONNECTION_STRING
@@ -849,7 +977,9 @@ finally {
 $categories.tenant.status = if ($tenantPassed) { 'passed' } else { 'failed' }
 Write-CategorySummaryFile -Category 'tenant'
 Write-NfrSummary
+}
 
+if (Test-Phase10NfrCategorySelected -Name 'payments') {
 $paymentsPassed = $false
 $previousTestConnection = $env:ORDERPROCESSING_TEST_CONNECTION_STRING
 try {
@@ -871,24 +1001,30 @@ finally {
 }
 
 if ($paymentsPassed) {
-    $paymentsPassed = Invoke-CategoryCommand -Category 'payments' -Name 'Dynamic provider payment matrix' -Command {
-        npm --prefix (Join-Path $workspaceRoot 'automation') run run:docker:dev:http:playwright-matrix
+    $categories.payments.integrationStatus = 'passed'
+    if ($SkipDynamicPaymentMatrix) {
+        $categories.payments.status = 'partial'
+        $categories.payments.error = 'Dynamic provider matrix explicitly skipped; only non-transactional integration tests ran.'
+        $categories.payments.checks += [ordered]@{ name = 'Dynamic provider payment matrix'; status = 'not-run'; reason = 'explicit opt-out' }
+        $categories.payments.dynamicMatrixStatus = 'not-run'
+    } else {
+        $paymentsPassed = Invoke-CategoryCommand -Category 'payments' -Name 'Dynamic provider payment matrix' -Command {
+            npm --prefix (Join-Path $workspaceRoot 'automation') run run:docker:dev:http:playwright-matrix
+        }
+        $categories.payments.status = if ($paymentsPassed) { 'passed' } else { 'failed' }
+        $categories.payments.dynamicMatrixStatus = if ($paymentsPassed) { 'passed' } else { 'failed' }
     }
+} else {
+    $categories.payments.status = 'failed'
+    $categories.payments.integrationStatus = 'failed'
+    $categories.payments.dynamicMatrixStatus = if ($SkipDynamicPaymentMatrix) { 'not-run' } else { 'not-started' }
 }
-$categories.payments.status = if ($paymentsPassed) { 'passed' } else { 'failed' }
 Write-CategorySummaryFile -Category 'payments'
 Write-NfrSummary
 }
-else {
-    foreach ($categoryName in @('functional', 'performance', 'tenant', 'payments')) {
-        $categories[$categoryName].status = 'not-run'
-        $categories[$categoryName].error = 'Not run because -OperationalOnly selected only local transport/recovery checks.'
-        Write-CategorySummaryFile -Category $categoryName
-    }
-    Write-NfrSummary
 }
 
-if ($SkipOperationalChecks) {
+if ($skipOperationalExecution) {
     Write-Progress 'Skipping operational checks by request.'
     $categories.operational.status = 'skipped'
     $categories.operational.checks += [ordered]@{
@@ -1072,11 +1208,8 @@ else {
 }
 
 $securityPrerequisites = Test-Path -LiteralPath (Join-Path $workspaceRoot 'frontend\apps\web\scripts\phase10-identity-proof.mjs')
-if ($OperationalOnly) {
-    $categories.security.status = 'not-run'
-    $categories.security.error = 'Not run because -OperationalOnly excludes browser identity/payment-adjacent checks.'
-}
-elseif ($script:Phase10NfrRestorationFailed) {
+if (Test-Phase10NfrCategorySelected -Name 'security') {
+if ($script:Phase10NfrRestorationFailed) {
     $categories.security.status = 'blocked'
     $categories.security.error = 'BLOCKED: an earlier outage-drill restoration failed; later identity actions were not attempted.'
 }
@@ -1092,6 +1225,30 @@ else {
     $categories.security.status = if ($securityPassed) { 'passed' } else { 'failed' }
 }
 Write-CategorySummaryFile -Category 'security'
+}
+
+if ($null -ne $paymentSettingsBefore) {
+    $afterPath = Join-Path $nfrRoot 'payment-settings-after.json'
+    try {
+        $paymentSettingsAfter = Get-Phase10NfrPaymentSettingsSnapshot -Settings $envValues
+        $paymentSettingsAfter | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $afterPath -Encoding utf8
+        $beforeCanonical = ConvertTo-Json -InputObject $paymentSettingsBefore -Depth 10 -Compress
+        $afterCanonical = ConvertTo-Json -InputObject $paymentSettingsAfter -Depth 10 -Compress
+        if ($beforeCanonical -cne $afterCanonical) {
+            $summary.paymentSettingsIntegrity = 'failed'
+            $categories.payments.status = 'failed'
+            $categories.payments.error = 'Active tenant provider routes/settings changed during the targeted no-charge NFR run; no automatic restoration was attempted.'
+        }
+        else { $summary.paymentSettingsIntegrity = 'passed' }
+        $summary.paymentSettingsEvidence += [ordered]@{ file = 'payment-settings-after.json'; sha256 = (Get-FileHash -LiteralPath $afterPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+    }
+    catch {
+        $summary.paymentSettingsIntegrity = 'failed'
+        $categories.payments.status = 'failed'
+        $categories.payments.error = 'Could not prove active tenant provider settings remained unchanged after the targeted NFR run.'
+    }
+    Write-CategorySummaryFile -Category 'payments'
+}
 
 $aggregate = Get-Phase10NfrAggregate -Categories $categories
 $notPassed = $aggregate.NonPassing

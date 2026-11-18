@@ -14,6 +14,9 @@ internal static class FunctionsAcceptance
     {
         var result = new Dictionary<string, object?> { ["status"]="failed",["runtime"]="local-docker",["startedUtc"]=DateTime.UtcNow };
         var approvalLifecycle = new ReplayApprovalLifecycle();
+        var approvalSubmissionAttempts = 0;
+        result["approvalSubmissionAttempts"] = approvalSubmissionAttempts;
+        result["approvalResubmitted"] = false;
         result["approvalStatus"] = approvalLifecycle.Status;
         result["approvalReconciliationRequired"] = approvalLifecycle.RequiresReconciliation;
         try
@@ -79,6 +82,9 @@ internal static class FunctionsAcceptance
             result["intake"]="passed"; result["quarantineId"]=quarantine;
             var approvalPath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(options.ResultPath))!, $"{Path.GetFileNameWithoutExtension(options.ResultPath)}.approval.json");
             approvalLifecycle.MarkSubmissionIntended();
+            approvalSubmissionAttempts++;
+            result["approvalSubmissionAttempts"] = approvalSubmissionAttempts;
+            result["approvalResubmitted"] = approvalSubmissionAttempts > 1;
             result["approvalStatus"] = approvalLifecycle.Status;
             result["approvalReconciliationRequired"] = approvalLifecycle.RequiresReconciliation;
             var approval=await RequestLocalReplayApprovalAsync(options,quarantine,approvalPath);

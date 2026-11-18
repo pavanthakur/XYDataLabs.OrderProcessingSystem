@@ -58,6 +58,7 @@ if ($startupCapture -lt 0 -or $persistenceGate -le $startupCapture -or $finalCap
 Write-Host 'PASS persistence-before-final-image-capture'
 
 . (Join-Path $root 'scripts/phase10-docker-image-evidence.ps1')
+$gitCommand = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
 $script:serviceNames = @('sql-server','redis','azurite','servicebus-sql','servicebus-emulator','keycloak-local','orders','payments','inventory','notifications','gateway','ui','functions')
 $script:currentService = $null
 $script:changeInventoryImage = $false
@@ -99,14 +100,22 @@ try {
     $readBack.candidate.dirtyStatusSha256 = $null
     $before.candidate.worktree = 'clean'
     $before.candidate.dirtyStatusSha256 = $null
+    $before.candidate.worktreeContentSha256 = $null
+    $before.candidate.changedPaths = @()
+    $readBack.candidate.worktreeContentSha256 = $null
+    $readBack.candidate.changedPaths = @()
     Assert-Phase10DockerImageManifestMatches -Expected $readBack -Actual $before
     Write-Host 'PASS live-ordered-manifest-matches-json-manifest'
     $beforeComparable = $readBack
     $afterComparable = Get-Content -LiteralPath $afterPath -Raw | ConvertFrom-Json
     $beforeComparable.candidate.worktree = 'clean'
     $beforeComparable.candidate.dirtyStatusSha256 = $null
+    $beforeComparable.candidate.worktreeContentSha256 = $null
+    $beforeComparable.candidate.changedPaths = @()
     $afterComparable.candidate.worktree = 'clean'
     $afterComparable.candidate.dirtyStatusSha256 = $null
+    $afterComparable.candidate.worktreeContentSha256 = $null
+    $afterComparable.candidate.changedPaths = @()
     $beforeShape = Test-Phase10DockerImageManifestShape -Manifest $beforeComparable -ExpectedCapturePoint before
     $afterShape = Test-Phase10DockerImageManifestShape -Manifest $afterComparable -ExpectedCapturePoint after
     if (-not (Test-Phase10DockerImageManifestsMatch -Before $beforeComparable -After $afterComparable)) {
@@ -116,6 +125,24 @@ try {
     if (Test-Phase10DockerImageManifestsMatch -Before $beforeComparable -After $afterComparable) { throw 'Image mismatch was not rejected.' }
     Write-Host 'PASS mocked-project-ownership-and-image-capture'
     Write-Host 'PASS image-change-detection'
+
+    $identityRepo = Join-Path $temp 'identity-repo'
+    [void][IO.Directory]::CreateDirectory($identityRepo)
+    & $gitCommand.Source -C $identityRepo init --quiet
+    & $gitCommand.Source -C $identityRepo config user.email 'phase10-test@example.invalid'
+    & $gitCommand.Source -C $identityRepo config user.name 'Phase10 test'
+    Set-Content -LiteralPath (Join-Path $identityRepo 'tracked.txt') -Value 'base' -NoNewline
+    & $gitCommand.Source -C $identityRepo add -- tracked.txt
+    & $gitCommand.Source -C $identityRepo commit --quiet -m 'base'
+    Set-Content -LiteralPath (Join-Path $identityRepo 'tracked.txt') -Value 'changed' -NoNewline
+    Set-Content -LiteralPath (Join-Path $identityRepo 'untracked.txt') -Value 'first' -NoNewline
+    $identityOne = Get-Phase10WorktreeContentIdentity -WorkspaceRoot $identityRepo -GitCommand $gitCommand
+    Set-Content -LiteralPath (Join-Path $identityRepo 'untracked.txt') -Value 'second' -NoNewline
+    $identityTwo = Get-Phase10WorktreeContentIdentity -WorkspaceRoot $identityRepo -GitCommand $gitCommand
+    if ($identityOne.sha256 -eq $identityTwo.sha256 -or 'untracked.txt' -notin $identityOne.changedPaths) {
+        throw 'Worktree content identity must cover changed tracked and untracked file contents.'
+    }
+    Write-Host 'PASS dirty-worktree-content-identity-includes-untracked-files'
 } finally {
     Microsoft.PowerShell.Management\Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -40,7 +40,11 @@ function Invoke-Phase10Preview {
     else { Set-Content -LiteralPath $path -Value 'preview' }
     Set-Content -LiteralPath (Join-Path $Directory 'index.html') -Value 'offline report'
     if (-not $script:missingCoverageSummary) {
-        Set-Content -LiteralPath (Join-Path $Directory 'phase10-coverage-summary.json') -Value '{}'
+        $coverage = @{schema='phase10-sanitized-coverage-v2';provisional=$true;runId=(Split-Path -Leaf $Directory)}
+        if ($script:coverageRunIdMismatch) { $coverage.runId = 'different-run' }
+        if ($script:coverageSchemaMismatch) { $coverage.schema = 'unexpected-schema' }
+        $coverage |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Directory 'phase10-coverage-summary.json')
     }
     $services = @('sql-server','redis','azurite','servicebus-sql','servicebus-emulator','keycloak-local','orders','payments','inventory','notifications','gateway','ui','functions')
     foreach ($point in @('before','after')) {
@@ -83,6 +87,8 @@ try {
         @{ name='cleanup-failed'; input='passed'; previewFailure=$false; expected='failed'; failLock=$true },
         @{ name='oversized-preview'; input='passed'; previewFailure=$false; expected='failed'; oversized=$true },
         @{ name='missing-coverage-summary'; input='passed'; previewFailure=$false; expected='failed'; missingCoverage=$true },
+        @{ name='coverage-run-id-mismatch'; input='passed'; previewFailure=$false; expected='failed'; coverageRunIdMismatch=$true },
+        @{ name='coverage-schema-mismatch'; input='passed'; previewFailure=$false; expected='failed'; coverageSchemaMismatch=$true },
         @{ name='missing-image-manifest'; input='passed'; previewFailure=$false; expected='failed'; missingImage=$true }
     )) {
         $workspaceRoot = Join-Path $tempRoot $case.name
@@ -99,6 +105,8 @@ try {
         $script:previewFailure = $case.previewFailure
         $script:oversizedPreview = [bool]$case.oversized
         $script:missingCoverageSummary = [bool]$case.missingCoverage
+        $script:coverageRunIdMismatch = [bool]$case.coverageRunIdMismatch
+        $script:coverageSchemaMismatch = [bool]$case.coverageSchemaMismatch
         $script:missingImageManifest = [bool]$case.missingImage
         $script:failLockRemoval = [bool]$case.failLock
         $script:summaryFailures = if ($case.summaryFailures) { $case.summaryFailures } else { 0 }
@@ -126,7 +134,7 @@ try {
         $packetPath = Join-Path $runRoot 'acceptance-packet.json'
         $packet = if (Test-Path -LiteralPath $packetPath) { Get-Content -LiteralPath $packetPath -Raw | ConvertFrom-Json } else { $null }
         $saved = Get-Content -LiteralPath $runSummaryJsonPath -Raw | ConvertFrom-Json
-        $persistedExpected = if ($case.existingMarker -or $case.oversized -or $case.missingCoverage -or $case.missingImage) { 'passed' } else { $case.expected }
+        $persistedExpected = if ($case.existingMarker -or $case.oversized -or $case.missingCoverage -or $case.coverageRunIdMismatch -or $case.coverageSchemaMismatch -or $case.missingImage) { 'passed' } else { $case.expected }
         if (($null -ne $packet -and $packet.status -ne $persistedExpected) -or $saved.status -ne $persistedExpected) { throw "$($case.name): status was not preserved." }
         if (((Test-Path -LiteralPath $acceptanceLockPath) -ne [bool]$case.failLock) -or $env:PHASE10_RUN_ID -ne 'prior-id' -or $env:PHASE10_RUN_ROOT -ne 'prior-root') {
             throw "$($case.name): cleanup did not complete."
@@ -151,6 +159,8 @@ try {
                     throw "$($case.name): completion hash mismatch."
                 }
             }
+            $coverage = Get-Content -LiteralPath (Join-Path $runRoot 'phase10-coverage-summary.json') -Raw | ConvertFrom-Json
+            if ($coverage.runId -ne 'run' -or $coverage.provisional -ne $false) { throw "$($case.name): coverage was not finalized against the run identity." }
             Push-Location (Join-Path $root 'automation')
             try {
                 & node --import tsx 'src\cli\verify-phase10-completion.ts' $runRoot

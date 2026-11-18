@@ -6,8 +6,14 @@ export type FollowupStatus = "PASS" | "FAIL" | "BLOCKED" | "NOT-RUN" | "DEFERRED
 export interface FollowupGate { id: string; status: FollowupStatus; detail: string }
 export interface FollowupEvidence { id: string; path: string; sha256: string }
 export interface LocalFollowupInput {
-  e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; imageAfter: unknown };
-  current: { imageManifest: unknown; foundation: unknown; functions: unknown; nfr: unknown; burst: unknown; outage: unknown; rollback: unknown };
+  e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; imageAfter: unknown; restorationContract?: unknown };
+  noPaymentReport?: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; coverage: unknown };
+  current: {
+    imageManifest: unknown; foundation: unknown; functions: unknown; nfr: unknown; burst: unknown; outage: unknown; rollback: unknown;
+    persistence?: { summary: unknown; before: unknown; after: unknown; imageBefore: unknown; imageAfter: unknown };
+    operational?: { summary: unknown; imageManifest: unknown };
+    replay?: { messaging: unknown; restoration: unknown; functions: unknown; imageManifest: unknown };
+  };
   evidence: FollowupEvidence[];
 }
 export interface LocalFollowupReport {
@@ -44,6 +50,32 @@ function imagesMatchByBinary(left: Phase10ImageManifest, right: Phase10ImageMani
       item.repositoryDigests.join("\n") === other.repositoryDigests.join("\n");
   });
 }
+function sameCandidate(left: Phase10ImageManifest, right: Phase10ImageManifest): boolean {
+  return left.candidate.commit === right.candidate.commit && left.candidate.worktree === right.candidate.worktree &&
+    left.candidate.dirtyStatusSha256 === right.candidate.dirtyStatusSha256 &&
+    left.candidate.worktreeContentSha256 === right.candidate.worktreeContentSha256 &&
+    (left.candidate.changedPaths ?? []).join("\n") === (right.candidate.changedPaths ?? []).join("\n");
+}
+function snapshotRows(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return JSON.stringify(value);
+}
+function providerConfigurationMatches(e2eValue: unknown, currentValue: unknown): boolean {
+  const e2e = rec(e2eValue);
+  const current = rec(currentValue);
+  if (e2e?.status !== "passed" || current?.schema !== "phase10-payment-settings-snapshot-v1") return false;
+  const e2eTenants = records(e2e.tenants);
+  const currentTenants = records(current.tenants);
+  if (!e2eTenants.length || e2eTenants.length !== currentTenants.length) return false;
+  return e2eTenants.every((tenant, index) => {
+    const actual = currentTenants[index];
+    if (!actual || tenant.tenant !== actual.code || tenant.status !== actual.status || tenant.tier !== actual.tier ||
+        tenant.registryRoute !== actual.registryRoute || tenant.businessDatabase !== actual.businessDatabase) return false;
+    const expectedProviders = records(tenant.providers).map(item => ({ provider: item.provider, threeDs: item.threeDs, production: item.nonProduction === true ? false : item.production })).sort((a, b) => String(a.provider).localeCompare(String(b.provider)));
+    const actualProviders = records(actual.providers).map(item => ({ provider: item.provider, threeDs: item.threeDs, production: item.production })).sort((a, b) => String(a.provider).localeCompare(String(b.provider)));
+    return JSON.stringify(expectedProviders) === JSON.stringify(actualProviders);
+  });
+}
 
 export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalFollowupReport {
   const gates: FollowupGate[] = [];
@@ -59,7 +91,9 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
   for (const name of DOCKER_PACKET_STEPS) {
     const matches = steps.filter(step => step.name === name);
     const status = matches.length === 1 ? matches[0].status : undefined;
-    if (name === "order-continuation" && status === "failed") {
+    if (name === "persistence" && status === "not-run") {
+      gates.push({ id: "historical-e2e-persistence", status: "NOT-RUN", detail: "The sealed E2E packet did not run persistence; see the separate persistence evidence gate." });
+    } else if (name === "order-continuation" && status === "failed") {
       gates.push({ id: "historical-e2e-order-continuation", status: "FAIL", detail: "Recorded step failed; a DW-023 deferral cannot hide an execution failure." });
     } else if (name === "order-continuation" && matches.length === 1 && deferrals.includes("DW-023") &&
         ["blocked", "deferred", "not-run"].includes(String(status))) {
@@ -96,6 +130,24 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     `e2e=${String(e2eStart?.commit ?? "UNKNOWN")}/${String(e2eStart?.worktree ?? "UNKNOWN")};` +
       ` current=${String(currentManifest?.candidate.commit ?? "UNKNOWN")}/${String(currentManifest?.candidate.worktree ?? "UNKNOWN")}.`));
 
+  const changedPaths = currentManifest?.candidate.changedPaths ?? [];
+  const dirtyIdentityAvailable = !!currentManifest && currentManifest.candidate.worktree === "dirty" &&
+    /^[a-f0-9]{64}$/.test(currentManifest.candidate.worktreeContentSha256 ?? "") && changedPaths.length > 0;
+  const toolingOnlyChanges = changedPaths.every(path => path.startsWith("scripts/") || path.startsWith("automation/src/report/") ||
+    path === "automation/src/cli/reconcile-phase10-local-followup.ts" || path.startsWith("automation/src/cli/reconcile-phase10-local-followup") ||
+    path.startsWith("tools/Phase10.NfrProbe/") || path.startsWith("docs/"));
+  const nfrRecord = rec(input.current.nfr);
+  const settingsBefore = rec(nfrRecord?.paymentSettingsBefore);
+  const settingsAfter = rec(nfrRecord?.paymentSettingsAfter);
+  const settingsStable = nfrRecord?.paymentSettingsIntegrity === "passed" && !!settingsBefore && !!settingsAfter &&
+    JSON.stringify(settingsBefore) === JSON.stringify(settingsAfter);
+  const paymentConfigCompatible = settingsStable && providerConfigurationMatches(input.e2e.restorationContract, settingsBefore);
+  const paymentCompatible = !!e2eStart && !!currentManifest && e2eStart.commit === currentManifest.candidate.commit &&
+    imageBinaryMatch === true && (currentManifest.candidate.worktree === "clean" || (dirtyIdentityAvailable && toolingOnlyChanges)) && paymentConfigCompatible;
+  gates.push(gate("historical-e2e-payment-compatibility", paymentCompatible,
+    paymentCompatible ? "E2E source commit and all service images match; the content-addressed diff is tooling-only and current payment settings match the recorded baseline." :
+      "Historical payment evidence cannot be reused: source/image identity, content-addressed tooling-only diff, or payment configuration compatibility is not fully proven."));
+
   const foundation = rec(input.current.foundation);
   const foundationResults = records(foundation?.results);
   const foundationPass = foundation?.status === "passed" && foundationResults.length > 0 &&
@@ -114,8 +166,17 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
 
   const nfr = rec(input.current.nfr);
   const categories = rec(nfr?.categories);
-  const operational = rec(categories?.operational);
-  const recoveryCategory = rec(categories?.recovery);
+  const operationalEvidence = input.current.operational;
+  const operationalSummary = rec(operationalEvidence?.summary);
+  const operationalCategories = rec(operationalSummary?.categories);
+  const operational = rec(operationalCategories?.operational);
+  const recoveryCategory = rec(operationalCategories?.recovery);
+  const operationalSelected = operational?.execution === "selected";
+  const recoverySelected = recoveryCategory?.execution === "selected";
+  const operationalImageResult = validatePhase10ImageManifest(operationalEvidence?.imageManifest, undefined, "after");
+  const operationalManifest = operationalImageResult.status === "PASS" ? operationalImageResult.manifest : undefined;
+  const operationalImageBound = !!currentManifest && !!operationalManifest && sameCandidate(currentManifest, operationalManifest) &&
+    imagesMatchByBinary(currentManifest, operationalManifest);
   const burst = rec(input.current.burst);
   const burstCounts = ["InventoryInboxCount", "NotificationsInboxCount", "InventoryEffectCount", "NotificationEffectCount"]
     .map(key => number(burst?.[key]));
@@ -127,8 +188,8 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     outage?.lostMessages === 0 && outage?.duplicateEffects === 0 && number(outage?.p95Seconds) !== undefined &&
     number(outage?.p95Seconds)! < 30 && number(outage?.backlogRecoverySeconds) !== undefined &&
     number(outage?.backlogRecoverySeconds)! <= 1800 && outage?.restorationStatus === "passed" && outage?.environmentRestored === true;
-  gates.push(gate("current-image-operational-and-outage", operational?.status === "passed" && burstPass && outagePass,
-    `operational=${String(operational?.status ?? "UNKNOWN")}; burst100=${burstPass}; outage100=${outagePass}.`,
+  gates.push(gate("current-image-operational-and-outage", operational?.status === "passed" && operationalSelected && burstPass && outagePass && operationalImageBound,
+    `operational=${String(operational?.status ?? "UNKNOWN")}; execution=${String(operational?.execution ?? "UNKNOWN")}; burst100=${burstPass}; outage100=${outagePass}; sameCandidateAndImages=${operationalImageBound}.`,
     operational?.status === "failed" || burst?.Status === "failed" || outage?.status === "failed" ||
       outage?.environmentRestored === false || outage?.restorationStatus === "failed"));
 
@@ -136,18 +197,89 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
   const rollbackPass = rollback?.status === "passed" && rollback.rollbackObserved === true && rollback.currentImageRestored === true &&
     rollback.databaseRollback === false && typeof rollback.previousImageId === "string" && typeof rollback.currentImageId === "string" &&
     rollback.previousImageId !== rollback.currentImageId;
-  gates.push(gate("current-image-rollback-and-restore", recoveryCategory?.status === "passed" && rollbackPass,
-    `recoveryCategory=${String(recoveryCategory?.status ?? "UNKNOWN")}; rollback=${rollbackPass}.`,
+  gates.push(gate("current-image-rollback-and-restore", recoveryCategory?.status === "passed" && recoverySelected && rollbackPass && operationalImageBound,
+    `recoveryCategory=${String(recoveryCategory?.status ?? "UNKNOWN")}; execution=${String(recoveryCategory?.execution ?? "UNKNOWN")}; rollback=${rollbackPass}; sameCandidateAndImages=${operationalImageBound}.`,
     recoveryCategory?.status === "failed" || rollback?.status === "failed" || rollback?.currentImageRestored === false));
 
-  const missingNfr = ["functional", "performance", "tenant", "payments", "security"]
-    .filter(name => rec(categories?.[name])?.status !== "passed");
-  const failedNfr = ["functional", "performance", "tenant", "payments", "security"]
-    .some(name => rec(categories?.[name])?.status === "failed");
+  const persistence = input.current.persistence;
+  const persistenceSummary = rec(persistence?.summary);
+  const beforeRows = snapshotRows(persistence?.before);
+  const afterRows = snapshotRows(persistence?.after);
+  const persistenceBeforeImage = validatePhase10ImageManifest(persistence?.imageBefore, undefined, "before");
+  const persistenceAfterImage = validatePhase10ImageManifest(persistence?.imageAfter, undefined, "after");
+  const persistenceBeforeManifest = persistenceBeforeImage.status === "PASS" ? persistenceBeforeImage.manifest : undefined;
+  const persistenceAfterManifest = persistenceAfterImage.status === "PASS" ? persistenceAfterImage.manifest : undefined;
+  const persistenceBound = !!currentManifest && !!persistenceBeforeManifest && !!persistenceAfterManifest &&
+    persistenceSummary?.status === "passed" && persistenceSummary.imageIdentitiesUnchanged === true &&
+    persistenceSummary.disk === "G:\\DockerStorage\\DockerDesktopWSL" && typeof persistenceSummary.sqlVolume === "string" &&
+    beforeRows !== undefined && beforeRows === afterRows && phase10ImageSetsMatch(persistenceBeforeManifest, persistenceAfterManifest) &&
+    sameCandidate(currentManifest, persistenceAfterManifest) && imagesMatchByBinary(currentManifest, persistenceAfterManifest);
+  gates.push(gate("current-image-persistence", persistenceBound,
+    persistenceBound ? "Known tenant/order rows and SQL volume persisted across Docker Desktop restart; before/after image identities match the selected NFR candidate." :
+      "Separate persistence evidence is missing, not run, or cannot be bound to unchanged before/after images and the selected NFR candidate.",
+    persistenceSummary?.status === "failed"));
+
+  const replay = input.current.replay;
+  const messaging = rec(replay?.messaging);
+  const replayRestoration = rec(replay?.restoration);
+  const replayFunctions = rec(replay?.functions);
+  const replayImageResult = validatePhase10ImageManifest(replay?.imageManifest, undefined, "after");
+  const replayManifest = replayImageResult.status === "PASS" ? replayImageResult.manifest : undefined;
+  const replayImageBound = !!currentManifest && !!replayManifest && sameCandidate(currentManifest, replayManifest) &&
+    imagesMatchByBinary(currentManifest, replayManifest);
+  const replayEffectPass = messaging?.Status === "passed" && typeof messaging.ExpectedMessages === "number" && messaging.ExpectedMessages > 0 &&
+    [messaging.InventoryInboxCount, messaging.NotificationsInboxCount, messaging.InventoryEffectCount, messaging.NotificationEffectCount]
+      .every(value => typeof value === "number" && value === messaging.ExpectedMessages) &&
+    replayRestoration?.status === "passed" && replayRestoration.effectiveSettingMatches === true &&
+    replayFunctions?.status === "passed" && replayFunctions.approvalSubmissionAttempts === 1 &&
+    replayFunctions.approvalResubmitted === false && replayImageBound;
+  gates.push(gate("current-image-replay", replayEffectPass,
+    `messaging=${String(messaging?.Status ?? "UNKNOWN")}; restoration=${String(replayRestoration?.status ?? "UNKNOWN")};` +
+      ` functions=${String(replayFunctions?.status ?? "UNKNOWN")}; sameCandidateAndImages=${replayImageBound}.` ,
+    messaging?.Status === "failed" || replayRestoration?.status === "failed" || replayFunctions?.status === "failed"));
+
+  const missingNfr = ["functional", "tenant", "security"].filter(name => rec(categories?.[name])?.status !== "passed");
+  if (rec(categories?.payments)?.integrationStatus !== "passed" || !paymentCompatible) missingNfr.push("payments-integration-or-compatible-sandbox-evidence");
+  if (!burstPass || !operationalImageBound || !operationalSelected) missingNfr.push("performance-evidence");
+  const failedNfr = ["functional", "tenant", "security"].some(name => rec(categories?.[name])?.status === "failed") ||
+    rec(categories?.payments)?.integrationStatus === "failed";
   gates.push(gate("full-current-image-nfr-categories", missingNfr.length === 0,
-    missingNfr.length ? `Not proven in current NFR run: ${missingNfr.map(name => `${name}=${String(rec(categories?.[name])?.status ?? "missing")}`).join(", " )}.` :
-      "All required NFR categories passed for current images.", failedNfr));
+    missingNfr.length ? `Not proven for the selected candidate: ${missingNfr.join(", ")}.` :
+      "Required current NFR categories and compatible historical sandbox evidence are independently proven.", failedNfr));
+
+  const evidenceIds = input.evidence.map(item => item.id);
+  const evidenceValid = evidenceIds.length === new Set(evidenceIds).size && input.evidence.every(item =>
+    typeof item.id === "string" && !!item.id && typeof item.path === "string" && item.path.startsWith("TestResults/") &&
+    !item.path.startsWith("/") && !/(^|\/)\.\.?($|\/)/.test(item.path) && /^[a-f0-9]{64}$/.test(item.sha256));
+  gates.push(gate("source-evidence-integrity", evidenceValid,
+    evidenceValid ? `${input.evidence.length} unique TestResults artifacts have canonical SHA-256 identities.` :
+      "Evidence list has duplicate IDs, unsafe paths, or malformed SHA-256 values.", !evidenceValid));
   gates.push({ id: "azure-acceptance", status: "NOT-RUN", detail: "Azure is excluded from this local follow-up report." });
+
+  const noPayment = input.noPaymentReport;
+  if (noPayment) {
+    const noPaymentSummary = rec(noPayment.summary);
+    const noPaymentPacket = rec(noPayment.packet);
+    const coverage = rec(noPayment.coverage);
+    const noPaymentSteps = records(noPaymentPacket?.steps);
+    const paymentSteps = ["payments-deterministic", "sandbox-payments"].map(name =>
+      noPaymentSteps.filter(step => step.name === name));
+    const identityStart = rec(rec(noPaymentSummary?.gitProvenance)?.start);
+    const identityFinish = rec(rec(noPaymentSummary?.gitProvenance)?.finish);
+    const valid = noPayment.completion === "COMPLETE" && noPayment.completionStatus === "partial" &&
+      noPaymentSummary?.status === "partial" && noPaymentPacket?.status === "partial" &&
+      typeof noPaymentSummary.runId === "string" && /^phase10-docker-http-\d{8}-\d{9}$/.test(noPaymentSummary.runId) &&
+      noPaymentPacket.runRoot === noPaymentSummary.runRoot &&
+      typeof noPaymentSummary.runRoot === "string" && noPaymentSummary.runRoot.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) === noPaymentSummary.runId &&
+      noPaymentSummary.paymentSuite === "none" && coverage?.schema === "phase10-sanitized-coverage-v2" &&
+      coverage.runId === noPaymentSummary.runId && coverage.provisional === false &&
+      noPaymentSteps.length > 0 && !noPaymentSteps.some(step => step.status === "failed") &&
+      paymentSteps.every(matches => matches.length === 1 && matches[0].status === "not-run") &&
+      typeof identityStart?.contentIdentity === "string" && /^[a-f0-9]{64}$/.test(identityStart.contentIdentity) &&
+      identityFinish?.contentIdentity === identityStart.contentIdentity;
+    gates.push(gate("no-payment-report-finalization", valid,
+      `completion=${noPayment.completion}/${String(noPayment.completionStatus ?? "UNKNOWN")}; runId=${String(noPaymentSummary?.runId ?? "UNKNOWN")}; coverageFinalized=${coverage?.provisional === false}; paymentStepsNotRun=${paymentSteps.every(matches => matches.length === 1 && matches[0].status === "not-run")}.`));
+  }
 
   const anyFail = gates.some(item => item.status === "FAIL");
   return {

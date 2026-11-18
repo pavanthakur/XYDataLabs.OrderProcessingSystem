@@ -1,5 +1,15 @@
 # Phase 10 fresh Docker storage on G:
 
+## Supplemental local acceptance follow-up — 18 November 2026
+
+The current non-Azure reconciliation is `TestResults/Phase10/local-followup-20261118-022000/index.html` and `local-followup.json`; its verdict is **INCOMPLETE**, not overall Phase 10 PASS. It is bound to base commit `9fa6160c18616003ad6d6aaa14753183d20c4c71` plus a dirty-worktree content identity.
+
+The no-payment Docker E2E run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261118-014011896/` passed selected foundations, isolated integration, identity/tenant routing, currency/order entry, messaging/Functions, settings restoration and Docker Desktop restart persistence. Its payment suite was `none`: do not interpret this run as fresh payment acceptance. Current-image NFR runs are `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261118-013113758/` (operational/recovery/rollback) and `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261118-013233653/` (selected no-charge functional/tenant/security/provider-integration). The supplemental reconciler verifies historical 17 November payment evidence only for matching service image identities and unchanged payment configuration; source-candidate cleanliness remains BLOCKED. DW-023 is still deferred, Azure was not run, and no charges/reset/prune/compaction occurred in this follow-up.
+
+Read-only storage evidence reports the configured G: Docker path, about 437.7 GiB free, about 0.28 GiB SQL allocation and correct `10m × 3` rotation for 13 services. This is a point-in-time manifest, not a guarantee of current free space. The F: retained copy was deleted and is not a recovery option.
+
+To open the generated report locally, use the `index.html` above. To reproduce reconciliation, inspect the CLI's current options first (`npm --prefix automation run report:phase10-local-followup -- --help`) and supply the existing historical E2E report plus each current run's evidence directory (the NFR `nfr` subdirectory where the CLI expects `summary.json`); never overwrite a sealed historical report. The latest report is supplemental and does not close Phase 10 while the candidate is dirty or required gates remain deferred/not run.
+
 ## Local replay publisher/consumer proof (16 November follow-up)
 
 Replay requires both Orders approval publication and Functions consumption. Normal Compose keeps `LOCAL_SERVICEBUS_APPROVAL_PUBLISHER_ENABLED` and `LOCAL_SERVICEBUS_REPLAY_ENABLED` false. The local messaging hook snapshots both effective values, refuses unrelated pending approvals, enables both temporarily, and restores/verifies both in `finally`. Do not enable the publisher blindly: it can release every unpublished approved replay request.
