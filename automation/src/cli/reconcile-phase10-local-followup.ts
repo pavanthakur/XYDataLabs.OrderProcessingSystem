@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyPhase10Completion } from "../report/phase10-completion.js";
 import { reconcilePhase10LocalFollowup, renderPhase10LocalFollowupHtml } from "../report/phase10-local-followup.js";
+import { capturePhase10WorktreeIdentity } from "../report/phase10-worktree-identity.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const testResultsRoot = resolve(repoRoot, "TestResults");
@@ -76,8 +77,147 @@ async function optionalJson(path: string): Promise<unknown | undefined> {
   return json(path);
 }
 
+interface PaymentArtifactCollection { valid: boolean; files: Array<{ id: string; path: string }> }
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+async function paymentMatrixArtifactsAreNestedInRun(e2eRoot: string, paths: string[], matrices: unknown[]): Promise<PaymentArtifactCollection> {
+  const files: PaymentArtifactCollection["files"] = [];
+  if (paths.length !== 3 || matrices.length !== 3) return { valid: false, files };
+  let valid = true;
+  for (let index = 0; index < paths.length; index++) {
+    const summaryPath = await safePath(paths[index]);
+    const summaryRelative = relative(e2eRoot, summaryPath).split(sep);
+    if (summaryRelative[0]?.toLowerCase() !== "payments" || summaryRelative.at(-1)?.toLowerCase() !== "summary.json") return { valid: false, files };
+    const summary = asRecord(matrices[index]);
+    const expectedMode = index === 0 ? "deterministic" : "sandbox";
+    const expectedNegative = index === 2;
+    if (!summary || summary.mode !== expectedMode || summary.negative !== expectedNegative) return { valid: false, files };
+    const groups = summary.results;
+    if (!Array.isArray(groups) || groups.length === 0) return { valid: false, files };
+    const matrixRoot = dirname(summaryPath);
+    for (const group of groups) {
+      const entry = asRecord(group);
+      if (!entry) { valid = false; continue; }
+      if (typeof entry.reportDirectory !== "string") {
+        const explicitCapabilityBlock = entry.status === "blocked" &&
+          ((entry.provider === "Razorpay" && entry.threeDs === true) || entry.provider === "OpenPay");
+        if (explicitCapabilityBlock) continue;
+        valid = false;
+        continue;
+      }
+      let reportDirectory: string;
+      try { reportDirectory = await safePath(entry.reportDirectory, true); }
+      catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") { valid = false; continue; }
+        throw error;
+      }
+      const artifactsRelative = relative(e2eRoot, reportDirectory).split(sep);
+      const inMatrixRoot = relative(matrixRoot, reportDirectory);
+      const runId = typeof entry.runId === "string" ? entry.runId : "";
+      const rows = Array.isArray(entry.rows) ? entry.rows.map(asRecord).filter((row): row is Record<string, unknown> => !!row) : [];
+      if (artifactsRelative[0]?.toLowerCase() !== "payments" || !inMatrixRoot || inMatrixRoot.startsWith("..") || isAbsolute(inMatrixRoot) ||
+          !runId || basename(reportDirectory) !== runId || rows.length === 0) { valid = false; continue; }
+
+      const artifactPaths = new Map<string, string>();
+      const addArtifact = (id: string, path: string) => artifactPaths.set(id, path);
+      addArtifact("summary", join(reportDirectory, "summary.json"));
+      addArtifact("validated-rows", join(reportDirectory, "acceptance-validated-rows.json"));
+      addArtifact("provider-dependencies", join(reportDirectory, "provider-dependencies.json"));
+      const validatedRowsValue = await optionalJson(join(reportDirectory, "acceptance-validated-rows.json"));
+      const validatedRows = Array.isArray(validatedRowsValue) ? validatedRowsValue.map(asRecord).filter((row): row is Record<string, unknown> => !!row) : [];
+      const dependenciesValue = asRecord(await optionalJson(join(reportDirectory, "provider-dependencies.json")));
+      const runSummary = asRecord(await optionalJson(join(reportDirectory, "summary.json")));
+      if (!validatedRowsValue || !dependenciesValue || !runSummary) valid = false;
+      const dependencyEvidence = Array.isArray(dependenciesValue?.evidence) ? dependenciesValue.evidence.filter((item): item is string => typeof item === "string").join("\n") : "";
+      const mode = rows[0]?.adapterMode;
+      const provider = rows[0]?.paymentProvider;
+      const expectedSimulation = mode === "deterministic" ? "Simulation=True" : "Simulation=False";
+      if (entry.runId !== runSummary?.runId || dependenciesValue?.mode !== mode ||
+          !dependencyEvidence.includes(`Provider=${String(provider)}`) || !dependencyEvidence.includes(expectedSimulation) ||
+          !dependencyEvidence.includes("Operation=create-charge")) valid = false;
+
+      for (const [rowIndex, row] of rows.entries()) {
+        const tenant = typeof row.tenantCode === "string" ? row.tenantCode : "";
+        const providerCode = typeof row.paymentProvider === "string" ? row.paymentProvider.toLowerCase() : "";
+        const outcome = row.journeyOutcome;
+        if (!tenant || tenant !== basename(tenant) || tenant === "." || tenant === ".." ||
+            !providerCode || providerCode !== basename(providerCode) || providerCode === "." || providerCode === ".." ||
+            row.runId !== runId || row.adapterMode !== mode || row.paymentProvider !== provider ||
+            !validatedRows.some(candidate => candidate.runId === runId && candidate.tenantCode === tenant && candidate.paymentProvider === provider &&
+              candidate.orderId === row.orderId && candidate.orderReferenceId === row.orderReferenceId && candidate.journeyOutcome === outcome)) valid = false;
+        const caseDirectory = join(reportDirectory, tenant, providerCode);
+        const caseRelative = relative(reportDirectory, caseDirectory);
+        if (!caseRelative || caseRelative.startsWith("..") || isAbsolute(caseRelative)) { valid = false; continue; }
+        const ledgerPath = join(caseDirectory, "case-ledger.json");
+        const ledger = asRecord(await optionalJson(ledgerPath));
+        const anchors = asRecord(ledger?.anchors);
+        const ledgerRow = asRecord(ledger?.row);
+        const expectedSqlName = outcome === "completed" ? "positive-sql-proof.json" : "negative-sql-proof.json";
+        const sqlPath = join(reportDirectory, expectedSqlName);
+        const sqlProof = asRecord(await optionalJson(sqlPath));
+        addArtifact(`case-${rowIndex}-ledger`, ledgerPath);
+        addArtifact(`case-${rowIndex}-sql-proof`, sqlPath);
+        if (!ledger || !anchors || !ledgerRow || !sqlProof || ledger.tenantCode !== tenant || ledger.provider !== provider ||
+            anchors.orderId !== row.orderId || anchors.orderReferenceId !== row.orderReferenceId || anchors.amount !== row.orderAmount ||
+            anchors.currency !== row.orderCurrencyCode || ledger.verification !== "passed" || ledger.restoration !== "passed" ||
+            ledgerRow.tenantCode !== tenant || ledgerRow.orderId !== row.orderId || ledgerRow.orderReferenceId !== row.orderReferenceId ||
+            sqlProof.tenantCode !== tenant || sqlProof.orderId !== row.orderId || sqlProof.status !== "passed") valid = false;
+
+        if (outcome === "completed") {
+          const confirmationPath = join(caseDirectory, "provider-confirmation.json");
+          const confirmation = asRecord(await optionalJson(confirmationPath));
+          const providerResult = asRecord(confirmation?.confirmation);
+          const verificationPath = join(reportDirectory, `${tenant}-${providerCode}-verification-report.json`);
+          const verification = asRecord(await optionalJson(verificationPath));
+          const checks = asRecord(verification?.Checks);
+          const correlation = Array.isArray(verification?.ChargeCorrelation) ? verification!.ChargeCorrelation.map(asRecord).filter((item): item is Record<string, unknown> => !!item) : [];
+          const paymentId = typeof providerResult?.paymentId === "string" ? providerResult.paymentId : "";
+          addArtifact(`case-${rowIndex}-provider-confirmation`, confirmationPath);
+          addArtifact(`case-${rowIndex}-verification-report`, verificationPath);
+          if (!confirmation || !providerResult || !verification || !checks || !correlation.length || !paymentId ||
+              confirmation.tenant !== tenant || confirmation.orderId !== row.orderId || confirmation.orderReferenceId !== row.orderReferenceId ||
+              confirmation.amount !== row.orderAmount || confirmation.currency !== row.orderCurrencyCode || confirmation.adapterMode !== mode ||
+              providerResult.status !== "completed" || providerResult.remoteStatusConfirmed !== true || providerResult.isSuccess !== true ||
+              providerResult.providerAmount !== row.orderAmount || (mode === "sandbox" && providerResult.providerCurrency !== row.orderCurrencyCode) ||
+              ledger?.mutation !== "provider-confirmed" || anchors?.providerPaymentId !== paymentId ||
+              !dependencyEvidence.includes(paymentId) || sqlProof?.expectedOutcome !== "success" || sqlProof.orderStatus !== "Paid" ||
+              sqlProof.successfulCharges !== 1 || sqlProof.allAttempts !== 1 || sqlProof.failedAttempts !== 0 || sqlProof.allPayinLogs !== 1 ||
+              Object.values(checks).some(check => asRecord(check)?.Outcome !== "PASS") ||
+              !correlation.some(item => item.Tenant === tenant && item.CustomerOrderId === row.customerOrderId && item.ChargeId === paymentId &&
+                item.InDb === true && item.UiCallbackLogged === true)) valid = false;
+          addArtifact(`case-${rowIndex}-provider-dependencies`, join(reportDirectory, "provider-dependencies.json"));
+          if (mode !== "deterministic" && !dependencyEvidence.includes("Operation=fetch-charge")) valid = false;
+        } else {
+          const expected = outcome === "expected-failure" ? "failure" : "cancelled";
+          const expectedFailed = expected === "failure" ? 1 : 0;
+          if (mode !== "sandbox" || provider !== "Razorpay" || sqlProof?.expectedOutcome !== expected || sqlProof.orderStatus !== "Created" ||
+              sqlProof.successfulCharges !== 0 || sqlProof.allAttempts !== 1 || sqlProof.failedAttempts !== expectedFailed ||
+              sqlProof.allPayinLogs !== 1 || ledger?.mutation !== "submission-started" || ledgerRow?.journeyOutcome !== outcome ||
+              (expected === "failure" && !dependencyEvidence.includes("Operation=fetch-charge"))) valid = false;
+        }
+      }
+      for (const [artifactId, path] of artifactPaths) {
+        try { const realPath = await safePath(path); files.push({ id: `payment-${files.length}-${artifactId}`, path: realPath }); }
+        catch (error) {
+          if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") valid = false;
+          else throw error;
+        }
+      }
+    }
+  }
+  return { valid, files };
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+  const usage = "Usage: report:phase10-local-followup -- --e2e <run-dir> --no-payment-report <sealed-no-payment-run-dir> --foundation <summary.json> --functions <functions-proof.json> --nfr-root <selected-nfr-dir> --image-manifest <selected-nfr-after.json> --operational-root <ops-nfr-dir> --operational-image-manifest <ops-after.json> --persistence-dir <persistence-run-dir> --replay-dir <replay-evidence-dir> --replay-image-manifest <replay-after.json> [--deterministic-payment-summary <summary.json> --sandbox-payment-summary <summary.json> --sandbox-negative-summary <summary.json>] [--customer-directory-retry-summary <summary.json>] --out <new-TestResults-dir>";
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(usage);
+    return;
+  }
   const option = (name: string) => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };
   const e2eArg = option("--e2e");
   const foundationArg = option("--foundation");
@@ -90,10 +230,19 @@ async function main(): Promise<void> {
   const persistenceRootArg = option("--persistence-dir");
   const replayRootArg = option("--replay-dir");
   const replayImageArg = option("--replay-image-manifest");
+  const deterministicPaymentArg = option("--deterministic-payment-summary");
+  const sandboxPaymentArg = option("--sandbox-payment-summary");
+  const sandboxNegativeArg = option("--sandbox-negative-summary");
+  const customerRetryArg = option("--customer-directory-retry-summary");
   const outputArg = option("--out");
-  if (!e2eArg || !foundationArg || !functionsArg || !nfrArg || !imageArg || !outputArg) {
-    throw new Error("Usage: report:phase10-local-followup -- --e2e <run-dir> --no-payment-report <sealed-no-payment-run-dir> --foundation <summary.json> --functions <functions-proof.json> --nfr-root <selected-nfr-dir> --image-manifest <selected-nfr-after.json> --operational-root <ops-nfr-dir> --operational-image-manifest <ops-after.json> --persistence-dir <persistence-run-dir> --replay-dir <replay-evidence-dir> --replay-image-manifest <replay-after.json> --out <new-TestResults-dir>");
+  const paymentArgs = [deterministicPaymentArg, sandboxPaymentArg, sandboxNegativeArg];
+  if (paymentArgs.some(Boolean) && !paymentArgs.every(Boolean)) {
+    throw new Error("Provide all three payment summary options together; partial matrix evidence is not accepted.");
   }
+  if (!e2eArg || !foundationArg || !functionsArg || !nfrArg || !imageArg || !outputArg) {
+    throw new Error(usage);
+  }
+  const liveSourceIdentity = capturePhase10WorktreeIdentity(repoRoot);
 
   const e2eRoot = await safePath(e2eArg, true);
   const nfrRoot = await safePath(nfrArg, true);
@@ -101,18 +250,29 @@ async function main(): Promise<void> {
   const operationalRoot = operationalRootArg ? await safePath(operationalRootArg, true) : nfrRoot;
   const persistenceRoot = persistenceRootArg ? await safePath(persistenceRootArg, true) : undefined;
   const replayRoot = replayRootArg ? await safePath(replayRootArg, true) : undefined;
+  const paymentMatrixSummaries = paymentArgs.every(Boolean) ? await Promise.all(paymentArgs.map(path => json(path!))) : undefined;
+  const paymentMatrixArtifactCollection = paymentMatrixSummaries
+    ? await paymentMatrixArtifactsAreNestedInRun(e2eRoot, paymentArgs as string[], paymentMatrixSummaries)
+    : { valid: false, files: [] };
   const e2eFile = (name: string) => join(e2eRoot, name);
+  const e2eRestorationFile = await (async () => {
+    for (const name of ["restoration-contract.json", "baseline-after-payment.json"]) {
+      try { await lstat(e2eFile(name)); return e2eFile(name); }
+      catch (error) { if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error; }
+    }
+    throw new Error("E2E restoration/configuration evidence is missing.");
+  })();
   const nfrFile = (name: string) => join(nfrRoot, name);
   const operationalFile = (name: string) => join(operationalRoot, name);
   const persistenceFile = (name: string) => persistenceRoot ? join(persistenceRoot, name) : undefined;
   const replayFile = (name: string) => replayRoot ? join(replayRoot, name) : undefined;
   const e2eCompletion = await verifyPhase10Completion(e2eRoot);
-  const [packet, e2eSummary, e2eImage, restorationContract, foundation, functions, nfrRaw, burst, outage, rollback, currentImage,
+  const [packet, e2eSummary, e2eImageBefore, e2eImage, restorationContract, foundation, functions, nfrRaw, burst, outage, rollback, currentImage,
     paymentSettingsBefore, paymentSettingsAfter, operationsSummary, operationsImage, persistenceSummary, persistenceBefore,
     persistenceAfter, persistenceImageBefore, persistenceImageAfter, replayMessaging, replayRestoration, replayFunctions, replayImage,
     noPaymentSummary, noPaymentPacket, noPaymentCoverage] = await Promise.all([
-    json(e2eFile("acceptance-packet.json")), json(e2eFile("run-summary.json")), json(e2eFile("docker-image-identities-after.json")),
-    json(e2eFile("restoration-contract.json")), json(foundationArg), json(functionsArg), json(nfrFile("summary.json")),
+    json(e2eFile("acceptance-packet.json")), json(e2eFile("run-summary.json")), json(e2eFile("docker-image-identities-before.json")), json(e2eFile("docker-image-identities-after.json")),
+    json(e2eRestorationFile), json(foundationArg), json(functionsArg), json(nfrFile("summary.json")),
     optionalJson(operationalFile("operational-100-message-burst.json")), optionalJson(operationalFile("consumer-outage-drill.json")),
     optionalJson(operationalFile("rollback-evidence.json")), json(imageArg),
     optionalJson(nfrFile("payment-settings-before.json")), optionalJson(nfrFile("payment-settings-after.json")),
@@ -136,8 +296,9 @@ async function main(): Promise<void> {
     evidence("e2e-acceptance-packet", e2eFile("acceptance-packet.json")),
     evidence("e2e-run-summary", e2eFile("run-summary.json")),
     evidence("e2e-completion", e2eFile("phase10-completion.json")),
+    evidence("e2e-image-manifest-before", e2eFile("docker-image-identities-before.json")),
     evidence("e2e-image-manifest", e2eFile("docker-image-identities-after.json")),
-    evidence("e2e-restoration-contract", e2eFile("restoration-contract.json")),
+    evidence("e2e-restoration-contract", e2eRestorationFile),
     evidence("current-foundation", foundationArg), evidence("current-functions", functionsArg),
     evidence("current-nfr-summary", nfrFile("summary.json")), evidence("current-image-manifest", imageArg),
     optionalEvidence("current-payment-settings-before", nfrFile("payment-settings-before.json")),
@@ -152,6 +313,9 @@ async function main(): Promise<void> {
     ...(["messaging-proof.json", "replay-restoration.json", "functions-proof.json"] as const)
       .map((name, index) => replayFile(name) ? optionalEvidence(`replay-${index}`, replayFile(name)!) : Promise.resolve(undefined)),
     replayImageArg ? optionalEvidence("replay-image-manifest", replayImageArg) : Promise.resolve(undefined),
+    ...(paymentMatrixSummaries ? await Promise.all(paymentArgs.map((path, index) => evidence(["payment-deterministic-matrix", "payment-sandbox-positive-matrix", "payment-sandbox-negative-matrix"][index], path!))) : []),
+    ...await Promise.all(paymentMatrixArtifactCollection.files.map(item => evidence(item.id, item.path))),
+    customerRetryArg ? evidence("customer-directory-isolated-retry", customerRetryArg) : Promise.resolve(undefined),
     ...(noPaymentRoot ? await Promise.all(["run-summary.json", "acceptance-packet.json", "phase10-coverage-summary.json", "phase10-completion.json"]
       .map(name => optionalEvidence(`no-payment-report-${name}`, join(noPaymentRoot, name)))) : [])
   ])).filter((item): item is NonNullable<typeof item> => item !== undefined);
@@ -160,11 +324,18 @@ async function main(): Promise<void> {
   const report = reconcilePhase10LocalFollowup({
     e2e: { completion: e2eCompletion.state,
       completionStatus: e2eCompletion.state === "COMPLETE" ? e2eCompletion.status : undefined,
-      packet, summary: e2eSummary, imageAfter: e2eImage, restorationContract },
+      packet, summary: e2eSummary, imageBefore: e2eImageBefore, imageAfter: e2eImage, restorationContract },
     noPaymentReport: noPaymentRoot ? { completion: noPaymentCompletion?.state ?? "INCOMPLETE", completionStatus: noPaymentCompletionStatus,
       packet: noPaymentPacket, summary: noPaymentSummary, coverage: noPaymentCoverage } : undefined,
     current: { imageManifest: currentImage, foundation, functions, nfr, burst, outage, rollback,
+      sourceIdentity: liveSourceIdentity,
       operational: { summary: operationsSummary, imageManifest: operationsImage },
+      paymentMatrices: paymentMatrixSummaries ? {
+        deterministic: paymentMatrixSummaries[0], sandboxPositive: paymentMatrixSummaries[1], sandboxNegative: paymentMatrixSummaries[2]
+      } : undefined,
+      paymentMatrixSource: { summariesAndArtifactsNestedInE2e: paymentMatrixSummaries !== undefined && paymentMatrixArtifactCollection.valid,
+        caseArtifactsHashedAndCorrelated: paymentMatrixSummaries !== undefined && paymentMatrixArtifactCollection.valid },
+      customerDirectoryRetry: customerRetryArg ? await json(customerRetryArg) : undefined,
       persistence: { summary: persistenceSummary, before: persistenceBefore, after: persistenceAfter,
         imageBefore: persistenceImageBefore, imageAfter: persistenceImageAfter },
       replay: { messaging: replayMessaging, restoration: replayRestoration, functions: replayFunctions, imageManifest: replayImage } },
@@ -181,7 +352,8 @@ async function main(): Promise<void> {
     throw new Error("Output must be a new directory beneath TestResults/Phase10.");
   }
   await mkdir(output, { recursive: false });
-  const links = new Map(evidenceFiles.map(item => [item.id,
+  const unlinkedEvidence = new Set(["payment-deterministic-matrix", "payment-sandbox-positive-matrix", "payment-sandbox-negative-matrix", "customer-directory-isolated-retry"]);
+  const links = new Map(evidenceFiles.filter(item => !unlinkedEvidence.has(item.id)).map(item => [item.id,
     relative(output, item.realPath).split(sep).map(segment => encodeURIComponent(segment)).join("/")]));
   const jsonOutput = join(output, "local-followup.json");
   const htmlOutput = join(output, "index.html");

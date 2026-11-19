@@ -30,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
 $Categories = @($Categories | ForEach-Object { ([string]$_ -split ',') } | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
-$unsupportedCategories = @($Categories | Where-Object { $_ -notin @('functional', 'tenant', 'payments', 'security') })
+$unsupportedCategories = @($Categories | Where-Object { $_ -notin @('functional', 'performance', 'tenant', 'payments', 'security') })
 if ($unsupportedCategories.Count -gt 0) { throw "Unsupported targeted NFR categories: $($unsupportedCategories -join ', ')." }
 if ($OperationalOnly -and $Categories.Count -gt 0) {
     throw '-OperationalOnly cannot be combined with -Categories; select one NFR profile.'

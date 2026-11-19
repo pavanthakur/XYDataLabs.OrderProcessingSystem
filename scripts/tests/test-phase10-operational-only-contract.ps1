@@ -21,6 +21,9 @@ if ($dockerWrapper -notmatch '\$Categories\s*=\s*@\(\$Categories\s*\|\s*ForEach-
     $dockerWrapper -notmatch '\$unsupportedCategories\s*=') {
     throw 'Docker NFR wrapper must accept comma-separated CLI category values and reject unsupported categories before creating artifacts.'
 }
+if ($dockerWrapper -notmatch "'functional',\s*'performance',\s*'tenant',\s*'payments',\s*'security'") {
+    throw 'Docker NFR wrapper must expose the implemented no-charge performance category for image-bound acceptance.'
+}
 if ($dockerWrapper -notmatch '(?s)status\s+-eq\s+''incomplete''.*?after-image inventory' -or
     $dockerWrapper -notmatch 'status\s*=\s*\$finalStatus') {
     throw 'Docker NFR wrapper must preserve finalized incomplete runs and capture their after-image inventory without reporting PASS.'

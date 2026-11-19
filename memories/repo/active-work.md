@@ -1,27 +1,22 @@
 # Active Work
 
-Session navigation, not proof. Verify Git, runtime and referenced evidence before acting.
+Session navigation, not proof. Verify Git, runtime and evidence before acting.
 
-## Latest checkpoint — 18 November 2026
+## Latest checkpoint — 19 November 2026
 
-- Review revision: `9fa6160c18616003ad6d6aaa14753183d20c4c71`
+- Review revision: `0e46047491e9e664e4d5a1b968ab59d7deda1581`
 - Worktree state: `DIRTY`
 - Evidence status: `BLOCKED`
 - Evidence revision: `UNKNOWN`
 - Evidence environment: `LOCAL DOCKER DESKTOP ON G:`
-- Evidence scope: supplemental local evidence; no single clean candidate or Azure acceptance
-- Evidence reference: `TestResults/Phase10/local-followup-20261118-022000/local-followup.json`
+- Evidence scope: `TenantA/B/C × Razorpay/OpenPay local deterministic and sandbox baseline, plus local NFR/recovery; Azure excluded`
+- Evidence reference: `TestResults/Phase10/local-followup-20261119-current-candidate015/local-followup.json`
+- Goal: finish Phase 10 local Docker acceptance. The current-candidate015 report is being regenerated after this handoff correction; candidate014 is the preceding snapshot and is not authoritative for this revision.
+- Payment evidence: E2E run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261119-021441154/`: deterministic 6/6, sandbox positives 6/6, and Razorpay negative/cancellation 6/6 across TenantA/B/C × Razorpay/OpenPay. Provider confirmation, SQL/order correlation and fixture restoration passed. Do not retry successful or ambiguous charges. OpenPay baseline uses 3DS off; challenge-negative support is not certified.
+- Latest source-bound evidence will be linked by candidate015's manifest. The previous selected checks passed: no-charge NFR, operational/recovery/rollback, Docker restart persistence, and messaging/Functions replay. Refreshed runs must retain 100-message recovery with zero loss/duplicates, exact Inventory rollback restoration, unchanged paid-order rows/SQL volume across restart, one approved replay and restoration.
+- Candidate014 is **INCOMPLETE**: the worktree is dirty; OpenPay challenge-negative is blocked/unverified; order continuation is deferred as DW-023; Azure is not run. The sealed E2E packet's persistence step is NOT-RUN, but the separate current persistence proof passed. Regenerate the report after source-bound checks without repeating sandbox charges.
+- Focused validation on current code passed: local-followup tests 16/16, automation TypeScript check, NFR-selection and operational-only contract tests, AI-customization validator, documentation-link validator, and `git diff --check`. The NU1701 OpenPay SDK compatibility warning remains unsuppressed.
+- Docker was running all 13 `xy-phase10` services after persistence/replay checks. Verify before further work. Preserve volumes and provider settings; Docker SQL is loopback 14330; native Windows SQL 1433 is out of scope. The deleted F: retention copy is not recoverable. No reset, global prune, VHDX compaction, Azure mutation or Git write occurred.
+- Next: rebind no-charge NFR, operations/recovery, persistence and replay evidence to this exact post-handoff worktree, regenerate candidate015, then review the dirty diff. Obtain fresh scoped authorization before staging, committing or pushing.
 
-- Scope: Phase 10 non-Azure local Docker follow-up. Azure is excluded. No Git write, reset, prune, VHDX compaction or payment submission was performed in this follow-up.
-- Candidate: base commit `9fa6160c18616003ad6d6aaa14753183d20c4c71`; worktree is DIRTY. The supplemental reconciliation records the report-time content identity; inspect it and re-run reconciliation after any candidate changes.
-- Reconciliation: `TestResults/Phase10/local-followup-20261118-022000/` (`INCOMPLETE`). It validates evidence hashes and all 13 current service image identities against the historical Docker payment baseline. It explicitly blocks a clean-single-source-candidate claim because the current worktree is dirty.
-- Current no-payment Docker run: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261118-014011896/`. Selected foundation (36/36), isolated integration (75/75), smoke, tenant/routing, currency/order-entry, messaging/Functions, restoration and restart persistence checks passed. Payment suite was `none`, so this is partial and not fresh payment acceptance.
-- Current-image operational/recovery run: `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261118-013113758/`; targeted no-charge checks: `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261118-013233653/`. Operational results include 100-message burst, outage recovery with zero loss/duplicate effects, replay/restoration and verified Inventory rollback followed by exact-image restoration. Targeted tests passed only their selected no-charge categories; dynamic payment matrix was not run.
-- Historical sandbox payment matrix: `TestResults/Playwright/phase10-docker-http/phase10-preazure-20261117-full-baseline/`, bound to the clean base revision. It may be reused only within the supplemental report’s limited compatibility check (same image binaries and payment settings); it is not a fresh run against the dirty source/test candidate. Do not charge again just to refresh reports.
-- Storage/runtime read-only check on 18 Nov: Docker Desktop active, all 13 project containers running; configured data path `G:\DockerStorage\DockerDesktopWSL`; storage manifest reported 469,915,316,224 bytes free (about 437.7 GiB), SQL allocation about 0.28 GiB, all 13 services with `10m × 3` logs and no rotation mismatches. Recheck before future actions. Retained F: Docker copy was deleted; it is not recoverable from that path.
-- Focused follow-up: report regression 10/10, TypeScript check, no-payment finalization and operational-only contract passed; Phase10 NFR probe build passed. Evidence is in the associated ignored `TestResults` directories.
-- Next: verify hosted checks on the published candidate SHA, then reconcile current Docker evidence and rerun only affected or missing required gates. The evidence above describes the earlier test snapshot, not the publication state. DW-023/DW-024 remain deferred; Azure acceptance for this candidate is NOT-RUN. Owner-reported Azure dev cleanup was not independently verified.
-- Historical L6 C PASS applies to `494ab4fd` under DW-028 Option A; workflow 99 remains local-only. The uncertain attempts on TenantA ORDER-1/4/5 and TenantB shared ORDER-2 remain protected; do not blindly retry.
-- Preserve payment-history safeguards: do not retry ambiguous attempts; correlate by tenant/database/order reference/provider because numeric IDs overlap. Preserve current Docker volumes/provider settings. Local SQL is Docker loopback `14330`; native Windows SQL `1433` is out of scope. No Azure/native SQL mutation or F: deletion.
-
-Canonical plans/runbooks: `docs/internal/phase10-implementation-checklist.md`, `docs/internal/phase10-preazure-lld.md`, `docs/runbooks/phase10-docker-fresh-ssd.md`, and `docs/runbooks/phase10-azure-smoke.md`. Raw `TestResults` are ignored; preserve failed/partial evidence.
+Canonical plans: `docs/internal/phase10-implementation-checklist.md`, `docs/internal/phase10-preazure-lld.md`, `docs/runbooks/phase10-docker-fresh-ssd.md`, and `docs/runbooks/phase10-azure-smoke.md`. Raw `TestResults` are ignored and must be preserved.

@@ -1,15 +1,19 @@
 import { phase10ImageSetsMatch, validatePhase10ImageManifest } from "./phase10-images.js";
 import type { Phase10ImageManifest } from "./phase10-images.js";
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
+import type { Phase10WorktreeIdentity } from "./phase10-worktree-identity.js";
 
 export type FollowupStatus = "PASS" | "FAIL" | "BLOCKED" | "NOT-RUN" | "DEFERRED";
 export interface FollowupGate { id: string; status: FollowupStatus; detail: string }
 export interface FollowupEvidence { id: string; path: string; sha256: string }
 export interface LocalFollowupInput {
-  e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; imageAfter: unknown; restorationContract?: unknown };
+  e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; imageBefore?: unknown; imageAfter: unknown; restorationContract?: unknown };
   noPaymentReport?: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; coverage: unknown };
   current: {
-    imageManifest: unknown; foundation: unknown; functions: unknown; nfr: unknown; burst: unknown; outage: unknown; rollback: unknown;
+    imageManifest: unknown; sourceIdentity?: Phase10WorktreeIdentity; foundation: unknown; functions: unknown; nfr: unknown; burst: unknown; outage: unknown; rollback: unknown;
+    paymentMatrices?: { deterministic?: unknown; sandboxPositive?: unknown; sandboxNegative?: unknown };
+    paymentMatrixSource?: { summariesAndArtifactsNestedInE2e: boolean; caseArtifactsHashedAndCorrelated?: boolean };
+    customerDirectoryRetry?: unknown;
     persistence?: { summary: unknown; before: unknown; after: unknown; imageBefore: unknown; imageAfter: unknown };
     operational?: { summary: unknown; imageManifest: unknown };
     replay?: { messaging: unknown; restoration: unknown; functions: unknown; imageManifest: unknown };
@@ -22,6 +26,7 @@ export interface LocalFollowupReport {
   candidate: { commit: string; worktree: "clean" | "dirty"; dirtyStatusSha256: string | null } | null;
   sourceRuns: { e2eRunId: string | null; e2eCommit: string | null; currentImageRunId: string | null };
   imageBinaryMatch: boolean | null;
+  currentSourceIdentity: Phase10WorktreeIdentity | null;
   gates: FollowupGate[];
   evidence: FollowupEvidence[];
   limitations: string[];
@@ -77,6 +82,117 @@ function providerConfigurationMatches(e2eValue: unknown, currentValue: unknown):
   });
 }
 
+function paymentMatrix(value: unknown): { summary?: Record<string, unknown>; groups: Record<string, unknown>[]; rows: Record<string, unknown>[] } {
+  const summary = rec(value);
+  const groups = records(summary?.results);
+  return { summary, groups, rows: groups.flatMap(group => records(group.rows)) };
+}
+
+function positiveGroupsHavePhysicalVerification(groups: Record<string, unknown>[]): boolean {
+  return groups.some(group => {
+    if (group.rows === undefined || group.rows === null) return false;
+    if (!Array.isArray(group.rows)) return true;
+    return records(group.rows).length > 0 && (group.verificationSafety !== "established" ||
+      typeof group.verificationSummary !== "string" || !group.verificationSummary.startsWith("Physical verification completed for "));
+  });
+}
+
+function positivePaymentMatrixValid(value: unknown, expectedMode: "deterministic" | "sandbox"): boolean {
+  const { summary, groups, rows } = paymentMatrix(value);
+  if (!summary || summary.mode !== expectedMode || summary.acceptanceProfile !== "baseline" || summary.negative !== false ||
+      summary.manualSmoke !== false || summary.status !== "passed" || summary.primaryPassed !== true || summary.coveragePassed !== true ||
+      !Array.isArray(summary.skippedTenants) || summary.skippedTenants.length !== 0 || !Number.isInteger(summary.caseCount) ||
+      summary.caseCount !== summary.expectedCaseCount || rows.length !== summary.caseCount || positiveGroupsHavePhysicalVerification(groups)) return false;
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const tenant = row.tenantCode;
+    const provider = row.paymentProvider;
+    const key = `${String(tenant)}|${String(provider)}`;
+    if (typeof tenant !== "string" || !tenant || !["Razorpay", "OpenPay"].includes(String(provider)) || keys.has(key) ||
+        row.journeyOutcome !== "completed" || row.verificationOutcome !== "passed" || row.cleanupOutcome !== "reset" ||
+        row.executionEvidence !== "fresh" || row.adapterMode !== expectedMode || row.providerVerification !== `${expectedMode}:completed` ||
+        typeof row.orderAmount !== "number" || row.orderAmount <= 0 ||
+        row.orderCurrencyCode !== (provider === "Razorpay" ? "INR" : "MXN")) return false;
+    keys.add(key);
+  }
+  const tenants = new Set(rows.map(row => String(row.tenantCode)));
+  return tenants.size > 0 && rows.length === tenants.size * 2 && [...tenants].every(tenant =>
+    keys.has(`${tenant}|Razorpay`) && keys.has(`${tenant}|OpenPay`));
+}
+
+function razorpayNegativeMatrixValid(value: unknown): boolean {
+  const { summary, rows } = paymentMatrix(value);
+  if (!summary || summary.mode !== "sandbox" || summary.acceptanceProfile !== "baseline" || summary.negative !== true ||
+      summary.manualSmoke !== false || summary.status !== "passed" || summary.primaryPassed !== true || summary.coveragePassed !== true ||
+      !Array.isArray(summary.skippedTenants) || summary.skippedTenants.length !== 0 || summary.caseCount !== summary.expectedCaseCount ||
+      rows.length !== summary.caseCount) return false;
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const tenant = row.tenantCode;
+    const outcome = row.journeyOutcome;
+    const key = `${String(tenant)}|${String(outcome)}`;
+    if (typeof tenant !== "string" || !tenant || !["expected-failure", "expected-cancelled"].includes(String(outcome)) || keys.has(key) ||
+        row.paymentProvider !== "Razorpay" || row.verificationOutcome !== "passed" || row.cleanupOutcome !== "reset" ||
+        row.executionEvidence !== "fresh" || row.adapterMode !== "sandbox" || row.orderCurrencyCode !== "INR" ||
+        (outcome === "expected-failure" && row.providerVerification !== "sandbox:failed") ||
+        (outcome === "expected-cancelled" && row.providerVerification !== "checkout-dismissed:order-unpaid")) return false;
+    keys.add(key);
+  }
+  const tenants = new Set(rows.map(row => String(row.tenantCode)));
+  return tenants.size > 0 && rows.length === tenants.size * 2 && [...tenants].every(tenant =>
+    keys.has(`${tenant}|expected-failure`) && keys.has(`${tenant}|expected-cancelled`));
+}
+
+function paymentMatricesBoundToE2e(input: LocalFollowupInput): boolean {
+  const matrices = input.current.paymentMatrices;
+  const run = rec(input.e2e.summary);
+  const packet = rec(input.e2e.packet);
+  const steps = records(packet?.steps);
+  const before = validatePhase10ImageManifest(input.e2e.imageBefore, typeof run?.runId === "string" ? run.runId : undefined, "before");
+  const after = validatePhase10ImageManifest(input.e2e.imageAfter, typeof run?.runId === "string" ? run.runId : undefined, "after");
+  const beforeManifest = before.status === "PASS" ? before.manifest : undefined;
+  const afterManifest = after.status === "PASS" ? after.manifest : undefined;
+  const start = typeof run?.startedUtc === "string" ? Date.parse(run.startedUtc) : Number.NaN;
+  const finish = typeof run?.finishedUtc === "string" ? Date.parse(run.finishedUtc) : Number.NaN;
+  const rows = [matrices?.deterministic, matrices?.sandboxPositive, matrices?.sandboxNegative]
+    .flatMap(value => paymentMatrix(value).rows);
+  const paymentStepsPassed = ["payments-deterministic", "sandbox-payments"].every(name => {
+    const matching = steps.filter(step => step.name === name);
+    return matching.length === 1 && matching[0].status === "passed";
+  });
+  const provenance = rec(run?.gitProvenance);
+  const gitStart = rec(provenance?.start);
+  const gitFinish = rec(provenance?.finish);
+  return !!matrices && input.current.paymentMatrixSource?.summariesAndArtifactsNestedInE2e === true &&
+    input.current.paymentMatrixSource.caseArtifactsHashedAndCorrelated === true &&
+    input.e2e.completion === "COMPLETE" && input.e2e.completionStatus === "passed" &&
+    run?.status === "passed" && run.paymentSuite === "both" && Number.isFinite(start) && Number.isFinite(finish) && start < finish &&
+    paymentStepsPassed && gitStart?.commit === gitFinish?.commit && gitStart?.worktree === gitFinish?.worktree &&
+    gitStart?.contentIdentity === gitFinish?.contentIdentity &&
+    !!beforeManifest && !!afterManifest && sameCandidate(beforeManifest, afterManifest) && imagesMatchByBinary(beforeManifest, afterManifest) &&
+    rows.length > 0 && rows.every(row => {
+      const rowStart = typeof row.startedUtc === "string" ? Date.parse(row.startedUtc) : Number.NaN;
+      const rowFinish = typeof row.finishedUtc === "string" ? Date.parse(row.finishedUtc) : Number.NaN;
+      return Number.isFinite(rowStart) && Number.isFinite(rowFinish) && start <= rowStart && rowStart < rowFinish && rowFinish <= finish;
+    });
+}
+
+function customerDirectoryRetryValid(value: unknown): boolean {
+  const result = rec(value);
+  const rows = records(result?.results);
+  if (!result || !Array.isArray(result.results)) return false;
+  const tenantUsers = ["TenantA", "TenantB", "TenantC"];
+  const adminRows = rows.filter(row => row.account === "tenant-admin" && tenantUsers.includes(String(row.tenant)) &&
+    row.status === "passed" && row.httpStatus === 200);
+  const regularRows = rows.filter(row => typeof row.account === "string" && row.account.startsWith("tenant-") && row.account !== "tenant-admin");
+  const expectedUsers = new Set(["tenant-a-user", "tenant-b-user", "tenant-c-user"]);
+  const logout = rows.filter(row => row.scenario === "same-browser login/logout and cross-tab logout" && row.status === "passed");
+  return adminRows.length === 3 && new Set(adminRows.map(row => row.tenant)).size === 3 &&
+    regularRows.length === 3 && new Set(regularRows.map(row => row.account)).size === 3 &&
+    regularRows.every(row => expectedUsers.has(String(row.account)) && row.status === "passed" && row.httpStatus === 200 &&
+      row.deniedStatus === 403 && row.deniedTenant !== row.tenant) && logout.length === 1;
+}
+
 export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalFollowupReport {
   const gates: FollowupGate[] = [];
   const summary = rec(input.e2e.summary);
@@ -113,6 +229,36 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     `completion=${input.e2e.completion}; sandbox=${sandbox.length === 1 ? String(sandbox[0].status) : "missing-or-duplicate"};` +
       ` restored=${restoration?.allRestored === true}; this remains bound to its recorded source revision.`, e2eFailed));
 
+  const paymentMatrices = input.current.paymentMatrices;
+  if (paymentMatrices) {
+    const deterministicPassed = positivePaymentMatrixValid(paymentMatrices.deterministic, "deterministic");
+    const sandboxPassed = positivePaymentMatrixValid(paymentMatrices.sandboxPositive, "sandbox");
+    const razorpayNegativePassed = razorpayNegativeMatrixValid(paymentMatrices.sandboxNegative);
+    gates.push(gate("supplemental-deterministic-payment-matrix", deterministicPassed,
+      deterministicPassed ? "Fresh deterministic Razorpay and OpenPay journeys passed physical-order verification and fixture restoration for every covered tenant." :
+        "Deterministic matrix is missing, incomplete, duplicated, simulated incorrectly, or contains an unverified/unclean case."));
+    gates.push(gate("supplemental-sandbox-positive-payment-matrix", sandboxPassed,
+      sandboxPassed ? "Fresh sandbox Razorpay and OpenPay journeys passed provider confirmation, physical-order verification and fixture restoration for every covered tenant." :
+        "Sandbox positive matrix is missing, incomplete, simulated, duplicated, or contains an unverified/unclean case."));
+    gates.push(gate("supplemental-razorpay-sandbox-negative-matrix", razorpayNegativePassed,
+      razorpayNegativePassed ? "Razorpay decline and checkout-dismissal outcomes were verified for every covered tenant." :
+        "Razorpay decline/cancellation matrix is missing, incomplete, or contains an unverified/unclean case."));
+    const openPayNegativeUnavailable = rec(paymentMatrices.sandboxNegative)?.negativeSandboxAcceptance === "razorpay-passed-openpay-blocked";
+    gates.push({ id: "openpay-sandbox-negative-capability", status: openPayNegativeUnavailable ? "BLOCKED" : "NOT-RUN",
+      detail: "OpenPay sandbox challenge rejection/cancellation behavior remains unsupported or unverified; it is not counted as PASS." });
+    const matrixSourceBound = paymentMatricesBoundToE2e(input);
+    gates.push({ id: "payment-matrix-source-image-binding", status: matrixSourceBound ? "PASS" : "BLOCKED",
+      detail: matrixSourceBound
+        ? "Each payment summary and case-level ledger, provider confirmation/dependency trace, SQL proof, and verification report is hashed, correlated to its row, and contained in the sealed E2E run's unchanged source/image envelope."
+        : "Payment evidence is blocked unless every case-level ledger, provider confirmation/dependency trace, SQL proof, and verification report is hashed, correlated to its row, and contained in the sealed E2E envelope." });
+  }
+  if (input.current.customerDirectoryRetry !== undefined) {
+    const retryPassed = customerDirectoryRetryValid(input.current.customerDirectoryRetry);
+    gates.push(gate("supplemental-customer-directory-identity-retry", retryPassed,
+      retryPassed ? "Isolated browser retry passed admin switching across A/B/C, regular-user tenant isolation with 403 denials, and same-browser logout." :
+        "Isolated customer-directory retry evidence is incomplete, duplicated, or contains an identity/isolation failure."));
+  }
+
 
   const e2eImageResult = validatePhase10ImageManifest(input.e2e.imageAfter, e2eRunId ?? undefined, "after");
   const currentImageResult = validatePhase10ImageManifest(input.current.imageManifest, undefined, "after");
@@ -123,6 +269,17 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     imageBinaryMatch === true ? "All 13 image references, IDs and repository digests match; this is binary identity only, not source-candidate identity." :
       imageBinaryMatch === false ? "E2E and current Docker image binaries differ; historical payment proof cannot be reused for current images." :
         "One or both image manifests are missing or malformed." , imageBinaryMatch === false));
+
+  const liveIdentity = input.current.sourceIdentity;
+  const manifestCandidate = currentManifest?.candidate;
+  const currentSourceMatchesImage = !!liveIdentity && !!manifestCandidate && liveIdentity.commit === manifestCandidate.commit &&
+    liveIdentity.worktree === manifestCandidate.worktree && liveIdentity.dirtyStatusSha256 === manifestCandidate.dirtyStatusSha256 &&
+    liveIdentity.worktreeContentSha256 === manifestCandidate.worktreeContentSha256 &&
+    JSON.stringify(liveIdentity.changedPaths) === JSON.stringify(manifestCandidate.changedPaths);
+  gates.push(gate("current-checkout-image-candidate-identity", currentSourceMatchesImage,
+    currentSourceMatchesImage ? "The reconciler's live Git worktree identity matches the source identity captured with the selected Docker image manifest." :
+      `Live checkout=${liveIdentity?.commit ?? "UNKNOWN"}/${liveIdentity?.worktree ?? "UNKNOWN"}/${liveIdentity?.worktreeContentSha256 ?? "UNKNOWN"};` +
+      ` image manifest=${manifestCandidate?.commit ?? "UNKNOWN"}/${manifestCandidate?.worktree ?? "UNKNOWN"}/${manifestCandidate?.worktreeContentSha256 ?? "UNKNOWN"}.`));
 
   const sourceSameAndClean = !!e2eStart && !!currentManifest && e2eStart.commit === currentManifest.candidate.commit &&
     e2eStart.worktree === "clean" && currentManifest.candidate.worktree === "clean";
@@ -135,14 +292,14 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     /^[a-f0-9]{64}$/.test(currentManifest.candidate.worktreeContentSha256 ?? "") && changedPaths.length > 0;
   const toolingOnlyChanges = changedPaths.every(path => path.startsWith("scripts/") || path.startsWith("automation/src/report/") ||
     path === "automation/src/cli/reconcile-phase10-local-followup.ts" || path.startsWith("automation/src/cli/reconcile-phase10-local-followup") ||
-    path.startsWith("tools/Phase10.NfrProbe/") || path.startsWith("docs/"));
+    path.startsWith("tools/Phase10.NfrProbe/") || path.startsWith("docs/") || path === "memories/repo/active-work.md");
   const nfrRecord = rec(input.current.nfr);
   const settingsBefore = rec(nfrRecord?.paymentSettingsBefore);
   const settingsAfter = rec(nfrRecord?.paymentSettingsAfter);
   const settingsStable = nfrRecord?.paymentSettingsIntegrity === "passed" && !!settingsBefore && !!settingsAfter &&
     JSON.stringify(settingsBefore) === JSON.stringify(settingsAfter);
   const paymentConfigCompatible = settingsStable && providerConfigurationMatches(input.e2e.restorationContract, settingsBefore);
-  const paymentCompatible = !!e2eStart && !!currentManifest && e2eStart.commit === currentManifest.candidate.commit &&
+  const paymentCompatible = currentSourceMatchesImage && !!e2eStart && !!currentManifest && e2eStart.commit === currentManifest.candidate.commit &&
     imageBinaryMatch === true && (currentManifest.candidate.worktree === "clean" || (dirtyIdentityAvailable && toolingOnlyChanges)) && paymentConfigCompatible;
   gates.push(gate("historical-e2e-payment-compatibility", paymentCompatible,
     paymentCompatible ? "E2E source commit and all service images match; the content-addressed diff is tooling-only and current payment settings match the recorded baseline." :
@@ -218,6 +375,18 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     persistenceBound ? "Known tenant/order rows and SQL volume persisted across Docker Desktop restart; before/after image identities match the selected NFR candidate." :
       "Separate persistence evidence is missing, not run, or cannot be bound to unchanged before/after images and the selected NFR candidate.",
     persistenceSummary?.status === "failed"));
+  const persistenceOutcomePass = !!persistenceSummary && persistenceSummary.status === "passed" &&
+    persistenceSummary.imageIdentitiesUnchanged === true && persistenceSummary.disk === "G:\\DockerStorage\\DockerDesktopWSL" &&
+    typeof persistenceSummary.sqlVolume === "string" && beforeRows !== undefined && beforeRows === afterRows &&
+    persistenceBeforeImage.status === "PASS" && persistenceAfterImage.status === "PASS" &&
+    phase10ImageSetsMatch(persistenceBeforeImage.manifest!, persistenceAfterImage.manifest!) &&
+    imagesMatchByBinary(persistenceBeforeImage.manifest!, persistenceAfterImage.manifest!);
+  gates.push(gate("supplemental-persistence-outcome", persistenceOutcomePass,
+    persistenceOutcomePass ? "Known tenant/order rows survived the Docker Desktop restart on G:; the SQL volume and all service image binaries were unchanged." :
+      "Persistence execution evidence is incomplete or indicates a data, volume, storage-location, or image change.", persistenceSummary?.status === "failed"));
+  gates.push({ id: "persistence-source-image-binding", status: persistenceOutcomePass && persistenceBound ? "PASS" : "BLOCKED",
+    detail: persistenceOutcomePass && persistenceBound ? "Persistence evidence is also bound to the selected source candidate and service images." :
+      "Persistence outcome passed separately, but its source-candidate identity does not match the selected NFR evidence; do not claim same-candidate persistence acceptance." });
 
   const replay = input.current.replay;
   const messaging = rec(replay?.messaging);
@@ -292,6 +461,7 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
       currentImageRunId: currentManifest?.runId ?? null
     },
     imageBinaryMatch,
+    currentSourceIdentity: liveIdentity ?? null,
     gates,
     evidence: input.evidence,
     limitations: [

@@ -6,7 +6,7 @@ function Resolve-Phase10NfrSelection {
         [switch]$SkipDynamicPaymentMatrix
     )
 
-    $supportedTargeted = @('functional', 'tenant', 'payments', 'security')
+    $supportedTargeted = @('functional', 'performance', 'tenant', 'payments', 'security')
     $allCategories = @('functional', 'performance', 'tenant', 'payments', 'operational', 'recovery', 'security')
     $explicit = $PSBoundParameters.ContainsKey('Categories') -and $Categories.Count -gt 0
 

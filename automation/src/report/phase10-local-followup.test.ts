@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { PHASE10_DOCKER_SERVICES } from "./phase10-images.js";
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
 import { reconcilePhase10LocalFollowup, renderPhase10LocalFollowupHtml } from "./phase10-local-followup.js";
+import { capturePhase10WorktreeIdentity } from "./phase10-worktree-identity.js";
 import type { LocalFollowupInput } from "./phase10-local-followup.js";
 
 const e2eCommit = "a".repeat(40);
@@ -26,9 +31,13 @@ const paymentSnapshot = () => ({ schema: "phase10-payment-settings-snapshot-v1",
 const base = (): LocalFollowupInput => ({
   e2e: {
     completion: "COMPLETE", completionStatus: "passed",
-    summary: { runId: "phase10-docker-http-20261115-194923198", gitProvenance: { start: { commit: e2eCommit, worktree: "clean" } } },
+    summary: { runId: "phase10-docker-http-20261115-194923198", status: "passed", paymentSuite: "both",
+      startedUtc: "2026-11-18T19:00:00.000Z", finishedUtc: "2026-11-18T20:00:00.000Z",
+      gitProvenance: { start: { commit: e2eCommit, worktree: "clean", contentIdentity: "a".repeat(64) },
+        finish: { commit: e2eCommit, worktree: "clean", contentIdentity: "a".repeat(64) } } },
     packet: { status: "passed", deferrals: ["DW-023"], restoration: { status: "passed", allRestored: true, fixtureLockPresent: false },
       steps: DOCKER_PACKET_STEPS.map(name => ({ name, status: name === "order-continuation" ? "deferred" : "passed" })) },
+    imageBefore: imageManifest("phase10-docker-http-20261115-194923198", e2eCommit, "clean", "before"),
     imageAfter: imageManifest("phase10-docker-http-20261115-194923198", e2eCommit, "clean", "after"),
     restorationContract: { status: "passed", tenants: ["TenantA", "TenantB", "TenantC"].map((tenant, index) => ({
       tenant, status: "Active", tier: index === 2 ? "Dedicated" : "SharedPool",
@@ -48,6 +57,8 @@ const base = (): LocalFollowupInput => ({
   },
   current: {
     imageManifest: imageManifest("current-image-audit-p0", currentCommit, "dirty", "after"),
+    sourceIdentity: { commit: currentCommit, worktree: "dirty", dirtyStatusSha256: "c".repeat(64),
+      worktreeContentSha256: "d".repeat(64), changedPaths: ["scripts/report-tool.ps1"] },
     foundation: { status: "passed", results: [{ status: "passed", exitCode: 0 }, { status: "passed", exitCode: 0 }] },
     functions: { status: "passed", approvalStatus: "processing-confirmed", approvalOutcome: "approved",
       approvalReconciliationRequired: false, intake: "passed", replay: "passed", downstreamEffects: "passed" },
@@ -79,6 +90,37 @@ const base = (): LocalFollowupInput => ({
   evidence: [{ id: "source-report", path: "TestResults/example/report.json", sha256: "f".repeat(64) }]
 });
 
+const paymentMatrix = (mode: "deterministic" | "sandbox", negative = false) => {
+  const tenants = ["TenantA", "TenantB", "TenantC"];
+  const rows = negative
+    ? tenants.flatMap(tenant => ["expected-failure", "expected-cancelled"].map(journeyOutcome => ({
+      tenantCode: tenant, paymentProvider: "Razorpay", journeyOutcome, verificationOutcome: "passed", cleanupOutcome: "reset",
+      executionEvidence: "fresh", adapterMode: "sandbox", orderCurrencyCode: "INR",
+      providerVerification: journeyOutcome === "expected-failure" ? "sandbox:failed" : "checkout-dismissed:order-unpaid", orderAmount: 200,
+      startedUtc: "2026-11-18T19:30:00.000Z", finishedUtc: "2026-11-18T19:31:00.000Z"
+    })))
+    : tenants.flatMap(tenant => ["Razorpay", "OpenPay"].map(paymentProvider => ({
+      tenantCode: tenant, paymentProvider, journeyOutcome: "completed", verificationOutcome: "passed", cleanupOutcome: "reset",
+      executionEvidence: "fresh", adapterMode: mode, orderCurrencyCode: paymentProvider === "Razorpay" ? "INR" : "MXN",
+      providerVerification: `${mode}:completed`, orderAmount: 200,
+      startedUtc: "2026-11-18T19:30:00.000Z", finishedUtc: "2026-11-18T19:31:00.000Z"
+    })));
+  return {
+    mode: negative ? "sandbox" : mode, acceptanceProfile: "baseline", negative, manualSmoke: false,
+    caseCount: rows.length, expectedCaseCount: rows.length, coveragePassed: true, status: "passed", primaryPassed: true,
+    capabilityAcceptance: negative ? "blocked" : "not-applicable",
+    negativeSandboxAcceptance: negative ? "razorpay-passed-openpay-blocked" : "separate-suite", skippedTenants: [],
+    results: [...rows.map(row => ({ rows: [row], verificationSafety: negative ? "unknown" : "established",
+      verificationSummary: negative ? "Verification skipped." : `Physical verification completed for ${row.tenantCode}.` })), {}, {}, {}]
+  };
+};
+const customerDirectoryRetry = () => ({ results: [
+  ...["TenantA", "TenantB", "TenantC"].map(tenant => ({ account: "tenant-admin", tenant, status: "passed", httpStatus: 200 })),
+  ...[["tenant-a-user", "TenantA", "TenantB"], ["tenant-b-user", "TenantB", "TenantA"], ["tenant-c-user", "TenantC", "TenantA"]]
+    .map(([account, tenant, deniedTenant]) => ({ account, tenant, deniedTenant, status: "passed", httpStatus: 200, deniedStatus: 403 })),
+  { scenario: "same-browser login/logout and cross-tab logout", status: "passed" }
+] });
+
 test("same image binaries permit scoped evidence reuse but never erase candidate/NFR incompleteness", () => {
   const report = reconcilePhase10LocalFollowup(base());
   assert.equal(report.verdict, "INCOMPLETE");
@@ -94,6 +136,77 @@ test("same image binaries permit scoped evidence reuse but never erase candidate
   assert.equal(report.gates.find(item => item.id === "full-current-image-nfr-categories")?.status, "PASS");
   assert.equal(report.gates.find(item => item.id === "clean-single-source-candidate")?.status, "BLOCKED");
   assert.equal(report.gates.find(item => item.id === "azure-acceptance")?.status, "NOT-RUN");
+});
+
+test("separately executed payment matrices are reported without overriding a failed parent E2E run", () => {
+  const input = base();
+  input.current.paymentMatrices = {
+    deterministic: paymentMatrix("deterministic"), sandboxPositive: paymentMatrix("sandbox"),
+    sandboxNegative: paymentMatrix("sandbox", true)
+  };
+  input.current.customerDirectoryRetry = customerDirectoryRetry();
+  (input.e2e.packet as { status: string }).status = "failed";
+  input.e2e.completionStatus = "failed";
+  const report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-deterministic-payment-matrix")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "supplemental-sandbox-positive-payment-matrix")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "supplemental-razorpay-sandbox-negative-matrix")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "openpay-sandbox-negative-capability")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "supplemental-customer-directory-identity-retry")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-and-restoration")?.status, "FAIL");
+  assert.equal(report.verdict, "FAIL");
+});
+
+test("a sealed parent E2E envelope binds nested payment summaries to unchanged images and run time", () => {
+  const input = base();
+  input.current.paymentMatrices = {
+    deterministic: paymentMatrix("deterministic"), sandboxPositive: paymentMatrix("sandbox"),
+    sandboxNegative: paymentMatrix("sandbox", true)
+  };
+  input.current.paymentMatrixSource = { summariesAndArtifactsNestedInE2e: true, caseArtifactsHashedAndCorrelated: true };
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "PASS");
+
+  const changedImage = base();
+  changedImage.current.paymentMatrices = input.current.paymentMatrices;
+  changedImage.current.paymentMatrixSource = input.current.paymentMatrixSource;
+  (changedImage.e2e.imageBefore as ReturnType<typeof imageManifest>).images[0].imageId = `sha256:${"f".repeat(64)}`;
+  report = reconcilePhase10LocalFollowup(changedImage);
+  assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
+
+  const missingCaseArtifacts = base();
+  missingCaseArtifacts.current.paymentMatrices = input.current.paymentMatrices;
+  missingCaseArtifacts.current.paymentMatrixSource = { summariesAndArtifactsNestedInE2e: true, caseArtifactsHashedAndCorrelated: false };
+  report = reconcilePhase10LocalFollowup(missingCaseArtifacts);
+  assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
+
+  const outOfWindow = base();
+  outOfWindow.current.paymentMatrices = input.current.paymentMatrices;
+  outOfWindow.current.paymentMatrixSource = input.current.paymentMatrixSource;
+  const matrix = outOfWindow.current.paymentMatrices!.sandboxPositive as { results: { rows: { finishedUtc: string }[] }[] };
+  matrix.results[0].rows[0].finishedUtc = "2026-11-18T20:01:00.000Z";
+  report = reconcilePhase10LocalFollowup(outOfWindow);
+  assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
+});
+
+test("payment matrix reconciliation rejects missing tenant/provider rows and simulated sandbox evidence", () => {
+  const input = base();
+  const sandbox = paymentMatrix("sandbox");
+  ((sandbox.results[0] as { rows: { adapterMode: string }[] }).rows[0]).adapterMode = "deterministic";
+  input.current.paymentMatrices = {
+    deterministic: paymentMatrix("deterministic"), sandboxPositive: sandbox,
+    sandboxNegative: paymentMatrix("sandbox", true)
+  };
+  const report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-sandbox-positive-payment-matrix")?.status, "BLOCKED");
+  const incomplete = base();
+  const deterministic = paymentMatrix("deterministic");
+  (deterministic.results[0] as { rows: unknown[] }).rows.pop();
+  incomplete.current.paymentMatrices = {
+    deterministic, sandboxPositive: paymentMatrix("sandbox"), sandboxNegative: paymentMatrix("sandbox", true)
+  };
+  assert.equal(reconcilePhase10LocalFollowup(incomplete).gates.find(item => item.id === "supplemental-deterministic-payment-matrix")?.status, "BLOCKED");
 });
 
 test("image mismatch fails reuse of the historical payment evidence", () => {
@@ -183,10 +296,14 @@ test("separate historical persistence without candidate-bound images is not prom
   const input = base();
   const steps = (input.e2e.packet as { steps: { name: string; status: string }[] }).steps;
   steps.find(step => step.name === "persistence")!.status = "not-run";
-  input.current.persistence!.imageBefore = undefined;
+  const persistence = input.current.persistence as NonNullable<LocalFollowupInput["current"]["persistence"]>;
+  (persistence.imageBefore as ReturnType<typeof imageManifest>).candidate.worktreeContentSha256 = "b".repeat(64);
+  (persistence.imageAfter as ReturnType<typeof imageManifest>).candidate.worktreeContentSha256 = "b".repeat(64);
   const report = reconcilePhase10LocalFollowup(input);
   assert.equal(report.gates.find(item => item.id === "historical-e2e-persistence")?.status, "NOT-RUN");
   assert.equal(report.gates.find(item => item.id === "current-image-persistence")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "supplemental-persistence-outcome")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "persistence-source-image-binding")?.status, "BLOCKED");
 });
 
 test("a recorded historical persistence failure remains FAIL even with a newer persistence pass", () => {
@@ -201,9 +318,19 @@ test("dirty tooling-only payment reuse requires content hash and unchanged provi
   const input = base();
   const manifest = input.current.imageManifest as ReturnType<typeof imageManifest>;
   manifest.candidate.changedPaths = ["tools/Phase10.NfrProbe/FunctionsAcceptance.cs"];
+  input.current.sourceIdentity!.changedPaths = [...manifest.candidate.changedPaths];
   let report = reconcilePhase10LocalFollowup(input);
   assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "PASS");
+  manifest.candidate.changedPaths = ["memories/repo/active-work.md"];
+  input.current.sourceIdentity!.changedPaths = [...manifest.candidate.changedPaths];
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "PASS");
+  manifest.candidate.changedPaths = ["memories/repo/unreviewed-instructions.md"];
+  input.current.sourceIdentity!.changedPaths = [...manifest.candidate.changedPaths];
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
   manifest.candidate.changedPaths = ["XYDataLabs.OrderProcessingSystem.API/Payments/PaymentController.cs"];
+  input.current.sourceIdentity!.changedPaths = [...manifest.candidate.changedPaths];
   report = reconcilePhase10LocalFollowup(input);
   assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
 
@@ -213,4 +340,42 @@ test("dirty tooling-only payment reuse requires content hash and unchanged provi
   report = reconcilePhase10LocalFollowup(missingIdentity);
   assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
   assert.equal(report.verdict, "INCOMPLETE");
+});
+
+test("payment compatibility is blocked when the live checkout differs from the image manifest identity", () => {
+  const input = base();
+  input.current.sourceIdentity!.worktreeContentSha256 = "e".repeat(64);
+  const report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
+  assert.equal(report.currentSourceIdentity?.worktreeContentSha256, "e".repeat(64));
+});
+
+test("worktree identity includes current tracked and untracked contents", () => {
+  const root = mkdtempSync(join(tmpdir(), "phase10-worktree-identity-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Phase10 Test"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "phase10-test@example.invalid"], { cwd: root });
+    writeFileSync(join(root, "tracked.txt"), "baseline\n");
+    execFileSync("git", ["add", "tracked.txt"], { cwd: root });
+    execFileSync("git", ["commit", "-q", "-m", "baseline"], { cwd: root });
+
+    const clean = capturePhase10WorktreeIdentity(root);
+    assert.equal(clean.worktree, "clean");
+    assert.equal(clean.worktreeContentSha256, null);
+
+    writeFileSync(join(root, "tracked.txt"), "changed\n");
+    const trackedDirty = capturePhase10WorktreeIdentity(root);
+    assert.equal(trackedDirty.worktree, "dirty");
+    assert.equal(trackedDirty.changedPaths.join(","), "tracked.txt");
+    assert.match(trackedDirty.worktreeContentSha256 ?? "", /^[a-f0-9]{64}$/);
+
+    writeFileSync(join(root, "untracked.txt"), "new evidence\n");
+    const withUntracked = capturePhase10WorktreeIdentity(root);
+    assert.equal(withUntracked.changedPaths.join(","), "tracked.txt,untracked.txt");
+    assert.notEqual(withUntracked.worktreeContentSha256, trackedDirty.worktreeContentSha256);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

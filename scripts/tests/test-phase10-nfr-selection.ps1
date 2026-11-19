@@ -14,6 +14,13 @@ if ($default.mode -ne 'full' -or $default.selectedCategories.Count -ne 7) {
     throw 'Default NFR behavior must retain the full seven-category suite.'
 }
 
+$performance = Resolve-Phase10NfrSelection -Categories @('performance')
+if ($performance.mode -ne 'targeted-no-charge' -or
+    ($performance.selectedCategories -join ',') -ne 'performance' -or
+    'payments' -notin $performance.notSelectedCategories) {
+    throw 'Performance must be independently selectable without enabling payment transactions.'
+}
+
 $operational = Resolve-Phase10NfrSelection -OperationalOnly
 if ($operational.mode -ne 'operational-only' -or
     ($operational.selectedCategories -join ',') -ne 'operational,recovery') {
