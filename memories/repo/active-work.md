@@ -2,24 +2,22 @@
 
 Session navigation, not proof. Verify Git, runtime and evidence before acting.
 
-## Latest checkpoint — 19 November 2026
+## Latest checkpoint — 20 November 2026
 
-- Review revision: `fc5a7a09`
-- `DIRTY` records the source snapshot used by the linked reconciliation report; verify live status before acting.
-- Worktree state: `DIRTY`
+- Review revision: `a42ddd3355b2b4fae04f822882c34e06e9a3abe2`
+- Worktree state: `CLEAN`
 - Evidence status: `BLOCKED`
-- Evidence revision: `UNKNOWN`
-- Evidence environment: `LOCAL DOCKER DESKTOP ON G:`
-- Evidence scope: `TenantA/B/C payments, current-candidate NFR/operations/recovery/rollback/persistence/replay; Azure excluded`
+- Evidence revision: `a42ddd3355b2b4fae04f822882c34e06e9a3abe2`
+- Evidence environment: LOCAL_DOCKER_DESKTOP_G
+- Evidence scope: `Docker non-payment run, prior TenantA/B/C payment matrix, NFR/operations/recovery/rollback/persistence/replay; Azure excluded`
 - Evidence reference: `TestResults/Phase10/local-followup-20261119-candidate-1fba2df2-final005/local-followup.json`
-- Implementation commit `1984f4917835cdab8be5c15d111ec2b4efdab11f` is pushed to `dev`; the seven-file change is limited to reporting/tests/checkpoint documentation, with no application source or image changes.
-- Exact-SHA hosted checks passed: CI Build/Contract `44584778543`, AI Customization `44584778559`, Documentation Links `44584778510`, AI Prompts `44584778660`, Drift Scanner `44584778590`. ADR Markdown `44584778544` was skipped by its opt-in condition. No deployment workflow ran.
-- Latest local reconciliation: `TestResults/Phase10/local-followup-20261119-candidate-1fba2df2-final005/local-followup.json`. It records image/source compatibility, payment evidence, NFR, operations/recovery, rollback, persistence, Functions/replay and artifact integrity separately. Overall remains **INCOMPLETE**, not full Phase 10 PASS.
-- Docker E2E run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261119-211313195/`: deterministic positives 6/6, real sandbox positives 6/6, and Razorpay failure/cancellation 6/6 passed across TenantA/B/C × both providers. Provider confirmation, SQL/order correlation and exact fixture restoration passed. Do not repeat successful charges just to refresh evidence.
-- Current-candidate no-charge tests: targeted NFR profile passed functional, 100-message performance, tenant, payment-integration, and security/identity checks; its standalone result is partial because the dynamic payment matrix was explicitly skipped. Operational-only profile passed 100/100 effects/inbox in burst and consumer-outage recovery, zero losses/duplicates, 32.259 s recovery, exact consumer restoration, retained-image Inventory rollback and current-image restoration. The combined report reconciles these distinct profiles.
-- Docker Desktop restart persistence passed: known tenant/order rows, named SQL volume and all image identities persisted; native SQL listener was unchanged. All 13 `xy-phase10` containers are running. No reset, prune, Azure operation, native SQL change, or F: recovery occurred. F: retained storage was deleted earlier and is not recoverable.
-- Reporting correction: clean image manifests must encode `changedPaths: []`; legacy `null` is normalized only for clean manifests. Dirty manifests still fail closed. Tool/report-only working-tree changes can be distinguished from application changes; application edits remain blocked. The report now states that OpenPay documents sandbox 3DS and the runner selects its documented test card, while visible challenge acceptance and provider-documented challenge rejection/cancellation remain unverified/BLOCKED. No payment was run for this wording correction. Focused local-follow-up 21/21, report 39/39, TypeScript typecheck, AI customization, docs links, and `git diff --check` passed; PowerShell image-evidence 8/8 remains valid from the prior unchanged test version. OpenPay NU1701 compatibility warning remains.
-- Remaining: OpenPay visible challenge acceptance and provider-documented challenge rejection/cancellation remain unverified/BLOCKED; order continuation/recovery remains deferred under DW-023/DW-024; Azure acceptance is NOT-RUN. These are not local baseline payment failures. Phase 10 is not closed.
-- Next: resolve or retain the documented Phase 10 non-pass items, then decide whether to begin the separately approval-gated Azure stage. Do not submit more payments, deploy Azure, reset data, prune Docker, or delete additional storage without scoped approval.
+- Reconciliation note: its original dirty-tree content hash and paths were independently reproduced from commit `a42ddd33`; its verdict remains `INCOMPLETE`.
+- Latest no-payment Docker run: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261119-202125004/`. Foundations, smoke, isolated integration, customer directory, currency/order entry, messaging/Functions and settings restoration passed. Payment suites and payment-dependent continuation were explicitly not run; this report is `partial` by design.
+- Earlier Docker payment run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261119-211313195/`: deterministic positives 6/6, sandbox positives 6/6, and Razorpay decline/dismissal 6/6 across TenantA/B/C and both providers. Provider confirmation, SQL/order correlation and fixture restoration passed for recorded cases. Do not repeat charges just to refresh evidence.
+- Separate Docker Desktop restart persistence evidence passed: known tenant/order rows and the named SQL volume persisted, with unchanged service image identities. At the latest read-only check, all 13 `xy-phase10` containers were running and G: had about 439 GiB free. No reset, prune, Azure operation, or native SQL change occurred. F: retained storage was deleted earlier and is not recoverable.
+- Exact-SHA hosted checks all passed on `a42ddd33`: CI Build/Contract `44589653256`, AI Customization `44589653161`, Documentation Links `44589653254`, Drift Scanner `44589653174`. No deployment workflow ran.
+- OpenPay sandbox 3DS is documented and the test fixture is configured, but visible challenge acceptance and provider-documented challenge rejection/cancellation remain unverified/BLOCKED. Order continuation/recovery remains deferred under DW-023/DW-024. Azure acceptance is NOT-RUN. These gaps do not negate the recorded baseline payment journeys; Phase 10 remains open.
+- Reporting correction checks passed: local-follow-up 21/21, report 39/39, TypeScript typecheck, AI customization validator, documentation links and `git diff --check`. OpenPay NU1701 compatibility warning remains recorded.
+- Next: keep OpenPay challenge behavior and DW-023/DW-024 in their documented follow-up scope; begin Azure only as a separate approved stage. Do not submit more payments, reset data, prune Docker or delete additional storage without specific approval.
 
 Canonical plans: `docs/internal/phase10-implementation-checklist.md`, `docs/internal/phase10-preazure-lld.md`, `docs/runbooks/phase10-docker-fresh-ssd.md`, and `docs/runbooks/phase10-azure-smoke.md`. Raw `TestResults` are ignored; preserve them.
