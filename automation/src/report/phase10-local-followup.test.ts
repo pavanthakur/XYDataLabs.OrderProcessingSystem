@@ -152,6 +152,7 @@ test("separately executed payment matrices are reported without overriding a fai
   assert.equal(report.gates.find(item => item.id === "supplemental-sandbox-positive-payment-matrix")?.status, "PASS");
   assert.equal(report.gates.find(item => item.id === "supplemental-razorpay-sandbox-negative-matrix")?.status, "PASS");
   assert.equal(report.gates.find(item => item.id === "openpay-sandbox-negative-capability")?.status, "BLOCKED");
+  assert.match(report.gates.find(item => item.id === "openpay-sandbox-negative-capability")?.detail ?? "", /documents sandbox 3DS testing.*does not verify a visible challenge/i);
   assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
   assert.equal(report.gates.find(item => item.id === "supplemental-customer-directory-identity-retry")?.status, "PASS");
   assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-and-restoration")?.status, "FAIL");

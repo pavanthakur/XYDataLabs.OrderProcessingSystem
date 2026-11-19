@@ -250,7 +250,7 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
         "Razorpay decline/cancellation matrix is missing, incomplete, or contains an unverified/unclean case."));
     const openPayNegativeUnavailable = rec(paymentMatrices.sandboxNegative)?.negativeSandboxAcceptance === "razorpay-passed-openpay-blocked";
     gates.push({ id: "openpay-sandbox-negative-capability", status: openPayNegativeUnavailable ? "BLOCKED" : "NOT-RUN",
-      detail: "OpenPay sandbox challenge rejection/cancellation behavior remains unsupported or unverified; it is not counted as PASS." });
+      detail: "OpenPay documents sandbox 3DS testing, but this evidence does not verify a visible challenge or provider-documented challenge rejection/cancellation; neither is counted as PASS." });
     const matrixSourceBound = paymentMatricesBoundToE2e(input);
     gates.push({ id: "payment-matrix-source-image-binding", status: matrixSourceBound ? "PASS" : "BLOCKED",
       detail: matrixSourceBound
