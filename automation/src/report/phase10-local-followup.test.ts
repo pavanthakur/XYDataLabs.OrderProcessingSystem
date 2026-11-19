@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { PHASE10_DOCKER_SERVICES } from "./phase10-images.js";
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
 import { reconcilePhase10LocalFollowup, renderPhase10LocalFollowupHtml } from "./phase10-local-followup.js";
-import { capturePhase10WorktreeIdentity } from "./phase10-worktree-identity.js";
+import { capturePhase10CommittedSnapshotIdentity, capturePhase10WorktreeIdentity } from "./phase10-worktree-identity.js";
 import type { LocalFollowupInput } from "./phase10-local-followup.js";
 
 const e2eCommit = "a".repeat(40);
@@ -351,6 +351,36 @@ test("payment compatibility is blocked when the live checkout differs from the i
   assert.equal(report.currentSourceIdentity?.worktreeContentSha256, "e".repeat(64));
 });
 
+test("committed source content equivalence allows tooling-only payment evidence reuse without claiming a clean run", () => {
+  const input = base();
+  const changedPaths = ["scripts/report-tool.ps1"];
+  for (const candidateImage of [input.e2e.imageBefore, input.e2e.imageAfter, input.current.imageManifest]) {
+    const candidate = (candidateImage as ReturnType<typeof imageManifest>).candidate;
+    candidate.worktree = "dirty";
+    candidate.dirtyStatusSha256 = "c".repeat(64);
+    candidate.worktreeContentSha256 = "d".repeat(64);
+    candidate.changedPaths = [...changedPaths];
+  }
+  const provenance = (input.e2e.summary as { gitProvenance: { start: Record<string, unknown>; finish: Record<string, unknown> } }).gitProvenance;
+  provenance.start.worktree = "dirty";
+  provenance.finish.worktree = "dirty";
+  input.current.sourceIdentity = {
+    commit: "b".repeat(40), worktree: "dirty", dirtyStatusSha256: "e".repeat(64),
+    worktreeContentSha256: "f".repeat(64), changedPaths: ["memories/repo/active-work.md"],
+    committedSnapshot: { baseCommit: e2eCommit, commit: "b".repeat(40), worktreeContentSha256: "d".repeat(64), changedPaths }
+  };
+
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "clean-single-source-candidate")?.status, "BLOCKED");
+
+  input.current.sourceIdentity.committedSnapshot!.worktreeContentSha256 = "9".repeat(64);
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
+});
+
 test("worktree identity includes current tracked and untracked contents", () => {
   const root = mkdtempSync(join(tmpdir(), "phase10-worktree-identity-"));
   try {
@@ -375,6 +405,35 @@ test("worktree identity includes current tracked and untracked contents", () => 
     const withUntracked = capturePhase10WorktreeIdentity(root);
     assert.equal(withUntracked.changedPaths.join(","), "tracked.txt,untracked.txt");
     assert.notEqual(withUntracked.worktreeContentSha256, trackedDirty.worktreeContentSha256);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("committed source snapshot reproduces the exact pre-commit dirty content identity", () => {
+  const root = mkdtempSync(join(tmpdir(), "phase10-committed-snapshot-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "core.autocrlf", "true"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Phase10 Test"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "phase10-test@example.invalid"], { cwd: root });
+    writeFileSync(join(root, "tracked.txt"), "baseline\r\n");
+    execFileSync("git", ["add", "tracked.txt"], { cwd: root });
+    execFileSync("git", ["commit", "-q", "-m", "baseline"], { cwd: root });
+    const baseCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+
+    writeFileSync(join(root, "tracked.txt"), "tested content\r\n");
+    writeFileSync(join(root, "new-file.txt"), "tested untracked content\r\n");
+    const testedIdentity = capturePhase10WorktreeIdentity(root);
+    assert.deepEqual(testedIdentity.changedPaths, ["new-file.txt", "tracked.txt"]);
+
+    execFileSync("git", ["add", "tracked.txt", "new-file.txt"], { cwd: root });
+    execFileSync("git", ["commit", "-q", "-m", "pin tested snapshot"], { cwd: root });
+    const committedIdentity = capturePhase10CommittedSnapshotIdentity(root, baseCommit);
+
+    assert.equal(committedIdentity.commit, execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim());
+    assert.deepEqual(committedIdentity.changedPaths, testedIdentity.changedPaths);
+    assert.equal(committedIdentity.worktreeContentSha256, testedIdentity.worktreeContentSha256);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

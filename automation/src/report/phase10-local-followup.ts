@@ -61,6 +61,11 @@ function sameCandidate(left: Phase10ImageManifest, right: Phase10ImageManifest):
     left.candidate.worktreeContentSha256 === right.candidate.worktreeContentSha256 &&
     (left.candidate.changedPaths ?? []).join("\n") === (right.candidate.changedPaths ?? []).join("\n");
 }
+function toolingOnlyPaths(paths: string[]): boolean {
+  return paths.length > 0 && paths.every(path => path.startsWith("scripts/") || path.startsWith("automation/src/report/") ||
+    path === "automation/src/cli/reconcile-phase10-local-followup.ts" || path.startsWith("automation/src/cli/reconcile-phase10-local-followup") ||
+    path.startsWith("tools/Phase10.NfrProbe/") || path.startsWith("docs/") || path === "memories/repo/active-work.md");
+}
 function snapshotRows(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   return JSON.stringify(value);
@@ -272,27 +277,41 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
 
   const liveIdentity = input.current.sourceIdentity;
   const manifestCandidate = currentManifest?.candidate;
-  const currentSourceMatchesImage = !!liveIdentity && !!manifestCandidate && liveIdentity.commit === manifestCandidate.commit &&
+  const directCurrentSourceMatch = !!liveIdentity && !!manifestCandidate && liveIdentity.commit === manifestCandidate.commit &&
     liveIdentity.worktree === manifestCandidate.worktree && liveIdentity.dirtyStatusSha256 === manifestCandidate.dirtyStatusSha256 &&
     liveIdentity.worktreeContentSha256 === manifestCandidate.worktreeContentSha256 &&
     JSON.stringify(liveIdentity.changedPaths) === JSON.stringify(manifestCandidate.changedPaths);
+  const committedSnapshot = liveIdentity?.committedSnapshot;
+  const currentWorktreeChangesAreToolingOnly = !!liveIdentity &&
+    (liveIdentity.worktree === "clean" || toolingOnlyPaths(liveIdentity.changedPaths));
+  const committedSourceSnapshotMatchesImage = !!manifestCandidate && !!committedSnapshot && currentWorktreeChangesAreToolingOnly &&
+    liveIdentity?.commit === committedSnapshot.commit && committedSnapshot.baseCommit === manifestCandidate.commit &&
+    manifestCandidate.worktree === "dirty" && committedSnapshot.worktreeContentSha256 === manifestCandidate.worktreeContentSha256 &&
+    JSON.stringify(committedSnapshot.changedPaths) === JSON.stringify(manifestCandidate.changedPaths) &&
+    toolingOnlyPaths(committedSnapshot.changedPaths);
+  const currentSourceMatchesImage = directCurrentSourceMatch || committedSourceSnapshotMatchesImage;
   gates.push(gate("current-checkout-image-candidate-identity", currentSourceMatchesImage,
-    currentSourceMatchesImage ? "The reconciler's live Git worktree identity matches the source identity captured with the selected Docker image manifest." :
+    directCurrentSourceMatch ? "The reconciler's live Git worktree identity matches the source identity captured with the selected Docker image manifest." :
+      committedSourceSnapshotMatchesImage ? "The selected image manifest's dirty source snapshot is reproduced exactly by the committed HEAD tree; any current uncommitted changes are tooling-only." :
       `Live checkout=${liveIdentity?.commit ?? "UNKNOWN"}/${liveIdentity?.worktree ?? "UNKNOWN"}/${liveIdentity?.worktreeContentSha256 ?? "UNKNOWN"};` +
       ` image manifest=${manifestCandidate?.commit ?? "UNKNOWN"}/${manifestCandidate?.worktree ?? "UNKNOWN"}/${manifestCandidate?.worktreeContentSha256 ?? "UNKNOWN"}.`));
 
   const sourceSameAndClean = !!e2eStart && !!currentManifest && e2eStart.commit === currentManifest.candidate.commit &&
     e2eStart.worktree === "clean" && currentManifest.candidate.worktree === "clean";
+  const exactE2eImageSourceSnapshot = !!e2eManifest && !!currentManifest && sameCandidate(e2eManifest, currentManifest);
   gates.push(gate("clean-single-source-candidate", sourceSameAndClean,
-    `e2e=${String(e2eStart?.commit ?? "UNKNOWN")}/${String(e2eStart?.worktree ?? "UNKNOWN")};` +
-      ` current=${String(currentManifest?.candidate.commit ?? "UNKNOWN")}/${String(currentManifest?.candidate.worktree ?? "UNKNOWN")}.`));
+    `e2e=${String(e2eManifest?.candidate.commit ?? e2eStart?.commit ?? "UNKNOWN")}/${String(e2eManifest?.candidate.worktree ?? e2eStart?.worktree ?? "UNKNOWN")}/${String(e2eManifest?.candidate.worktreeContentSha256 ?? "UNKNOWN")};` +
+      ` current=${String(currentManifest?.candidate.commit ?? "UNKNOWN")}/${String(currentManifest?.candidate.worktree ?? "UNKNOWN")}/${String(currentManifest?.candidate.worktreeContentSha256 ?? "UNKNOWN")};` +
+      ` exactE2eToCurrentImageSnapshot=${exactE2eImageSourceSnapshot}.`));
 
   const changedPaths = currentManifest?.candidate.changedPaths ?? [];
   const dirtyIdentityAvailable = !!currentManifest && currentManifest.candidate.worktree === "dirty" &&
     /^[a-f0-9]{64}$/.test(currentManifest.candidate.worktreeContentSha256 ?? "") && changedPaths.length > 0;
-  const toolingOnlyChanges = changedPaths.every(path => path.startsWith("scripts/") || path.startsWith("automation/src/report/") ||
-    path === "automation/src/cli/reconcile-phase10-local-followup.ts" || path.startsWith("automation/src/cli/reconcile-phase10-local-followup") ||
-    path.startsWith("tools/Phase10.NfrProbe/") || path.startsWith("docs/") || path === "memories/repo/active-work.md");
+  const toolingOnlyChanges = toolingOnlyPaths(changedPaths);
+  const e2eCandidate = e2eManifest?.candidate;
+  const e2eChangesAreToolingOnly = !!e2eCandidate && (e2eCandidate.worktree === "clean" ||
+    (e2eCandidate.worktree === "dirty" && /^[a-f0-9]{64}$/.test(e2eCandidate.worktreeContentSha256 ?? "") &&
+      toolingOnlyPaths(e2eCandidate.changedPaths ?? [])));
   const nfrRecord = rec(input.current.nfr);
   const settingsBefore = rec(nfrRecord?.paymentSettingsBefore);
   const settingsAfter = rec(nfrRecord?.paymentSettingsAfter);
@@ -300,7 +319,8 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     JSON.stringify(settingsBefore) === JSON.stringify(settingsAfter);
   const paymentConfigCompatible = settingsStable && providerConfigurationMatches(input.e2e.restorationContract, settingsBefore);
   const paymentCompatible = currentSourceMatchesImage && !!e2eStart && !!currentManifest && e2eStart.commit === currentManifest.candidate.commit &&
-    imageBinaryMatch === true && (currentManifest.candidate.worktree === "clean" || (dirtyIdentityAvailable && toolingOnlyChanges)) && paymentConfigCompatible;
+    imageBinaryMatch === true && e2eChangesAreToolingOnly &&
+    (currentManifest.candidate.worktree === "clean" || (dirtyIdentityAvailable && toolingOnlyChanges)) && paymentConfigCompatible;
   gates.push(gate("historical-e2e-payment-compatibility", paymentCompatible,
     paymentCompatible ? "E2E source commit and all service images match; the content-addressed diff is tooling-only and current payment settings match the recorded baseline." :
       "Historical payment evidence cannot be reused: source/image identity, content-addressed tooling-only diff, or payment configuration compatibility is not fully proven."));

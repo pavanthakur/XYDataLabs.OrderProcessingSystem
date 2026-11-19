@@ -4,19 +4,19 @@ Session navigation, not proof. Verify Git, runtime and evidence before acting.
 
 ## Latest checkpoint — 19 November 2026
 
-- Review revision: `0e46047491e9e664e4d5a1b968ab59d7deda1581`
+- Review revision: `2200b5b15d766f13c019fb22fff5a72f23d29498`
 - Worktree state: `DIRTY`
 - Evidence status: `BLOCKED`
 - Evidence revision: `UNKNOWN`
 - Evidence environment: `LOCAL DOCKER DESKTOP ON G:`
 - Evidence scope: `TenantA/B/C × Razorpay/OpenPay local deterministic and sandbox baseline, plus local NFR/recovery; Azure excluded`
-- Evidence reference: `TestResults/Phase10/local-followup-20261119-current-candidate015/local-followup.json`
-- Goal: finish Phase 10 local Docker acceptance. The current-candidate015 report is being regenerated after this handoff correction; candidate014 is the preceding snapshot and is not authoritative for this revision.
+- Evidence reference: `TestResults/Phase10/local-followup-20261119-postcommit004/local-followup.json`
+- Goal: finish Phase 10 local Docker acceptance. Commit `2200b5b` contains reporting/NFR tooling and documentation only; no payment was rerun after it. The post-commit report records exact image-source content equivalence where proven and keeps the earlier E2E source mismatch explicit.
 - Payment evidence: E2E run `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261119-021441154/`: deterministic 6/6, sandbox positives 6/6, and Razorpay negative/cancellation 6/6 across TenantA/B/C × Razorpay/OpenPay. Provider confirmation, SQL/order correlation and fixture restoration passed. Do not retry successful or ambiguous charges. OpenPay baseline uses 3DS off; challenge-negative support is not certified.
-- Latest source-bound evidence will be linked by candidate015's manifest. The previous selected checks passed: no-charge NFR, operational/recovery/rollback, Docker restart persistence, and messaging/Functions replay. Refreshed runs must retain 100-message recovery with zero loss/duplicates, exact Inventory rollback restoration, unchanged paid-order rows/SQL volume across restart, one approved replay and restoration.
-- Candidate014 is **INCOMPLETE**: the worktree is dirty; OpenPay challenge-negative is blocked/unverified; order continuation is deferred as DW-023; Azure is not run. The sealed E2E packet's persistence step is NOT-RUN, but the separate current persistence proof passed. Regenerate the report after source-bound checks without repeating sandbox charges.
+- Pre-commit candidate015 is retained unchanged as historical evidence. The new post-commit report is the current checkpoint; its source-binding and remaining gates are authoritative only for its recorded snapshot.
+- Post-push hosted checks for `2200b5b` passed: CI Build/Contract, Drift Scanner, AI Customization, AI Prompts and Documentation Links. ADR Markdown was skipped because no ADR changed. These checks do not certify Docker/Azure runtime acceptance.
 - Focused validation on current code passed: local-followup tests 16/16, automation TypeScript check, NFR-selection and operational-only contract tests, AI-customization validator, documentation-link validator, and `git diff --check`. The NU1701 OpenPay SDK compatibility warning remains unsuppressed.
-- Docker was running all 13 `xy-phase10` services after persistence/replay checks. Verify before further work. Preserve volumes and provider settings; Docker SQL is loopback 14330; native Windows SQL 1433 is out of scope. The deleted F: retention copy is not recoverable. No reset, global prune, VHDX compaction, Azure mutation or Git write occurred.
-- Next: rebind no-charge NFR, operations/recovery, persistence and replay evidence to this exact post-handoff worktree, regenerate candidate015, then review the dirty diff. Obtain fresh scoped authorization before staging, committing or pushing.
+- Docker was running all 13 `xy-phase10` services after persistence/replay checks; verify before further work. Preserve volumes and provider settings; Docker SQL is loopback 14330; native Windows SQL 1433 is out of scope. The deleted F: retention copy is not recoverable. No reset, global prune, VHDX compaction or Azure mutation occurred.
+- Next: review the post-commit report. It must keep OpenPay challenge-negative blocked/unverified, order continuation deferred as DW-023, Azure not run, and any cross-run source mismatch visible. Do not repeat sandbox payments merely to refresh reporting. Separately review and authorize any Git write for the reporting/handoff follow-up.
 
 Canonical plans: `docs/internal/phase10-implementation-checklist.md`, `docs/internal/phase10-preazure-lld.md`, `docs/runbooks/phase10-docker-fresh-ssd.md`, and `docs/runbooks/phase10-azure-smoke.md`. Raw `TestResults` are ignored and must be preserved.

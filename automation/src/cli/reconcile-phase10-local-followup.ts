@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { fileURLToPath } from "node:url";
 import { verifyPhase10Completion } from "../report/phase10-completion.js";
 import { reconcilePhase10LocalFollowup, renderPhase10LocalFollowupHtml } from "../report/phase10-local-followup.js";
-import { capturePhase10WorktreeIdentity } from "../report/phase10-worktree-identity.js";
+import { capturePhase10CommittedSnapshotIdentity, capturePhase10WorktreeIdentity } from "../report/phase10-worktree-identity.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const testResultsRoot = resolve(repoRoot, "TestResults");
@@ -290,6 +290,19 @@ async function main(): Promise<void> {
     noPaymentRoot ? optionalJson(join(noPaymentRoot, "acceptance-packet.json")) : Promise.resolve(undefined),
     noPaymentRoot ? optionalJson(join(noPaymentRoot, "phase10-coverage-summary.json")) : Promise.resolve(undefined)
   ]);
+  const currentImageCandidate = asRecord(asRecord(currentImage)?.candidate);
+  const imageBaseCommit = typeof currentImageCandidate?.commit === "string" ? currentImageCandidate.commit : undefined;
+  let currentSourceIdentity = liveSourceIdentity;
+  if (imageBaseCommit && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(imageBaseCommit)) {
+    try {
+      currentSourceIdentity = {
+        ...liveSourceIdentity,
+        committedSnapshot: capturePhase10CommittedSnapshotIdentity(repoRoot, imageBaseCommit)
+      };
+    } catch {
+      // Missing ancestry or malformed source evidence leaves the identity gate blocked.
+    }
+  }
   const nfrRecord = nfrRaw !== null && typeof nfrRaw === "object" && !Array.isArray(nfrRaw) ? nfrRaw as Record<string, unknown> : {};
   const nfr = { ...nfrRecord, paymentSettingsBefore, paymentSettingsAfter };
   const evidenceFiles = (await Promise.all([
@@ -328,7 +341,7 @@ async function main(): Promise<void> {
     noPaymentReport: noPaymentRoot ? { completion: noPaymentCompletion?.state ?? "INCOMPLETE", completionStatus: noPaymentCompletionStatus,
       packet: noPaymentPacket, summary: noPaymentSummary, coverage: noPaymentCoverage } : undefined,
     current: { imageManifest: currentImage, foundation, functions, nfr, burst, outage, rollback,
-      sourceIdentity: liveSourceIdentity,
+      sourceIdentity: currentSourceIdentity,
       operational: { summary: operationsSummary, imageManifest: operationsImage },
       paymentMatrices: paymentMatrixSummaries ? {
         deterministic: paymentMatrixSummaries[0], sandboxPositive: paymentMatrixSummaries[1], sandboxNegative: paymentMatrixSummaries[2]
