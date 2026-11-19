@@ -85,7 +85,14 @@ function docker {
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('phase10-image-evidence-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($temp)
 try {
-    $workspace = $root
+    $workspace = Join-Path $temp 'clean-workspace'
+    [void][IO.Directory]::CreateDirectory($workspace)
+    & $gitCommand.Source -C $workspace init --quiet
+    & $gitCommand.Source -C $workspace config user.email 'phase10-test@example.invalid'
+    & $gitCommand.Source -C $workspace config user.name 'Phase10 test'
+    Set-Content -LiteralPath (Join-Path $workspace 'baseline.txt') -Value 'baseline' -NoNewline
+    & $gitCommand.Source -C $workspace add -- baseline.txt
+    & $gitCommand.Source -C $workspace commit --quiet -m 'baseline'
     $beforePath = Join-Path $temp 'before.json'
     $afterPath = Join-Path $temp 'after.json'
     $arguments = @{ RunId='phase10-docker-http-20261111-000000001'; OutputPath=$beforePath; ComposeFile='compose.yml';
@@ -96,6 +103,9 @@ try {
     $after = Get-Phase10DockerImageManifest @afterArguments -CapturePoint after
     $readBack = Get-Content -LiteralPath $beforePath -Raw | ConvertFrom-Json
     if ($readBack.images.Count -ne 13 -or $readBack.capturePoint -ne 'before') { throw 'Captured manifest is incomplete.' }
+    if ($readBack.candidate.changedPaths -isnot [array] -or $readBack.candidate.changedPaths.Count -ne 0) {
+        throw 'A clean candidate must serialize changedPaths as an empty JSON array.'
+    }
     $readBack.candidate.worktree = 'clean'
     $readBack.candidate.dirtyStatusSha256 = $null
     $before.candidate.worktree = 'clean'

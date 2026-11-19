@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { PHASE10_DOCKER_SERVICES } from "./phase10-images.js";
+import { PHASE10_DOCKER_SERVICES, validatePhase10ImageManifest } from "./phase10-images.js";
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
 import { reconcilePhase10LocalFollowup, renderPhase10LocalFollowupHtml } from "./phase10-local-followup.js";
 import { capturePhase10CommittedSnapshotIdentity, capturePhase10WorktreeIdentity } from "./phase10-worktree-identity.js";
@@ -349,6 +349,64 @@ test("payment compatibility is blocked when the live checkout differs from the i
   assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "BLOCKED");
   assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
   assert.equal(report.currentSourceIdentity?.worktreeContentSha256, "e".repeat(64));
+});
+
+test("clean image evidence accepts only a tooling-only checkout overlay", () => {
+  const input = base();
+  for (const value of [input.e2e.imageBefore, input.e2e.imageAfter, input.current.imageManifest]) {
+    const manifest = value as ReturnType<typeof imageManifest>;
+    manifest.candidate.worktree = "clean";
+    manifest.candidate.dirtyStatusSha256 = null;
+    manifest.candidate.worktreeContentSha256 = null;
+    manifest.candidate.changedPaths = [];
+  }
+  input.current.sourceIdentity = { commit: e2eCommit, worktree: "dirty", dirtyStatusSha256: "c".repeat(64),
+    worktreeContentSha256: "d".repeat(64), changedPaths: ["automation/src/report/phase10-images.ts"] };
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "PASS");
+
+  input.current.sourceIdentity.changedPaths = ["XYDataLabs.OrderProcessingSystem.API/Payments/PaymentController.cs"];
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
+});
+
+test("clean image evidence remains compatible with a committed tooling-only descendant", () => {
+  const input = base();
+  for (const value of [input.e2e.imageBefore, input.e2e.imageAfter, input.current.imageManifest]) {
+    const manifest = value as ReturnType<typeof imageManifest>;
+    manifest.candidate.worktree = "clean";
+    manifest.candidate.dirtyStatusSha256 = null;
+    manifest.candidate.worktreeContentSha256 = null;
+    manifest.candidate.changedPaths = [];
+  }
+  const descendant = "b".repeat(40);
+  const changedPaths = ["automation/src/report/phase10-images.ts", "scripts/phase10-docker-image-evidence.ps1"];
+  input.current.sourceIdentity = { commit: descendant, worktree: "clean", dirtyStatusSha256: null,
+    worktreeContentSha256: null, changedPaths: [], committedSnapshot: {
+      baseCommit: e2eCommit, commit: descendant, worktreeContentSha256: "d".repeat(64), changedPaths
+    } };
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "PASS");
+
+  input.current.sourceIdentity.committedSnapshot!.changedPaths = ["XYDataLabs.OrderProcessingSystem.API/Payments/PaymentController.cs"];
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "current-checkout-image-candidate-identity")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "historical-e2e-payment-compatibility")?.status, "BLOCKED");
+});
+
+test("legacy clean image manifests normalize null changedPaths but dirty manifests reject it", () => {
+  const clean = imageManifest("clean-run", e2eCommit, "clean", "after") as ReturnType<typeof imageManifest>;
+  clean.candidate.changedPaths = null as unknown as string[];
+  const cleanResult = validatePhase10ImageManifest(clean, "clean-run", "after");
+  assert.equal(cleanResult.status, "PASS");
+  if (cleanResult.status === "PASS") assert.deepEqual(cleanResult.manifest.candidate.changedPaths, []);
+
+  const dirty = imageManifest("dirty-run", e2eCommit, "dirty", "after") as ReturnType<typeof imageManifest>;
+  dirty.candidate.changedPaths = null as unknown as string[];
+  assert.equal(validatePhase10ImageManifest(dirty, "dirty-run", "after").status, "BLOCKED");
 });
 
 test("committed source content equivalence allows tooling-only payment evidence reuse without claiming a clean run", () => {

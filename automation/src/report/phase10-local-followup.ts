@@ -289,10 +289,22 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
     manifestCandidate.worktree === "dirty" && committedSnapshot.worktreeContentSha256 === manifestCandidate.worktreeContentSha256 &&
     JSON.stringify(committedSnapshot.changedPaths) === JSON.stringify(manifestCandidate.changedPaths) &&
     toolingOnlyPaths(committedSnapshot.changedPaths);
-  const currentSourceMatchesImage = directCurrentSourceMatch || committedSourceSnapshotMatchesImage;
+  // A clean image candidate remains source-compatible when the current checkout
+  // differs only in allowlisted test/reporting tools. Runtime/application changes
+  // remain blocked, and the report retains the dirty-worktree identity.
+  const cleanImageWithToolingOverlay = !!manifestCandidate && !!liveIdentity && manifestCandidate.worktree === "clean" &&
+    liveIdentity.commit === manifestCandidate.commit && liveIdentity.worktree === "dirty" &&
+    toolingOnlyPaths(liveIdentity.changedPaths);
+  const cleanImageWithCommittedToolingOverlay = !!manifestCandidate && !!committedSnapshot && manifestCandidate.worktree === "clean" &&
+    liveIdentity?.commit === committedSnapshot.commit && committedSnapshot.baseCommit === manifestCandidate.commit &&
+    toolingOnlyPaths(committedSnapshot.changedPaths);
+  const currentSourceMatchesImage = directCurrentSourceMatch || committedSourceSnapshotMatchesImage || cleanImageWithToolingOverlay ||
+    cleanImageWithCommittedToolingOverlay;
   gates.push(gate("current-checkout-image-candidate-identity", currentSourceMatchesImage,
     directCurrentSourceMatch ? "The reconciler's live Git worktree identity matches the source identity captured with the selected Docker image manifest." :
       committedSourceSnapshotMatchesImage ? "The selected image manifest's dirty source snapshot is reproduced exactly by the committed HEAD tree; any current uncommitted changes are tooling-only." :
+      cleanImageWithToolingOverlay ? "The image was built from the current clean HEAD; the checkout differs only in allowlisted test/reporting tooling, and its dirty identity is retained." :
+      cleanImageWithCommittedToolingOverlay ? "The image candidate is an ancestor of the current clean HEAD; intervening committed changes are confined to allowlisted test/reporting tooling." :
       `Live checkout=${liveIdentity?.commit ?? "UNKNOWN"}/${liveIdentity?.worktree ?? "UNKNOWN"}/${liveIdentity?.worktreeContentSha256 ?? "UNKNOWN"};` +
       ` image manifest=${manifestCandidate?.commit ?? "UNKNOWN"}/${manifestCandidate?.worktree ?? "UNKNOWN"}/${manifestCandidate?.worktreeContentSha256 ?? "UNKNOWN"}.`));
 

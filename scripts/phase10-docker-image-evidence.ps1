@@ -119,6 +119,10 @@ function Get-Phase10DockerImageManifest {
         [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($statusBytes)).ToLowerInvariant()
     } else { $null }
     $contentIdentity = if ($worktree -eq 'dirty') { Get-Phase10WorktreeContentIdentity -WorkspaceRoot $WorkspaceRoot -GitCommand $gitCommand } else { $null }
+    # Assign through a typed local: an empty array inside an if-expression can be
+    # unrolled by PowerShell and serialized as JSON null instead of [].
+    [string[]]$changedPaths = @()
+    if ($contentIdentity) { $changedPaths = [string[]]@($contentIdentity.changedPaths) }
     $buildLogs = [ordered]@{}
     foreach ($name in @('docker-compose-apps-build.log', 'docker-compose-azurite-build.log')) {
         $path = Join-Path $ArtifactRoot $name
@@ -138,7 +142,7 @@ function Get-Phase10DockerImageManifest {
             worktree = $worktree
             dirtyStatusSha256 = $dirtyIdentity
             worktreeContentSha256 = if ($contentIdentity) { $contentIdentity.sha256 } else { $null }
-            changedPaths = if ($contentIdentity) { $contentIdentity.changedPaths } else { @() }
+            changedPaths = $changedPaths
         }
         buildLogsSha256 = $buildLogs
         images = $images

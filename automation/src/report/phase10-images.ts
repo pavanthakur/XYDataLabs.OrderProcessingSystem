@@ -44,9 +44,10 @@ export function validatePhase10ImageManifest(value: unknown, expectedRunId?: str
       (candidate.worktree === "dirty" && (typeof candidate.dirtyStatusSha256 !== "string" || !/^[a-f0-9]{64}$/.test(candidate.dirtyStatusSha256)))) {
     return { status: "BLOCKED", reason: "Manifest candidate identity is missing or malformed." };
   }
+  const legacyCleanPaths = candidate.worktree === "clean" && candidate.changedPaths === null;
   if ((candidate.worktreeContentSha256 !== undefined && candidate.worktreeContentSha256 !== null &&
        (typeof candidate.worktreeContentSha256 !== "string" || !/^[a-f0-9]{64}$/.test(candidate.worktreeContentSha256))) ||
-      (candidate.changedPaths !== undefined && (!Array.isArray(candidate.changedPaths) || candidate.changedPaths.some(path =>
+      (candidate.changedPaths !== undefined && !legacyCleanPaths && (!Array.isArray(candidate.changedPaths) || candidate.changedPaths.some(path =>
         typeof path !== "string" || path.startsWith("/") || /(^|\/)\.\.?($|\/)/.test(path))))) {
     return { status: "BLOCKED", reason: "Manifest worktree-content identity is malformed." };
   }
