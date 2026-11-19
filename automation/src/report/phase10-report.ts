@@ -12,8 +12,15 @@ import { phase10ImageSetsMatch, validatePhase10ImageManifest } from "./phase10-i
 import type { Phase10ImageRecord } from "./phase10-images.js";
 import { normalizeAzureEvidence } from "./phase10-azure-evidence.js";
 import type { AzureEvidenceReport } from "./phase10-azure-evidence.js";
+import type { PaymentMatrixReport } from "./phase10-payment-matrix.js";
+import { normalizePhase10IdentityMatrix } from "./phase10-identity-matrix.js";
+import type { IdentityMatrixReport } from "./phase10-identity-matrix.js";
+import { normalizePhase10PersistenceEvidence } from "./phase10-persistence.js";
+import type { Phase10PersistenceEvidence } from "./phase10-persistence.js";
+import { normalizePhase10NfrEvidence } from "./phase10-nfr-evidence.js";
+import type { Phase10NfrEvidence } from "./phase10-nfr-evidence.js";
 
-export const PHASE10_REPORT_VERSION = 14 as const;
+export const PHASE10_REPORT_VERSION = 15 as const;
 
 // This inventory mirrors the Docker hook's final packet, not the complete L5-R suite inventory.
 export const DOCKER_PACKET_STEPS = [
@@ -48,6 +55,10 @@ export interface Phase10Report {
   git: { start: GitSnapshot; finish: GitSnapshot };
   imageIdentities: { status: "PASS" | "FAIL" | "BLOCKED"; detail: string; services: Phase10ImageRecord[] };
   azureEvidence: AzureEvidenceReport;
+  identityMatrix: IdentityMatrixReport;
+  paymentMatrices: PaymentMatrixReport[];
+  persistenceEvidence: Phase10PersistenceEvidence;
+  nfrEvidence: Phase10NfrEvidence;
   steps: PacketStep[];
   issues: string[];
   overall: "FAIL" | "BLOCKED";
@@ -93,7 +104,11 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
     backendCoverage?: Partial<Record<TrxProject, { xml: string; modifiedUtc: number }>>;
     automation?: Partial<Record<string, unknown>>; automationInventorySha256?: string;
     dotnetTests?: Partial<Record<TrxSuite, unknown>>; reportInputIssues?: string[];
-    dockerImageBefore?: unknown; dockerImageAfter?: unknown; azureEvidence?: Parameters<typeof normalizeAzureEvidence>[0] }): Phase10Report {
+    dockerImageBefore?: unknown; dockerImageAfter?: unknown; paymentMatrices?: PaymentMatrixReport[];
+    identityMatrix?: IdentityMatrixReport;
+    persistenceEvidence?: Phase10PersistenceEvidence;
+    nfrEvidence?: Phase10NfrEvidence;
+    azureEvidence?: Parameters<typeof normalizeAzureEvidence>[0] }): Phase10Report {
   const issues: string[] = [];
   if (additional?.reportInputIssues?.length) issues.push(...additional.reportInputIssues);
   const packet = record(packetInput);
@@ -241,12 +256,29 @@ export function normalizePhase10Packet(packetInput: unknown, summaryInput: unkno
   if (packetStatus === "PASS" && (restoration === "FAIL" || storage === "FAIL")) {
     issues.push("Packet reports PASS despite failed restoration or storage evidence.");
   }
+  const paymentMatrices = additional?.paymentMatrices ?? [];
+  const identityMatrix = additional?.identityMatrix ?? normalizePhase10IdentityMatrix(undefined, undefined);
+  if (steps.find(step => step.name === "customer-directory")?.status === "PASS" && identityMatrix.status !== "PASS") {
+    issues.push(`Customer-directory packet step is PASS but structured identity/isolation evidence is ${identityMatrix.status}.`);
+  }
+  if (additional?.paymentMatrices) for (const matrix of paymentMatrices) if (matrix.status !== "PASS") {
+    issues.push(`Payment case matrix is ${matrix.status}: ${matrix.kind}.`);
+  }
+  if (additional?.paymentMatrices && paymentSuite !== "none") {
+    for (const kind of ["deterministic", "sandbox-positive"] as const) {
+      const selected = paymentSuite === "both" || paymentSuite === (kind === "deterministic" ? "deterministic" : "sandbox");
+      if (selected && !paymentMatrices.some(matrix => matrix.kind === kind)) issues.push(`Selected payment case matrix is missing: ${kind}.`);
+    }
+  }
+  const persistenceEvidence = additional?.persistenceEvidence ?? normalizePhase10PersistenceEvidence();
+  const nfrEvidence = additional?.nfrEvidence ?? normalizePhase10NfrEvidence();
   const overall = packetStatus === "FAIL" || summaryStatus === "FAIL" || hasFailedStep || foundations.hasFailure ||
-    trx.some(result => result.status === "FAIL") || integration.status === "FAIL" || frontend.status === "FAIL" || restoration === "FAIL" || storage === "FAIL"
+    trx.some(result => result.status === "FAIL") || integration.status === "FAIL" || frontend.status === "FAIL" || restoration === "FAIL" || storage === "FAIL" ||
+    paymentMatrices.some(matrix => matrix.status === "FAIL") || identityMatrix.status === "FAIL"
     ? "FAIL" : "BLOCKED";
   return { version: PHASE10_REPORT_VERSION, runId, packetStatus: packetStatus ?? "BLOCKED", profile, paymentSuite,
     startedUtc, finishedUtc, restoration, storage, foundations, trx, integration, integrationCoverage, frontend, frontendCoverage,
-    backendCoverage, automation, dotnetTests, git, imageIdentities, azureEvidence, steps, issues, overall };
+    backendCoverage, automation, dotnetTests, git, imageIdentities, azureEvidence, identityMatrix, paymentMatrices, persistenceEvidence, nfrEvidence, steps, issues, overall };
 }
 
 function escapeHtml(value: string): string {
@@ -280,6 +312,15 @@ export function renderPhase10CoverageSummary(report: Phase10Report): string {
 export function renderPhase10Report(report: Phase10Report, coverageSummaryAvailable = false): string {
   const rows = report.steps.map(step => `<tr><td>${escapeHtml(step.name)}</td><td>${step.selection}</td><td>${step.status}</td></tr>`).join("\n");
   const issues = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("\n");
+  const paymentCaseRows = report.paymentMatrices.flatMap(matrix => matrix.cases.map(item =>
+    `<tr><td>${escapeHtml(matrix.kind)}</td><td>${escapeHtml(item.tenant)}</td><td>${escapeHtml(item.provider)}</td><td>${item.mode}</td><td>${item.threeDs}</td><td>${item.challenge}</td><td>${escapeHtml(item.outcome)}</td><td>${item.status}</td><td>${item.verification}</td><td>${item.cleanup}</td><td>${item.orderId ?? "UNKNOWN"}</td><td>${item.amount ?? "UNKNOWN"} ${item.currency ?? ""}</td><td>${item.reference ? escapeHtml(item.reference) : "UNKNOWN"}</td></tr>`
+  )).join("\n");
+  const paymentMatrixSummary = report.paymentMatrices.length
+    ? report.paymentMatrices.map(matrix => `<p>${escapeHtml(matrix.kind)}: ${matrix.status}; ${matrix.observed}/${matrix.expected ?? "UNKNOWN"} observed; summary SHA-256 ${matrix.summarySha256 ?? "UNKNOWN"}; seed-contract SHA-256 ${matrix.seedContractSha256 ?? "UNKNOWN"}.${matrix.issues.length ? ` Issues: ${matrix.issues.map(escapeHtml).join("; ")}` : ""}</p>`).join("\n")
+    : "<p>Payment case-level evidence: NOT COLLECTED.</p>";
+  const identityRows = report.identityMatrix.cases.map(item =>
+    `<tr><td>${item.role}</td><td>${item.tenant ? escapeHtml(item.tenant) : "—"}</td><td>${item.allowedHttpStatus ?? "—"}</td><td>${item.deniedTenant ? escapeHtml(item.deniedTenant) : "—"}</td><td>${item.deniedHttpStatus ?? "—"}</td><td>${item.status}</td></tr>`
+  ).join("\n");
   const foundationRows = report.foundations.checks.map(check => `<tr><td>${escapeHtml(check.name)}</td><td>${check.status}</td></tr>`).join("\n");
   const trxRows = [...report.trx, report.integration].map(result => `<tr><td>${result.project}</td><td>${result.status}</td><td>${result.counts?.total ?? "UNAVAILABLE"}</td><td>${result.counts?.passed ?? "UNAVAILABLE"}</td><td>${result.counts?.failed ?? "UNAVAILABLE"}</td><td>${result.counts?.skipped ?? "UNAVAILABLE"}</td></tr>`).join("\n");
   const testSources: { name: string; runnerStatus: EvidenceStatus; status: EvidenceStatus; total: number | null;
@@ -335,12 +376,21 @@ export function renderPhase10Report(report: Phase10Report, coverageSummaryAvaila
 <p>These are Git observations only. They do not identify built or running images, prove the contents of a dirty worktree, or establish that files remained unchanged during the run.</p>
 <p>Profile: ${report.profile}; payment suite: ${report.paymentSuite}; started: ${report.startedUtc ?? "UNKNOWN"}; finished: ${report.finishedUtc ?? "UNKNOWN"}.</p>
 <p>Fixture restoration: ${report.restoration}; storage exit evidence: ${report.storage}.</p>
+<h2>Supplemental Docker persistence restart evidence</h2>
+<p>Status: ${report.persistenceEvidence.status}; run: ${escapeHtml(report.persistenceEvidence.runId ?? "UNKNOWN")}; candidate: ${report.persistenceEvidence.candidateCommit ?? "UNKNOWN"}; unchanged tenant/order snapshots: ${report.persistenceEvidence.tenantRows}; unchanged service image identities: ${report.persistenceEvidence.imageCount}/13.</p>
+<p>This supplemental proof is shown independently. It does not overwrite the packet's persistence step, upgrade the overall verdict, or certify other gates.${report.persistenceEvidence.issues.length ? ` Issues: ${report.persistenceEvidence.issues.map(escapeHtml).join("; ")}` : ""}</p>
+<h2>Supplemental NFR, recovery and rollback evidence</h2>
+<p>Overall selected-profile status: ${report.nfrEvidence.overallStatus}; operational/recovery scope: ${report.nfrEvidence.selectedScopeStatus}; candidate: ${report.nfrEvidence.commit ?? "UNKNOWN"}; selected: ${report.nfrEvidence.selectedCategories.join(", ") || "NONE"}; not selected: ${report.nfrEvidence.notSelectedCategories.join(", ") || "UNKNOWN"}.</p>
+<p>100-message burst: ${report.nfrEvidence.burst.inbox ?? "UNKNOWN"}/${report.nfrEvidence.burst.messages ?? "UNKNOWN"} inbox; ${report.nfrEvidence.burst.effects ?? "UNKNOWN"}/${report.nfrEvidence.burst.messages ?? "UNKNOWN"} effects; P95 ${report.nfrEvidence.burst.p95Seconds ?? "UNKNOWN"} s. Consumer outage: ${report.nfrEvidence.recovery.messages ?? "UNKNOWN"} messages; recovery ${report.nfrEvidence.recovery.seconds ?? "UNKNOWN"} s; lost ${report.nfrEvidence.recovery.lost ?? "UNKNOWN"}; duplicate effects ${report.nfrEvidence.recovery.duplicateEffects ?? "UNKNOWN"}. Rollback: ${report.nfrEvidence.rollbackStatus}. Replay latency: ${report.nfrEvidence.replayStatus} (${report.nfrEvidence.replaySeconds ?? "UNKNOWN"} s).</p>
+<p>These are supplemental, candidate-bound selected-category results; they do not mean the full NFR suite passed. Evidence SHA-256: ${report.nfrEvidence.evidenceSha256 ?? "UNKNOWN"}.${report.nfrEvidence.issues.length ? ` Issues: ${report.nfrEvidence.issues.map(escapeHtml).join("; ")}` : ""}</p>
+<h2>Tenant identity and isolation matrix</h2><p>Status: ${report.identityMatrix.status}; ${report.identityMatrix.cases.length}/${report.identityMatrix.expected ?? "UNKNOWN"} normalized cases observed. Covers one administrator access case and one assigned-user access plus one cross-tenant denial case per active tenant, and the same-browser/cross-tab logout scenario. It does not claim every user-by-tenant denial pair was exercised.${report.identityMatrix.issues.length ? ` Issues: ${report.identityMatrix.issues.map(escapeHtml).join("; ")}` : ""}</p>
+<table><thead><tr><th>Identity role</th><th>Tenant</th><th>Allowed request</th><th>One tested denied tenant</th><th>Denied request</th><th>Status</th></tr></thead><tbody>${identityRows || '<tr><td colspan="6">NOT COLLECTED</td></tr>'}</tbody></table>
 <h2>Azure operational evidence</h2>
 <p>Azure evidence scope: ${report.azureEvidence.environment}; completeness: ${report.azureEvidence.completeness}; verdict: ${report.azureEvidence.verdict}. This is independent of the local Docker packet result. Runner revisions: ${escapeHtml(report.azureEvidence.runnerRevisions.join(", ") || "UNKNOWN")}. Azure acceptance is not certified by this preview.</p>
 <table><thead><tr><th>Azure gate</th><th>Status</th><th>Source status</th><th>Deployment provenance</th></tr></thead><tbody>${report.azureEvidence.gates.map(gate =>
     `<tr><td>${escapeHtml(gate.id)}</td><td>${gate.status}</td><td>${escapeHtml(gate.sourceStatus)}</td><td>${gate.provenance}</td></tr>`
   ).join("\n")}</tbody></table>
-<p>Raw test names, durations, failure details, raw artifact links, integration expected-test discovery, and the complete Phase 10 inventory: NOT COLLECTED.</p>
+<p>Raw test names and failure diagnostics are intentionally omitted; per-test durations and direct raw artifact links are not collected. .NET test identities are hashed and reconciled against current-candidate TRX where emitted. The complete Phase 10 expected-scenario inventory remains NOT COLLECTED.</p>
 ${coverageSummaryAvailable ? '<p><a href="phase10-coverage-summary.json">Sanitized aggregate coverage summary (JSON)</a>. This file is provisional; verify the completion record before using it.</p>' : ''}
 <h2>Inventory reconciliation</h2>
 <p>Fixed inventory counts, not individual test totals or acceptance gates. Packet step selection is independent of status; NOT-SELECTED and UNKNOWN are not failures or proof of coverage. Duplicates are BLOCKED; failures in conflicting entries still affect the overall result.</p>
@@ -350,6 +400,8 @@ ${coverageSummaryAvailable ? '<p><a href="phase10-coverage-summary.json">Sanitiz
 <p>These inventories do not include every Phase 10 suite, test or independent gate and must not be added together.</p>
 <h2>Docker packet steps</h2><p>Selection is shown only where the run summary records it; UNKNOWN does not mean optional.</p><table><thead><tr><th>Step</th><th>Selection</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
 <h2>Foundation checks</h2><p>These are runner checks, not individual test counts.</p><table><thead><tr><th>Check</th><th>Status</th></tr></thead><tbody>${foundationRows}</tbody></table>
+<h2>Payment case matrix</h2><p>This sanitized projection comes from nested payment-run summaries. It does not upgrade the packet verdict, prove source/image binding, or replace authoritative provider and SQL evidence. Empty optional capability placeholders are not treated as executed cases.</p>${paymentMatrixSummary}
+<table><thead><tr><th>Suite</th><th>Tenant</th><th>Provider</th><th>Adapter</th><th>Configured 3DS</th><th>Observed challenge</th><th>Journey</th><th>Status</th><th>Verification</th><th>Cleanup</th><th>Order</th><th>Amount</th><th>Order reference</th></tr></thead><tbody>${paymentCaseRows || '<tr><td colspan="13">NOT COLLECTED</td></tr>'}</tbody></table>
 <h2>Expected test-result sources</h2><p>These fixed sources are only a subset of Phase 10 suites. ${FOUNDATION_AUTOMATION_TEST_CHECKS.length} automation suites reconcile against a versioned expected-test inventory and stable hashed test IDs; inventory hash mismatch, missing, duplicate, unexpected or non-passing outcomes block that suite. The remaining sources reconcile recorded individual outcomes and counters but do not have a complete expected-test inventory; omitted tests cannot be detected from counts alone. Runner status is separate from result status.</p>
 <p>Versioned automation cases: ${report.automation.reduce((sum, suite) => sum + suite.expected, 0)} expected; ${report.automation.reduce((sum, suite) => sum + (suite.observed ?? 0), 0)} observed. Inventory/result completeness is separate from whether the cases passed.</p>
 <p>Discovered .NET cases: ${report.dotnetTests.reduce((sum, suite) => sum + suite.expected, 0)} expected; ${report.dotnetTests.reduce((sum, suite) => sum + (suite.observed ?? 0), 0)} observed across five foundation suites plus integration. IDs are hashes of discovered test names; raw names are not emitted.</p>

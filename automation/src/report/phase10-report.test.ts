@@ -15,6 +15,7 @@ import { parseBackendCoverage, parseFrontendCoverage } from "./phase10-coverage.
 import { verifyPhase10Completion } from "./phase10-completion.js";
 import { expectedAutomationTests, normalizeAutomationSuite, normalizeAutomationSuites, normalizeDiscoveredDotnetSuite,
   phase10AutomationInventorySha256 } from "./phase10-automation.js";
+import { normalizePhase10IdentityMatrix } from "./phase10-identity-matrix.js";
 
 const execFileAsync = promisify(execFile);
 const summary = {
@@ -280,8 +281,30 @@ test("complete packet remains blocked until independent L5-R gates are implement
   assert.equal(result.steps.length, DOCKER_PACKET_STEPS.length);
   assert.equal(result.restoration, "PASS");
   assert.equal(result.storage, "PASS");
-  assert.equal(result.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 8);
+  assert.equal(result.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 9);
   assert.match(renderPhase10Report(result), /cannot certify/);
+});
+
+test("identity matrix is rendered with aggregate outcomes and no account identifiers", () => {
+  const identityMatrix = normalizePhase10IdentityMatrix({ results: [
+    { account: "tenant-admin", tenant: "TenantA", status: "passed", httpStatus: 200, customerCount: 2 },
+    { account: "tenant-admin", tenant: "TenantB", status: "passed", httpStatus: 200, customerCount: 3 },
+    { account: "private-user-a", tenant: "TenantA", status: "passed", httpStatus: 200,
+      deniedTenant: "TenantB", deniedStatus: 403, customerCount: 2 },
+    { account: "private-user-b", tenant: "TenantB", status: "passed", httpStatus: 200,
+      deniedTenant: "TenantA", deniedStatus: 403, customerCount: 3 },
+    { scenario: "same-browser login/logout and cross-tab logout", status: "passed" }
+  ] }, { status: "passed", activeTenantCount: 2, tenants: [
+    { tenant: "TenantA", status: "Active" }, { tenant: "TenantB", status: "Active" }
+  ] });
+  const report = normalizePhase10Packet(packet, summary, foundations, trxInputs, { ...additional, identityMatrix });
+  const html = renderPhase10Report(report);
+  assert.equal(identityMatrix.status, "PASS");
+  assert.match(html, /Tenant identity and isolation matrix/);
+  assert.match(html, /platform-admin/);
+  assert.match(html, /tenant-user/);
+  assert.match(html, /cross-tenant denial/);
+  assert.doesNotMatch(html, /private-admin|private-user/);
 });
 
 test("Git provenance is allowlisted, provisional, and never inferred from historical runs", () => {
@@ -337,7 +360,7 @@ test("suite selection is separate from step outcome and unknown selection is exp
   assert.equal(deterministic.steps.find(step => step.name === "sandbox-payments")?.selection, "NOT-SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "payments-deterministic")?.selection, "SELECTED");
   assert.equal(deterministic.steps.find(step => step.name === "persistence")?.selection, "UNKNOWN");
-  assert.equal(deterministic.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 8);
+  assert.equal(deterministic.issues.length, FOUNDATION_AUTOMATION_TEST_CHECKS.length + 9);
   const noPayment = normalizePhase10Packet({ ...packet, steps }, { ...summary, paymentSuite: "none" }, foundations, trxInputs, additional);
   assert.equal(noPayment.paymentSuite, "none");
   assert.equal(noPayment.steps.find(step => step.name === "payments-deterministic")?.selection, "NOT-SELECTED");
@@ -427,6 +450,19 @@ test("structured source inventory displays bounded anonymous reconciled outcomes
 
 test("automation test inventory matches the foundation runner and package scripts", async () => {
   const runner = await readFile(resolve("../scripts/run-phase10-foundation-tests.ps1"), "utf8");
+  const directChecks = [...runner.matchAll(/\bRun-Test\s+'([^']+)'/g)].map(match => match[1]);
+  const dotnetLoop = runner.match(/foreach\(\$name in @\(('Domain'(?:,'[^']+')*)\)\)/);
+  assert.ok(dotnetLoop, "Foundation .NET project loop is missing or changed");
+  const dotnetProjects = [...dotnetLoop[1].matchAll(/'([^']+)'/g)].map(match => `${match[1]}-tests`);
+  const automationLoop = runner.match(/foreach\(\$suite in @\(([^)]*)\)\)/);
+  assert.ok(automationLoop, "Foundation automation suite loop is missing or changed");
+  const automationScripts = [...automationLoop[1].matchAll(/'([^']+)'/g)].map(match => match[1]);
+  const automationCheckIds = automationScripts.map(name => name.replaceAll(":", "-"));
+  const declaredChecks = [...directChecks, ...dotnetProjects, ...automationCheckIds];
+  assert.equal(new Set(declaredChecks).size, declaredChecks.length, "Foundation runner emits duplicate check IDs");
+  assert.deepEqual([...FOUNDATION_CHECKS].sort(), [...declaredChecks].sort(),
+    "Report foundation inventory must exactly match every named and parameterized foundation runner check");
+
   const suiteLoop = runner.match(/foreach\(\$suite in @\(([^)]*)\)\)/);
   assert.ok(suiteLoop, "Foundation automation suite loop is missing or changed");
   const scripts = [...suiteLoop[1].matchAll(/'([^']+)'/g)].map(match => match[1]);
@@ -704,6 +740,28 @@ test("CLI refuses an existing coverage output without replacing it", async () =>
   }
 });
 
+test("CLI can project a refreshed report to a separate directory without modifying sealed run artifacts", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "phase10-report-projection-"));
+  const root = join(parent, "sealed-run");
+  const output = join(parent, "new-report");
+  await mkdir(root);
+  await mkdir(output);
+  try {
+    await writeFile(join(root, "acceptance-packet.json"), JSON.stringify(packet));
+    await writeFile(join(root, "run-summary.json"), JSON.stringify(summary));
+    const before = await readFile(join(root, "acceptance-packet.json"), "utf8");
+    const args = ["--import", "tsx", "src/cli/render-phase10-preview.ts", root, "--output-directory", output];
+    await execFileAsync(process.execPath, args);
+    const html = await readFile(join(output, "index.html"), "utf8");
+    assert.match(html, /Tenant identity and isolation matrix/);
+    assert.match(html, /Status: BLOCKED/);
+    assert.equal(await readFile(join(output, "phase10-preview.html"), "utf8"), html);
+    assert.equal(await readFile(join(root, "acceptance-packet.json"), "utf8"), before);
+    await assert.rejects(execFileAsync(process.execPath, args));
+    assert.equal(await readFile(join(output, "index.html"), "utf8"), html);
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
 test("CLI reads the same-run foundation summary without changing input", async () => {
   const root = await mkdtemp(join(tmpdir(), "phase10-preview-test-"));
   try {
@@ -761,6 +819,33 @@ test("CLI reads the same-run foundation summary without changing input", async (
         observedCount: 1, missingCount: 0, unexpectedCount: 0, duplicateCount: 0, tests: [{ id, status: "passed" }]
       }));
     }
+    const paymentRoot = join(root, "payments");
+    const paymentSeed = { status: "passed", activeTenantCount: 3, supportedProviders: ["Razorpay", "OpenPay"], tenants: [
+      { tenant: "TenantA", status: "Active", providers: [{ provider: "Razorpay", threeDs: false }, { provider: "OpenPay", threeDs: false }] },
+      { tenant: "TenantB", status: "Active", providers: [{ provider: "Razorpay", threeDs: false }, { provider: "OpenPay", threeDs: false }] },
+      { tenant: "TenantC", status: "Active", providers: [{ provider: "Razorpay", threeDs: false }, { provider: "OpenPay", threeDs: false }] }
+    ] };
+    for (const mode of ["deterministic", "sandbox"] as const) {
+      const matrixRoot = join(paymentRoot, `payment-acceptance-${mode}-${mode === "deterministic" ? "123" : "456"}`);
+      await mkdir(matrixRoot, { recursive: true });
+      const resultRows = paymentSeed.tenants.flatMap(tenant => paymentSeed.supportedProviders.map(provider => ({ rows: [{
+        tenantCode: tenant.tenant, paymentProvider: provider, adapterMode: mode, threeDsSetting: false,
+        observedChallenge: "not-presented", journeyOutcome: "completed", verificationOutcome: "passed",
+        cleanupOutcome: "reset", executionEvidence: "fresh", orderId: 42,
+        orderReferenceId: "fbdf39bc-e1bc-48fc-9520-47848338aebd", orderAmount: 200,
+        orderCurrencyCode: provider === "Razorpay" ? "INR" : "MXN",
+        providerVerification: mode === "deterministic" ? "deterministic:completed" : "sandbox:completed",
+        errorDetail: "DO_NOT_LEAK_PAYMENT_DETAIL"
+      }] })));
+      const results = resultRows.map((entry, index) => {
+        const runId = `payment-automation-2026-11-20T00-01-${String(index).padStart(2, "0")}-000Z`;
+        return { runId, rows: entry.rows.map(row => ({ ...row, runId })) };
+      });
+      await writeFile(join(matrixRoot, "summary.json"), JSON.stringify({ mode, negative: false, status: "passed",
+        caseCount: 6, expectedCaseCount: 6, coveragePassed: true, primaryPassed: true, skippedTenants: [],
+        results: mode === "sandbox" ? [...results, { rows: [] }, { rows: [] }, { rows: [] }] : results }));
+      await writeFile(join(matrixRoot, "seed-contract.json"), JSON.stringify(paymentSeed));
+    }
     const azureEvidenceRoot = join(root, "azure-evidence");
     await mkdir(azureEvidenceRoot);
     await writeFile(join(azureEvidenceRoot, "runtime-smoke.json"), JSON.stringify({
@@ -788,6 +873,11 @@ test("CLI reads the same-run foundation summary without changing input", async (
     assert.match(html, /Overall: BLOCKED/);
     assert.match(html, /Azure operational evidence/);
     assert.match(html, /runtime-smoke<\/td><td>BLOCKED/);
+    assert.match(html, /Payment case matrix/);
+    assert.match(html, /deterministic: PASS; 6\/6 observed/);
+    assert.match(html, /sandbox-positive: PASS; 6\/6 observed/);
+    assert.match(html, /TenantC<\/td><td>OpenPay/);
+    assert.doesNotMatch(html, /DO_NOT_LEAK_PAYMENT_DETAIL/);
     assert.equal(await readFile(join(root, "index.html"), "utf8"), html);
     const coverage = await readFile(join(root, "phase10-coverage-summary.json"), "utf8");
     assert.match(coverage, /"covered": 3/);
