@@ -1,6 +1,8 @@
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
 import { phase10ImageSetsMatch, validatePhase10ImageManifest } from "./phase10-images.js";
 import type { Phase10ImageManifest } from "./phase10-images.js";
+import { isDeepStrictEqual } from "node:util";
+import type { PaymentMatrixKind } from "./phase10-payment-matrix.js";
 
 export const NFR_REQUIRED_CATEGORIES = ["functional", "performance", "tenant", "payments", "operational", "recovery", "security"] as const;
 export const P95_LIMIT_SECONDS = 30;
@@ -15,8 +17,12 @@ export interface AcceptanceInput {
   expectedCommit: string;
   e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown;
     coverage: unknown; reportIssuesClean: boolean; imageBefore: unknown; imageAfter: unknown };
+  payments?: { completionStatus?: string; configurationMatched: boolean; sandboxGates: unknown; packet: unknown; summary: unknown;
+    imageBefore: unknown; imageAfter: unknown };
+  standalonePayments?: Array<{ kind: PaymentMatrixKind; status: "PASS" | "FAIL" | "BLOCKED";
+    configurationMatched: boolean; runId?: string; before?: Phase10ImageManifest; after?: Phase10ImageManifest }>;
   nfr: { summary: unknown; outageDrill: unknown; replayProof: unknown; performanceProbe: unknown;
-    imageBefore: unknown; imageAfter: unknown; imageRunId?: string };
+    imageBefore: unknown; imageAfter: unknown; imageRunId?: string; sealVerified?: boolean; settingsUnchanged?: boolean };
 }
 export interface AcceptanceResult {
   schema: "phase10-local-acceptance-v1";
@@ -47,6 +53,39 @@ function cleanCommit(snapshot: unknown, expected: string): boolean {
   return value?.commit === expected && value?.worktree === "clean";
 }
 
+const paymentStepNames = ["payments-deterministic", "sandbox-payments", "tenantc-routing-regression"];
+const rows = (value: unknown) => Array.isArray(value) ? value.map(rec) : [];
+
+export function phase10PaymentConfigurationMatches(before: unknown, after: unknown, seed: unknown, restored: unknown): boolean {
+  const snapshot = rec(before);
+  if (snapshot?.schema !== "phase10-payment-settings-snapshot-v1" || !isDeepStrictEqual(before, after)) return false;
+  function project(value: unknown, fromSeed: boolean) {
+    const source = rec(value);
+    const tenants = rows(source?.tenants);
+    if (!tenants.length || (fromSeed && source?.status !== "passed")) return undefined;
+    const mapped = [];
+    for (const tenant of tenants) {
+      const code = fromSeed ? tenant?.tenant : tenant?.code;
+      if (typeof code !== "string" || !code || tenant?.status !== "Active" ||
+          (tenant.tier !== "SharedPool" && tenant.tier !== "Dedicated") ||
+          typeof tenant.registryRoute !== "string" || typeof tenant.businessDatabase !== "string") return undefined;
+      const providers = rows(tenant.providers);
+      if (!providers.length || providers.some(provider => typeof provider?.provider !== "string" ||
+          typeof provider.threeDs !== "boolean" || (fromSeed
+            ? provider.nonProduction !== true || provider.merchantMatchesLocal !== true ||
+              provider.publicKeyMatchesLocal !== true || provider.privateKeyReferenceCorrect !== true
+            : provider.production !== false))) return undefined;
+      const modes = providers.map(provider => [provider!.provider, provider!.threeDs]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+      if (new Set(modes.map(item => item[0])).size !== modes.length || !modes.some(item => item[0] === tenant.registryRoute)) return undefined;
+      mapped.push({ code, tier: tenant.tier, route: tenant.registryRoute, database: tenant.businessDatabase, modes });
+    }
+    if (new Set(mapped.map(tenant => tenant.code)).size !== mapped.length) return undefined;
+    return mapped.sort((a, b) => a.code.localeCompare(b.code));
+  }
+  const baseline = project(before, false);
+  return !!baseline && isDeepStrictEqual(baseline, project(seed, true)) && isDeepStrictEqual(baseline, project(restored, true));
+}
+
 function imagePair(valueBefore: unknown, valueAfter: unknown, runId: string | undefined, expectedCommit: string):
   { status: "PASS" | "FAIL" | "BLOCKED"; before?: Phase10ImageManifest; after?: Phase10ImageManifest; detail: string } {
   const before = validatePhase10ImageManifest(valueBefore, runId, "before");
@@ -69,9 +108,57 @@ export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceRe
   const summary = rec(e2e.summary);
   const e2eRunId = typeof summary?.runId === "string" ? summary.runId : undefined;
   const e2eImages = imagePair(e2e.imageBefore, e2e.imageAfter, e2eRunId, input.expectedCommit);
+  const nfrSummary = rec(nfr.summary);
+  const selection = rec(nfrSummary?.selection);
+  const categories = rec(nfrSummary?.categories);
+  const paymentCategory = rec(categories?.payments);
+  const separateMatrix = selection?.mode === "full" && selection.dynamicPaymentMatrix === "not-run-explicit";
+  const paymentSteps = rows(rec(input.payments?.packet)?.steps);
+  const paymentSummary = rec(input.payments?.summary);
+  const paymentRunId = typeof paymentSummary?.runId === "string" ? paymentSummary.runId : undefined;
+  const paymentImages = imagePair(input.payments?.imageBefore, input.payments?.imageAfter, paymentRunId, input.expectedCommit);
+  const paymentProvenance = rec(paymentSummary?.gitProvenance);
+  const paymentRestoration = rec(rec(input.payments?.packet)?.restoration);
+  const sandbox = rec(input.payments?.sandboxGates);
+  const sandboxResults = rows(sandbox?.results);
+  const sandboxPassed = sandbox?.status === "passed" && sandbox.primaryPassed === true && sandboxResults.length === 2 &&
+    [false, true].every(negative => sandboxResults.filter(result =>
+      result?.negative === negative && result.primaryPassed === true && result.rawExitCode === 0 && result.status === "passed").length === 1);
+  const linkedPayments = separateMatrix && !!paymentRunId && input.payments?.completionStatus === "passed" &&
+    input.payments.configurationMatched && sandboxPassed && paymentSummary?.paymentSuite === "both" && paymentSummary.acceptanceProfile === "baseline" &&
+    cleanCommit(paymentProvenance?.start, input.expectedCommit) && cleanCommit(paymentProvenance?.finish, input.expectedCommit) &&
+    paymentRestoration?.allRestored === true && paymentRestoration.fixtureLockPresent === false &&
+    paymentImages.status === "PASS" && e2eImages.status === "PASS" &&
+    phase10ImageSetsMatch(paymentImages.before!, e2eImages.before!) &&
+    paymentStepNames.every(name => {
+      const matches = paymentSteps.filter(step => step?.name === name);
+      return matches.length === 1 && matches[0]?.status === "passed";
+    });
+  const standalone = input.standalonePayments ?? [];
+  const standaloneKinds: PaymentMatrixKind[] = ["deterministic", "sandbox-positive", "sandbox-negative"];
+  const standalonePaymentsPassed = separateMatrix && standalone.length === standaloneKinds.length &&
+    standaloneKinds.every(kind => standalone.filter(item => item.kind === kind).length === 1 &&
+      standalone.find(item => item.kind === kind)?.status === "PASS" &&
+      standalone.find(item => item.kind === kind)?.configurationMatched === true) && e2eImages.status === "PASS" &&
+    standalone.every(item => {
+      if (!item.runId || !item.before || !item.after) return false;
+      const before = validatePhase10ImageManifest(item.before, item.runId, "before");
+      const after = validatePhase10ImageManifest(item.after, item.runId, "after");
+      return before.status === "PASS" && after.status === "PASS" && before.manifest.candidate.commit === input.expectedCommit &&
+        after.manifest.candidate.commit === input.expectedCommit && before.manifest.candidate.worktree === "clean" &&
+        after.manifest.candidate.worktree === "clean" && phase10ImageSetsMatch(before.manifest, after.manifest) &&
+        phase10ImageSetsMatch(before.manifest, e2eImages.before!);
+    });
+  const linkedPaymentAcceptance = linkedPayments || standalonePaymentsPassed;
+  const noPaymentE2e = separateMatrix && summary?.paymentSuite === "none" && e2e.completionStatus === "partial";
+  if (separateMatrix) gates.push(gate("linked-payment-matrix", linkedPaymentAcceptance,
+    "A sealed baseline deterministic and sandbox matrix (including Razorpay negatives) is required on the same clean source, images and restored provider settings.",
+    input.payments?.completionStatus === "failed" || sandbox?.status === "failed" || sandboxResults.some(result => result?.status === "failed") ||
+    paymentSteps.some(step => paymentStepNames.includes(String(step?.name)) && step?.status === "failed") ||
+    standalone.some(item => item.status === "FAIL")));
   gates.push({ name: "e2e-image-identities", status: e2eImages.status, detail: e2eImages.detail });
 
-  gates.push(gate("e2e-sealed-completion", e2e.completion === "COMPLETE" && e2e.completionStatus === "passed",
+  gates.push(gate("e2e-sealed-completion", e2e.completion === "COMPLETE" && (e2e.completionStatus === "passed" || noPaymentE2e),
     `completion=${e2e.completion}; status=${e2e.completionStatus ?? "UNKNOWN"}`, e2e.completionStatus === "failed"));
 
   const provenance = rec(summary?.gitProvenance);
@@ -92,7 +179,14 @@ export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceRe
           : { name: `e2e-${name}`, status: "BLOCKED", detail: `status=${status}; no DW-023 deferral recorded` });
       continue;
     }
-    gates.push(gate(`e2e-${name}`, status === "passed", `status=${status}`, status === "failed"));
+    const standaloneCoversStep = name === "payments-deterministic" || name === "sandbox-payments" ||
+      (name === "tenantc-routing-regression" && matches[0]?.fixtureRegression === true &&
+        Array.isArray(matches[0].dedicatedTenants) && matches[0].dedicatedTenants.length > 0);
+    gates.push(gate(`e2e-${name}`, status === "passed" || (status === "not-run" && noPaymentE2e &&
+      ((paymentStepNames.includes(name) && linkedPayments) || (standaloneCoversStep && standalonePaymentsPassed))),
+      status === "not-run" && noPaymentE2e && ((paymentStepNames.includes(name) && linkedPayments) ||
+        (standaloneCoversStep && standalonePaymentsPassed))
+        ? "Not run in primary E2E; satisfied by the verified linked payment run." : `status=${status}`, status === "failed"));
   }
 
   const restoration = rec(packet?.restoration);
@@ -108,7 +202,8 @@ export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceRe
       measured(coverage?.frontend) && measured(coverage?.integration),
     "Sealed report lists no reconciliation issues and measured backend, frontend and integration coverage."));
 
-  const nfrSummary = rec(nfr.summary);
+  gates.push(gate("nfr-run-evidence-seal", nfr.sealVerified === true,
+    "The NFR summary, image manifests, and required proof files must match hashes sealed by that run."));
   const nfrRunDirectory = typeof nfrSummary?.runDir === "string" ? nfrSummary.runDir.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) : undefined;
   const nfrImages = imagePair(nfr.imageBefore, nfr.imageAfter, nfr.imageRunId ?? nfrRunDirectory, input.expectedCommit);
   gates.push({ name: "nfr-image-identities", status: nfrImages.status, detail: nfrImages.detail });
@@ -118,15 +213,30 @@ export function reconcilePhase10Acceptance(input: AcceptanceInput): AcceptanceRe
   gates.push({ name: "e2e-nfr-image-consistency", status: crossImageMatch ? "PASS" : crossMismatch ? "FAIL" : "BLOCKED",
     detail: crossImageMatch ? "E2E and NFR used the same 13 local service image IDs." : crossMismatch
       ? "E2E and NFR used different service image identities despite matching source revision." : "Cannot compare E2E and NFR image identities." });
-  const categories = rec(nfrSummary?.categories);
   const categoryStatuses = NFR_REQUIRED_CATEGORIES.map(name => `${name}=${String(rec(categories?.[name])?.status ?? "missing")}`);
   gates.push(gate("nfr-single-clean-candidate",
     nfrSummary?.commitSha === input.expectedCommit && nfrSummary?.worktreeAtStart === "clean" && nfrSummary?.worktreeAtFinish === "clean" &&
       nfrSummary?.commitShaAtFinish === input.expectedCommit,
     "NFR run must record the expected commit and a clean worktree at start and finish."));
-  gates.push(gate("nfr-categories",
+  const integrationChecks = rows(paymentCategory?.checks);
+  const selectedCategories = selection?.selectedCategories;
+  const checkedSelection = Array.isArray(selectedCategories) && selectedCategories.length === NFR_REQUIRED_CATEGORIES.length &&
+    NFR_REQUIRED_CATEGORIES.every(name => selectedCategories.includes(name));
+  const onlyPaymentPartial = separateMatrix && nfrSummary?.status === "incomplete" && checkedSelection &&
+    paymentCategory?.status === "partial" && paymentCategory.execution === "selected" &&
+    paymentCategory.integrationStatus === "passed" && paymentCategory.dynamicMatrixStatus === "not-run" &&
+    integrationChecks.length === 2 &&
+    integrationChecks.filter(check => check?.name === "Payment provider integration tests" && check.status === "passed").length === 1 &&
+    integrationChecks.filter(check => check?.name === "Dynamic provider payment matrix" && check.status === "not-run").length === 1 &&
+    nfrSummary.paymentSettingsIntegrity === "passed" && nfr.settingsUnchanged === true &&
+    NFR_REQUIRED_CATEGORIES.filter(name => name !== "payments").every(name => {
+      const category = rec(categories?.[name]);
+      return category?.status === "passed" && category.execution === "selected";
+    });
+  gates.push(gate("nfr-categories", separateMatrix ? onlyPaymentPartial :
     nfrSummary?.status === "passed" && categoryStatuses.every(item => item.endsWith("=passed")),
-    categoryStatuses.join("; "), nfrSummary?.status === "failed"));
+    categoryStatuses.join("; "), nfrSummary?.status === "failed" || nfrSummary?.paymentSettingsIntegrity === "failed" ||
+    NFR_REQUIRED_CATEGORIES.some(name => rec(categories?.[name])?.status === "failed")));
 
   const probe = rec(nfr.performanceProbe);
   const expected = num(pick(probe, "ExpectedMessages"));

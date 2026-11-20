@@ -190,13 +190,30 @@ function Write-Phase10Completion {
     param([Parameter(Mandatory = $true)][string]$Directory, [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Summary)
     $paths = @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html',
         'docker-image-identities-before.json', 'docker-image-identities-after.json')
+    $packet = Get-Content -LiteralPath (Join-Path $Directory 'acceptance-packet.json') -Raw | ConvertFrom-Json
+    $schema = 'phase10-completion-v4'
+    if (@($packet.steps | Where-Object { $_.name -ceq 'messaging-functions' -and $_.status -ceq 'passed' }).Count -eq 1) {
+        $messagingDirectory = Get-Item -LiteralPath (Join-Path $Directory 'messaging') -Force
+        if (-not $messagingDirectory.PSIsContainer -or ($messagingDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Messaging evidence directory is not a regular directory.'
+        }
+        $paths += 'messaging/functions-proof.json'
+        $schema = 'phase10-completion-v5'
+    }
+    if ($schema -eq 'phase10-completion-v5' -and $Summary.paymentSuite -ceq 'both' -and $Summary.status -ceq 'passed') {
+        $paymentDirectory = Get-Item -LiteralPath (Join-Path $Directory 'payments') -Force
+        if (-not $paymentDirectory.PSIsContainer -or ($paymentDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Payment evidence directory is not a regular directory.'
+        }
+        $paths += @('seed-contract.json', 'restoration-contract.json', 'payments/sandbox-gates.json')
+        $schema = 'phase10-completion-v6'
+    }
     foreach ($name in $paths) {
         $item = Get-Item -LiteralPath (Join-Path $Directory $name) -Force
         if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Length -gt 2MB) {
             throw 'Finalization artifact is not a bounded regular file.'
         }
     }
-    $packet = Get-Content -LiteralPath (Join-Path $Directory 'acceptance-packet.json') -Raw | ConvertFrom-Json
     $savedSummary = Get-Content -LiteralPath (Join-Path $Directory 'run-summary.json') -Raw | ConvertFrom-Json
     $coveragePath = Join-Path $Directory 'phase10-coverage-summary.json'
     $coverage = Get-Content -LiteralPath $coveragePath -Raw | ConvertFrom-Json
@@ -219,7 +236,7 @@ function Write-Phase10Completion {
         $hashes[$name] = (Get-FileHash -LiteralPath (Join-Path $Directory $name) -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     $record = [ordered]@{
-        schema = 'phase10-completion-v4'
+        schema = $schema
         runId = $Summary.runId
         status = $Summary.status
         sha256 = $hashes

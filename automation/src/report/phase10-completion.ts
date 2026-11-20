@@ -7,16 +7,36 @@ const legacyArtifacts = ["acceptance-packet.json", "run-summary.json", "phase10-
 const currentArtifacts = [...legacyArtifacts, "phase10-coverage-summary.json"] as const;
 const currentArtifactsV3 = [...currentArtifacts, "index.html"] as const;
 const currentArtifactsV4 = [...currentArtifactsV3, "docker-image-identities-before.json", "docker-image-identities-after.json"] as const;
+export const phase10FunctionsProofPath = "messaging/functions-proof.json";
+const currentArtifactsV5 = [...currentArtifactsV4, phase10FunctionsProofPath] as const;
+export const phase10PaymentBaselinePaths = ["seed-contract.json", "restoration-contract.json", "payments/sandbox-gates.json"] as const;
+const currentArtifactsV6 = [...currentArtifactsV5, ...phase10PaymentBaselinePaths] as const;
 type Status = "passed" | "partial" | "failed";
-export type CompletionResult = { state: "COMPLETE"; status: Status } | { state: "INCOMPLETE" };
+export type CompletionResult = { state: "COMPLETE"; status: Status; functionsProofSha256?: string;
+  paymentBaselineSha256?: string[] } | { state: "INCOMPLETE" };
+
+export function phase10NfrSealMatches(seal: unknown, runId: string, requiredPaths: readonly string[],
+  loadedHash: (path: string) => string | undefined): boolean {
+  const record = object(seal);
+  const hashes = object(record?.sha256);
+  return record?.schema === "phase10-nfr-evidence-v1" && record.runId === runId && !!hashes &&
+    requiredPaths.every(path => typeof hashes[path] === "string" && /^[a-f0-9]{64}$/.test(hashes[path]) &&
+      hashes[path] === loadedHash(path));
+}
 
 function object(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value)) : undefined;
 }
 
-async function readFileSafely(root: string, name: string): Promise<Buffer | undefined> {
+export async function readPhase10Artifact(root: string, name: string): Promise<Buffer | undefined> {
   try {
+    const segments = name.split("/");
+    if (segments.some(segment => !/^[a-z0-9][a-z0-9.-]*$/i.test(segment))) return undefined;
+    for (let depth = 0; depth < segments.length; depth++) {
+      const directory = await lstat(join(root, ...segments.slice(0, depth)));
+      if (!directory.isDirectory() || directory.isSymbolicLink()) return undefined;
+    }
     const path = join(root, name);
     const info = await lstat(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 2 * 1024 * 1024) return undefined;
@@ -37,13 +57,15 @@ export async function verifyPhase10Completion(root: string): Promise<CompletionR
   const incomplete: CompletionResult = { state: "INCOMPLETE" };
   const directory = await lstat(root);
   if (!directory.isDirectory() || directory.isSymbolicLink()) return incomplete;
-  const marker = json(await readFileSafely(root, "phase10-completion.json"));
+  const marker = json(await readPhase10Artifact(root, "phase10-completion.json"));
   const hashes = object(marker?.sha256);
   const status = marker?.status;
   const artifacts = marker?.schema === "phase10-completion-v1" ? legacyArtifacts
     : marker?.schema === "phase10-completion-v2" ? currentArtifacts
       : marker?.schema === "phase10-completion-v3" ? currentArtifactsV3
-        : marker?.schema === "phase10-completion-v4" ? currentArtifactsV4 : undefined;
+        : marker?.schema === "phase10-completion-v4" ? currentArtifactsV4
+          : marker?.schema === "phase10-completion-v5" ? currentArtifactsV5
+            : marker?.schema === "phase10-completion-v6" ? currentArtifactsV6 : undefined;
   if (!artifacts || typeof marker?.runId !== "string" ||
       marker.runId !== basename(root) || (status !== "passed" && status !== "partial" && status !== "failed") ||
       !hashes || Object.keys(hashes).length !== artifacts.length) return incomplete;
@@ -51,7 +73,7 @@ export async function verifyPhase10Completion(root: string): Promise<CompletionR
   for (const name of artifacts) {
     const expected = hashes[name];
     if (typeof expected !== "string" || !/^[a-f0-9]{64}$/.test(expected)) return incomplete;
-    const bytes = await readFileSafely(root, name);
+    const bytes = await readPhase10Artifact(root, name);
     if (!bytes || createHash("sha256").update(bytes).digest("hex") !== expected) return incomplete;
     contents.set(name, bytes);
   }
@@ -62,7 +84,7 @@ export async function verifyPhase10Completion(root: string): Promise<CompletionR
       typeof summary.runRoot !== "string" || !summary.runRoot ||
       packet.runRoot !== summary.runRoot ||
       summary.runRoot.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) !== marker.runId) return incomplete;
-  if (marker.schema === "phase10-completion-v4") {
+  if (["phase10-completion-v4", "phase10-completion-v5", "phase10-completion-v6"].includes(String(marker.schema))) {
     const before = validatePhase10ImageManifest(json(contents.get("docker-image-identities-before.json")), marker.runId, "before");
     const after = validatePhase10ImageManifest(json(contents.get("docker-image-identities-after.json")), marker.runId, "after");
     const git = object(summary.gitProvenance);
@@ -74,5 +96,9 @@ export async function verifyPhase10Completion(root: string): Promise<CompletionR
         provenanceStart?.worktree !== before.manifest.candidate.worktree ||
         provenanceFinish?.worktree !== before.manifest.candidate.worktree) return incomplete;
   }
-  return { state: "COMPLETE", status };
+  return { state: "COMPLETE", status,
+    ...(marker.schema === "phase10-completion-v5" || marker.schema === "phase10-completion-v6"
+      ? { functionsProofSha256: hashes[phase10FunctionsProofPath] as string } : {}),
+    ...(marker.schema === "phase10-completion-v6"
+      ? { paymentBaselineSha256: phase10PaymentBaselinePaths.map(path => hashes[path] as string) } : {}) };
 }

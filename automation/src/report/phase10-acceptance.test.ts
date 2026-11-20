@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DOCKER_PACKET_STEPS } from "./phase10-report.js";
-import { NFR_REQUIRED_CATEGORIES, reconcilePhase10Acceptance } from "./phase10-acceptance.js";
+import { NFR_REQUIRED_CATEGORIES, phase10PaymentConfigurationMatches, reconcilePhase10Acceptance } from "./phase10-acceptance.js";
 import type { AcceptanceInput } from "./phase10-acceptance.js";
+import type { Phase10ImageManifest } from "./phase10-images.js";
 
 const commit = "a".repeat(40);
 const snapshot = { commit, worktree: "clean" };
 const imageServices = ["sql-server", "redis", "azurite", "servicebus-sql", "servicebus-emulator", "keycloak-local", "orders", "payments", "inventory", "notifications", "gateway", "ui", "functions"];
-const imageManifest = (runId: string, capturePoint: "before" | "after") => ({
+const imageManifest = (runId: string, capturePoint: "before" | "after"): Phase10ImageManifest => ({
   schema: "phase10-docker-image-identities-v1", runId, capturePoint,
   candidate: { commit, worktree: "clean", dirtyStatusSha256: null }, buildLogsSha256: {},
   images: imageServices.map((service, index) => ({ project: "xy-phase10", service,
@@ -32,6 +33,7 @@ const passing = (): AcceptanceInput => ({
     imageAfter: imageManifest("phase10-docker-http-20261111-000000001", "after")
   },
   nfr: {
+    sealVerified: true,
     summary: {
       status: "passed", commitSha: commit, commitShaAtFinish: commit, worktreeAtStart: "clean", worktreeAtFinish: "clean",
       runDir: "C:/results/phase10-docker-nfr-20261111-000000002",
@@ -49,6 +51,105 @@ const passing = (): AcceptanceInput => ({
     imageAfter: imageManifest("phase10-docker-nfr-20261111-000000002", "after"),
     imageRunId: "phase10-docker-nfr-20261111-000000002"
   }
+});
+
+test("otherwise passing results cannot substitute for the NFR evidence seal", () => {
+  const input = passing();
+  delete input.nfr.sealVerified;
+  const result = reconcilePhase10Acceptance(input);
+  assert.equal(result.gates.find(item => item.name === "nfr-run-evidence-seal")?.status, "BLOCKED");
+  assert.equal(result.verdict, "INCOMPLETE");
+  (input.nfr.summary as { status: string }).status = "failed";
+  assert.equal(reconcilePhase10Acceptance(input).verdict, "FAIL");
+});
+
+test("full no-charge NFR needs a sealed linked matrix and never excuses a failed check", () => {
+  const input = passing();
+  const paymentRunId = "phase10-payments";
+  input.payments = {
+    completionStatus: "passed", configurationMatched: true,
+    sandboxGates: { status: "passed", primaryPassed: true, results: [false, true].map(negative =>
+      ({ negative, status: "passed", primaryPassed: true, rawExitCode: 0 })) },
+    packet: structuredClone(input.e2e.packet),
+    summary: { runId: paymentRunId, paymentSuite: "both", acceptanceProfile: "baseline", gitProvenance: { start: snapshot, finish: snapshot } },
+    imageBefore: imageManifest(paymentRunId, "before"), imageAfter: imageManifest(paymentRunId, "after")
+  };
+  (input.e2e.summary as Record<string, unknown>).paymentSuite = "none";
+  input.e2e.completionStatus = "partial";
+  const steps = (input.e2e.packet as { steps: Array<{ name: string; status: string }> }).steps;
+  for (const step of steps.filter(item => ["tenantc-routing-regression", "payments-deterministic", "sandbox-payments"].includes(item.name))) {
+    step.status = "not-run";
+  }
+  input.nfr.settingsUnchanged = true;
+  const nfr = input.nfr.summary as Record<string, unknown>;
+  nfr.status = "incomplete";
+  nfr.selection = { mode: "full", dynamicPaymentMatrix: "not-run-explicit", selectedCategories: [...NFR_REQUIRED_CATEGORIES] };
+  nfr.paymentSettingsIntegrity = "passed";
+  const categories = nfr.categories as Record<string, Record<string, unknown>>;
+  for (const category of Object.values(categories)) category.execution = "selected";
+  Object.assign(categories.payments, { status: "partial", integrationStatus: "passed", dynamicMatrixStatus: "not-run", checks: [
+    { name: "Payment provider integration tests", status: "passed" },
+    { name: "Dynamic provider payment matrix", status: "not-run" }
+  ] });
+  assert.equal(reconcilePhase10Acceptance(input).verdict, "PASS", JSON.stringify(reconcilePhase10Acceptance(input).gates));
+  const missing = structuredClone(input); delete missing.payments;
+  assert.equal(reconcilePhase10Acceptance(missing).verdict, "INCOMPLETE");
+  const settings = structuredClone(input); settings.payments!.configurationMatched = false;
+  assert.equal(reconcilePhase10Acceptance(settings).verdict, "INCOMPLETE");
+  const images = structuredClone(input);
+  (images.payments!.imageAfter as ReturnType<typeof imageManifest>).images[0].imageId = `sha256:${"b".repeat(64)}`;
+  assert.equal(reconcilePhase10Acceptance(images).verdict, "INCOMPLETE");
+  const missingNegative = structuredClone(input);
+  (missingNegative.payments!.sandboxGates as { results: unknown[] }).results.pop();
+  assert.equal(reconcilePhase10Acceptance(missingNegative).verdict, "INCOMPLETE");
+  const failed = structuredClone(input);
+  (failed.payments!.sandboxGates as { status: string }).status = "failed";
+  assert.equal(reconcilePhase10Acceptance(failed).verdict, "FAIL");
+  nfr.paymentSettingsIntegrity = "failed";
+  assert.equal(reconcilePhase10Acceptance(input).verdict, "FAIL");
+});
+
+test("three standalone sealed payment matrices can satisfy the separate no-charge E2E payment gate", () => {
+  const input = passing();
+  (input.e2e.summary as Record<string, unknown>).paymentSuite = "none";
+  input.e2e.completionStatus = "partial";
+  const steps = (input.e2e.packet as { steps: Array<{ name: string; status: string }> }).steps;
+  for (const step of steps.filter(item => ["payments-deterministic", "sandbox-payments"].includes(item.name))) step.status = "not-run";
+  const nfr = input.nfr.summary as Record<string, unknown>;
+  nfr.status = "incomplete";
+  nfr.selection = { mode: "full", dynamicPaymentMatrix: "not-run-explicit", selectedCategories: [...NFR_REQUIRED_CATEGORIES] };
+  nfr.paymentSettingsIntegrity = "passed";
+  const categories = nfr.categories as Record<string, Record<string, unknown>>;
+  for (const category of Object.values(categories)) category.execution = "selected";
+  Object.assign(categories.payments, { status: "partial", integrationStatus: "passed", dynamicMatrixStatus: "not-run", checks: [
+    { name: "Payment provider integration tests", status: "passed" }, { name: "Dynamic provider payment matrix", status: "not-run" }
+  ] });
+  input.nfr.settingsUnchanged = true;
+  input.standalonePayments = (["deterministic", "sandbox-positive", "sandbox-negative"] as const).map(kind => ({
+    kind, runId: "phase10-payment-standalone", status: "PASS" as const, configurationMatched: true,
+    before: imageManifest("phase10-payment-standalone", "before"), after: imageManifest("phase10-payment-standalone", "after")
+  }));
+  const records = input.standalonePayments;
+  assert.equal(reconcilePhase10Acceptance(input).verdict, "PASS");
+  records.pop();
+  assert.equal(reconcilePhase10Acceptance(input).verdict, "INCOMPLETE");
+  records.push({ kind: "sandbox-negative", runId: "phase10-payment-standalone", status: "FAIL", configurationMatched: true,
+    before: imageManifest("phase10-payment-standalone", "before"), after: imageManifest("phase10-payment-standalone", "after") });
+  assert.equal(reconcilePhase10Acceptance(input).verdict, "FAIL");
+});
+
+test("provider configuration links require identical NFR snapshots and matching non-production baselines", () => {
+  const tenant = { status: "Active", tier: "SharedPool", registryRoute: "Razorpay", businessDatabase: "Dev" };
+  const before = { schema: "phase10-payment-settings-snapshot-v1", tenants: [
+    { ...tenant, code: "TenantA", providers: [{ provider: "Razorpay", threeDs: false, production: false }] }
+  ] };
+  const baseline = { status: "passed", tenants: [{ ...tenant, tenant: "TenantA", providers: [{
+    provider: "Razorpay", threeDs: false, nonProduction: true, merchantMatchesLocal: true, publicKeyMatchesLocal: true, privateKeyReferenceCorrect: true
+  }] }] };
+  assert.equal(phase10PaymentConfigurationMatches(before, structuredClone(before), baseline, baseline), true);
+  const changed = structuredClone(baseline); changed.tenants[0].providers[0].threeDs = true;
+  assert.equal(phase10PaymentConfigurationMatches(before, before, baseline, changed), false);
+  assert.equal(phase10PaymentConfigurationMatches(before, { ...before, tenants: [] }, baseline, baseline), false);
 });
 
 test("a fully evidenced single-candidate run passes while deferrals and L6/Azure stay visible and uncounted", () => {

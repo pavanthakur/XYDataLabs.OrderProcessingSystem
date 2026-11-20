@@ -260,6 +260,33 @@ npm --prefix automation run report:phase10-local-followup -- `
 
 The output directory must be new. Inputs must be regular files under `TestResults`; symlinked paths and traversal are rejected. The report checks image-binary equality separately from source revision, hashes each input and links to it. It is deliberately supplemental: its verdict remains `INCOMPLETE` when the candidate is dirty or required current-image NFR categories are unproven. A binary match does not imply source, test-runner, configuration or full acceptance equivalence. It does not replace `reconcile:phase10-acceptance` or permit a final Phase 10 PASS.
 
+### Standalone sealed payment matrices
+
+When the no-charge Docker E2E and NFR runs are already sealed but payment evidence must be collected separately, run the deterministic, sandbox-positive, and sandbox-negative matrices individually against the same running 13-image inventory. This avoids rerunning the full E2E hook. Each matrix still performs payment tests; sandbox-positive/negative require explicit operator approval and create sandbox transactions. Never use a dirty candidate or auto-retry an ambiguous charge.
+
+Choose the `docker-image-identities-before.json` from the clean candidate's sealed E2E run as the expected image manifest. The standalone runner refuses a dirty/different source or image set, owns the normal Phase 10 acceptance lock while active, captures before/after seed-contract state, and seals its JSON evidence. Example (replace all three run paths with newly created outputs):
+
+```powershell
+$expectedImages = 'TestResults/Playwright/phase10-docker-http/<clean-e2e-run>/docker-image-identities-before.json'
+pwsh -NoProfile -File scripts/run-phase10-sealed-payment-matrix.ps1 -Matrix deterministic -ExpectedImageManifest $expectedImages -ApproveExecution
+pwsh -NoProfile -File scripts/run-phase10-sealed-payment-matrix.ps1 -Matrix sandbox-positive -ExpectedImageManifest $expectedImages -ApproveExecution
+pwsh -NoProfile -File scripts/run-phase10-sealed-payment-matrix.ps1 -Matrix sandbox-negative -ExpectedImageManifest $expectedImages -ApproveExecution
+```
+
+Then reconcile those three directories with the no-charge E2E and NFR runs:
+
+```powershell
+npm --prefix automation run reconcile:phase10-acceptance -- `
+  --e2e TestResults/Playwright/phase10-docker-http/<clean-e2e-run> `
+  --nfr TestResults/Playwright/phase10-docker-http/<sealed-nfr-run> `
+  --payment-deterministic TestResults/Phase10/sealed-payments/<deterministic-run> `
+  --payment-sandbox-positive TestResults/Phase10/sealed-payments/<sandbox-positive-run> `
+  --payment-sandbox-negative TestResults/Phase10/sealed-payments/<sandbox-negative-run> `
+  --expected-commit <full-clean-commit-sha>
+```
+
+The verifier checks seal hashes, complete seed-derived tenant/provider case counts, per-case provider dependencies and provider confirmation, SQL/order correlation, settings restoration, matching NFR provider settings, and exact candidate/image identity. Missing or invalid runs remain BLOCKED; historical evidence cannot substitute for them. Linked payments can satisfy the dedicated-tenant routing gate only when the primary E2E packet also records a passing routing fixture regression and a nonempty dedicated-tenant inventory. If a standalone run fails or is interrupted and leaves the acceptance lock, investigate runtime and fixture restoration before removing it or starting another run.
+
 When reviewed Azure artifacts have been copied into a separate sanitized directory, pass it with `--azure-evidence <directory>`. The renderer reads only the fixed filenames `deployment-identity.json`, `runtime-smoke.json`, `identity.json`, `payment-matrix-summary.json`, `transport-smoke.json`, `functions-replay.json`, `recovery-nfr.json`, `rollback.json`, and `restoration.json`, plus `evidence-manifest.json` and the flat files named by that manifest. The manifest must hash all nine fixed contracts as well as every detailed source file, and maps each of the six supplemental gates (`identity`, `payments`, `transport-functions`, `recovery-nfr`, `rollback`, `restoration`) to its source filenames. The report computes each listed digest from the actual file bytes, parses fixed contract JSON from those same bytes, and requires each gate's `sourceEvidenceSha256` list to match its gate-specific source-file hashes. Missing, altered, duplicate, unsafe-path or unlisted evidence stays BLOCKED. This is integrity/reconciliation, not a signature or proof of who produced the files. The renderer performs no tests or runtime/cloud calls. The new runtime/transport smoke summaries alone do not bind the observed deployment digest, and the payment runner summary alone is not provider/SQL proof, so these inputs cannot certify Azure acceptance.
 
 The deployment identity input must describe the dev source revision, immutable digests for all six application images, Functions package SHA-256, and a non-secret configuration identity hash. Its canonical identity hash is validated by `automation/src/report/phase10-azure-evidence.ts`. Runtime and transport smoke JSON must echo that hash to bind their result to the deployed artifacts. Each gate must also point to raw evidence digests included in the manifest. The smoke producers do not yet emit all required deployment/evidence bindings, so their current results remain BLOCKED in the combined report until producer wiring and tests are completed.

@@ -38,6 +38,10 @@ if ($OperationalOnly -and $Categories.Count -gt 0) {
 if ($OperationalOnly -and $SkipOperationalChecks) {
     throw '-OperationalOnly cannot be combined with -SkipOperationalChecks.'
 }
+if ($SkipDynamicPaymentMatrix -and -not $OperationalOnly -and $Categories.Count -eq 0 -and
+    (-not $SkipStartIfNeeded -or [string]::IsNullOrWhiteSpace($ExpectedImageManifest) -or $UseCleanReset -or $SkipOperationalChecks)) {
+    throw 'Full no-charge Docker NFR requires -SkipStartIfNeeded and -ExpectedImageManifest, with no reset or operational skips.'
+}
 if (-not [string]::IsNullOrWhiteSpace($ExpectedImageManifest) -and -not $SkipStartIfNeeded) {
     throw '-ExpectedImageManifest requires -SkipStartIfNeeded so NFR cannot start or rebuild a different stack.'
 }
@@ -223,6 +227,35 @@ try {
         latestPointerPath = $latestPointerPath
         failurePointerPath = $failurePointerPath
     } | ConvertTo-Json -Depth 8)
+    # Seal the files produced by this execution before another reconciler reads them.
+    $hashes = [ordered]@{}
+    $nfrDirectory = Get-Item -LiteralPath $nfrEvidenceRoot -Force
+    if ($nfrDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Invalid NFR evidence directory.' }
+    $replayDirectory = Join-Path $nfrEvidenceRoot 'replay-proof'
+    if ((Test-Path -LiteralPath $replayDirectory) -and
+        ((Get-Item -LiteralPath $replayDirectory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Invalid NFR replay evidence directory.'
+    }
+    foreach ($name in @('wrapper-summary.json', 'docker-image-identities-before.json', 'docker-image-identities-after.json', 'nfr/summary.json',
+        'nfr/performance-probe-warmup.json', 'nfr/performance-probe.json', 'nfr/operational-100-message-burst.json',
+        'nfr/consumer-outage-drill.json', 'nfr/rollback-evidence.json', 'nfr/replay-proof/functions-proof.json',
+        'nfr/payment-settings-before.json', 'nfr/payment-settings-after.json')) {
+        $path = Join-Path $runDir $name
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $item = Get-Item -LiteralPath $path -Force
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Length -gt 2MB) {
+            throw 'Invalid NFR evidence artifact.'
+        }
+        $hashes[$name] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    $seal = @{ schema = 'phase10-nfr-evidence-v1'; runId = (Split-Path -Leaf $runDir); sha256 = $hashes } | ConvertTo-Json -Depth 4
+    $sealPath = Join-Path $runDir 'nfr-evidence-seal.json'
+    $stream = [IO.File]::Open($sealPath, [IO.FileMode]::CreateNew)
+    try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($seal)
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally { $stream.Dispose() }
     if ($proofIncomplete) {
         Set-Content -LiteralPath $failurePointerPath -Value $runDir -Encoding utf8
         Write-WrapperProgress 'Phase 10 docker NFR proof recorded incomplete category results.'

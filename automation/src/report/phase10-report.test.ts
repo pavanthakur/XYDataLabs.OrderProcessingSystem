@@ -12,7 +12,19 @@ import { FOUNDATION_AUTOMATION_TEST_CHECKS, FOUNDATION_CHECKS, normalizeFoundati
 import { FOUNDATION_TRX_PROJECTS, parseFoundationTrx } from "./phase10-trx.js";
 import { parseVitest } from "./phase10-vitest.js";
 import { parseBackendCoverage, parseFrontendCoverage } from "./phase10-coverage.js";
-import { verifyPhase10Completion } from "./phase10-completion.js";
+import { phase10NfrSealMatches, verifyPhase10Completion } from "./phase10-completion.js";
+
+test("NFR seal binds exact loaded hashes and rejects replaced or mixed-run artifacts", () => {
+  const summary = "nfr/summary.json";
+  const probe = "nfr/performance-probe.json";
+  const hashes: Record<string, string> = { [summary]: "a".repeat(64), [probe]: "b".repeat(64) };
+  const seal = { schema: "phase10-nfr-evidence-v1", runId: "owned-run", sha256: hashes };
+  const required = [summary, probe];
+  assert.equal(phase10NfrSealMatches(seal, "owned-run", required, name => hashes[name]), true);
+  assert.equal(phase10NfrSealMatches(seal, "other-run", required, name => hashes[name]), false);
+  assert.equal(phase10NfrSealMatches(seal, "owned-run", required, name => name === probe ? "c".repeat(64) : hashes[name]), false);
+  assert.equal(phase10NfrSealMatches(seal, "owned-run", required, name => name === probe ? undefined : hashes[name]), false);
+});
 import { expectedAutomationTests, normalizeAutomationSuite, normalizeAutomationSuites, normalizeDiscoveredDotnetSuite,
   phase10AutomationInventorySha256 } from "./phase10-automation.js";
 import { normalizePhase10IdentityMatrix } from "./phase10-identity-matrix.js";
@@ -223,6 +235,32 @@ test("completion verification rejects absent, altered, contradictory and copied 
     } };
     await writeMarker(v4);
     assert.deepEqual(await verifyPhase10Completion(root), { state: "COMPLETE", status: "passed" });
+    const functionsPath = "messaging/functions-proof.json";
+    const functionsProof = JSON.stringify({ status: "passed" });
+    const functionsProofSha256 = createHash("sha256").update(functionsProof).digest("hex");
+    await mkdir(join(root, "messaging"));
+    await writeFile(join(root, functionsPath), functionsProof);
+    await writeMarker({ ...v4, schema: "phase10-completion-v5", sha256: { ...v4.sha256, [functionsPath]: functionsProofSha256 } });
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "COMPLETE", status: "passed", functionsProofSha256 });
+    await writeFile(join(root, functionsPath), JSON.stringify({ status: "passed", replacement: true }));
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
+    await writeFile(join(root, functionsPath), functionsProof);
+    await mkdir(join(root, "payments"));
+    const baselinePaths = ["seed-contract.json", "restoration-contract.json", "payments/sandbox-gates.json"];
+    const baselineHashes: Record<string, string> = {};
+    for (const name of baselinePaths) {
+      const payload = JSON.stringify({ name });
+      await writeFile(join(root, name), payload);
+      baselineHashes[name] = createHash("sha256").update(payload).digest("hex");
+    }
+    await writeMarker({ ...v4, schema: "phase10-completion-v6", sha256: {
+      ...v4.sha256, [functionsPath]: functionsProofSha256, ...baselineHashes
+    } });
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "COMPLETE", status: "passed", functionsProofSha256,
+      paymentBaselineSha256: baselinePaths.map(name => baselineHashes[name]) });
+    await writeFile(join(root, "restoration-contract.json"), "{}");
+    assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
+    await writeMarker(v4);
     await rm(join(root, "docker-image-identities-before.json"));
     assert.deepEqual(await verifyPhase10Completion(root), { state: "INCOMPLETE" });
     await writeFile(join(root, "docker-image-identities-before.json"), before);

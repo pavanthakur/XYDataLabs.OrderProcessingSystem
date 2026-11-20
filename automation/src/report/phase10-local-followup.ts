@@ -10,12 +10,17 @@ export interface LocalFollowupInput {
   e2e: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; imageBefore?: unknown; imageAfter: unknown; restorationContract?: unknown };
   noPaymentReport?: { completion: "COMPLETE" | "INCOMPLETE"; completionStatus?: string; packet: unknown; summary: unknown; coverage: unknown };
   current: {
-    imageManifest: unknown; sourceIdentity?: Phase10WorktreeIdentity; foundation: unknown; functions: unknown; nfr: unknown; burst: unknown; outage: unknown; rollback: unknown;
+    imageManifest: unknown; sourceIdentity?: Phase10WorktreeIdentity; foundation: unknown; functions: unknown; functionsProofBoundToE2e?: boolean; nfr: unknown; burst: unknown; outage: unknown; rollback: unknown;
     paymentMatrices?: { deterministic?: unknown; sandboxPositive?: unknown; sandboxNegative?: unknown };
-    paymentMatrixSource?: { summariesAndArtifactsNestedInE2e: boolean; caseArtifactsHashedAndCorrelated?: boolean };
+    paymentMatrixSource?: {
+      summariesAndArtifactsNestedInE2e: boolean;
+      caseArtifactsHashedAndCorrelated?: boolean;
+      linkedSupplementalRun?: { artifactsHashedAndCorrelated: boolean; cleanCandidate: boolean; sameCandidate: boolean; imagesMatchE2e: boolean };
+    };
+    performance?: { summary: unknown; warmup: unknown; burst: unknown; imageBeforeManifest: unknown; imageManifest: unknown; sealed?: boolean };
     customerDirectoryRetry?: unknown;
     persistence?: { summary: unknown; before: unknown; after: unknown; imageBefore: unknown; imageAfter: unknown };
-    operational?: { summary: unknown; imageManifest: unknown };
+    operational?: { summary: unknown; imageManifest: unknown; imageBeforeManifest?: unknown; sealed?: boolean };
     replay?: { messaging: unknown; restoration: unknown; functions: unknown; imageManifest: unknown };
   };
   evidence: FollowupEvidence[];
@@ -54,6 +59,14 @@ function imagesMatchByBinary(left: Phase10ImageManifest, right: Phase10ImageMani
     return !!other && item.imageId === other.imageId && item.imageReference === other.imageReference &&
       item.repositoryDigests.join("\n") === other.repositoryDigests.join("\n");
   });
+}
+function imageBinaryMismatchServices(left: Phase10ImageManifest, right: Phase10ImageManifest): string[] {
+  const rightByService = new Map(right.images.map(item => [item.service, item]));
+  return left.images.filter(item => {
+    const other = rightByService.get(item.service);
+    return !other || item.imageId !== other.imageId || item.imageReference !== other.imageReference ||
+      item.repositoryDigests.join("\n") !== other.repositoryDigests.join("\n");
+  }).map(item => item.service);
 }
 function sameCandidate(left: Phase10ImageManifest, right: Phase10ImageManifest): boolean {
   return left.candidate.commit === right.candidate.commit && left.candidate.worktree === right.candidate.worktree &&
@@ -182,6 +195,92 @@ function paymentMatricesBoundToE2e(input: LocalFollowupInput): boolean {
     });
 }
 
+function paymentMatricesBoundToLinkedRun(input: LocalFollowupInput): boolean {
+  const source = input.current.paymentMatrixSource;
+  const linked = source?.linkedSupplementalRun;
+  const e2e = validatePhase10ImageManifest(input.e2e.imageAfter, undefined, "after");
+  return !!source && !source.summariesAndArtifactsNestedInE2e && !!linked &&
+    linked.artifactsHashedAndCorrelated === true && linked.cleanCandidate === true &&
+    linked.sameCandidate === true && linked.imagesMatchE2e === true && e2e.status === "PASS";
+}
+
+function operationalRecoveryBoundToLinkedRun(input: LocalFollowupInput): boolean {
+  const operationalEvidence = input.current.operational;
+  if (operationalEvidence?.sealed !== true) return false;
+  const summary = rec(operationalEvidence.summary);
+  const categories = rec(summary?.categories);
+  const operational = rec(categories?.operational);
+  const recovery = rec(categories?.recovery);
+  const burst = rec(input.current.burst);
+  const outage = rec(input.current.outage);
+  const rollback = rec(input.current.rollback);
+  const e2eImage = validatePhase10ImageManifest(input.e2e.imageAfter, undefined, "after");
+  const before = validatePhase10ImageManifest(operationalEvidence.imageBeforeManifest, undefined, "before");
+  const after = validatePhase10ImageManifest(operationalEvidence.imageManifest, undefined, "after");
+  if (e2eImage.status !== "PASS" || before.status !== "PASS" || after.status !== "PASS") return false;
+  return operational?.status === "passed" && operational.execution === "selected" &&
+    recovery?.status === "passed" && recovery.execution === "selected" &&
+    before.manifest.runId === after.manifest.runId && phase10ImageSetsMatch(before.manifest, after.manifest) &&
+    imagesMatchByBinary(after.manifest, e2eImage.manifest) &&
+    burst?.Status === "passed" && burst.ExpectedMessages === 100 && number(burst.P95Seconds) !== undefined && number(burst.P95Seconds)! < 30 &&
+    outage?.status === "passed" && outage.messageCount === 100 && outage.inventoryEffects === 100 && outage.notificationEffects === 100 &&
+    outage.inventoryInbox === 100 && outage.notificationsInbox === 100 && outage.lostMessages === 0 && outage.duplicateEffects === 0 &&
+    number(outage.p95Seconds) !== undefined && number(outage.p95Seconds)! < 30 &&
+    number(outage.backlogRecoverySeconds) !== undefined && number(outage.backlogRecoverySeconds)! <= 1800 &&
+    outage.restorationStatus === "passed" && outage.environmentRestored === true &&
+    rollback?.status === "passed" && rollback.rollbackObserved === true && rollback.currentImageRestored === true &&
+    rollback.databaseRollback === false && typeof rollback.previousImageId === "string" &&
+    typeof rollback.currentImageId === "string" && rollback.previousImageId !== rollback.currentImageId;
+}
+
+function e2eFunctionsReplayEvidenceBound(input: LocalFollowupInput): boolean {
+  if (input.current.functionsProofBoundToE2e !== true) return false;
+  const proof = rec(input.current.functions);
+  const steps = records(rec(input.e2e.packet)?.steps).filter(step => step.name === "messaging-functions");
+  const summary = rec(input.e2e.summary);
+  const before = validatePhase10ImageManifest(input.e2e.imageBefore, typeof summary?.runId === "string" ? summary.runId : undefined, "before");
+  const after = validatePhase10ImageManifest(input.e2e.imageAfter, typeof summary?.runId === "string" ? summary.runId : undefined, "after");
+  const replayVisibleWithinLimit = number(proof?.replayVisibilitySeconds) !== undefined &&
+    number(proof?.replayVisibilityLimitSeconds) !== undefined &&
+    number(proof?.replayVisibilitySeconds)! <= number(proof?.replayVisibilityLimitSeconds)! &&
+    number(proof?.replayVisibilityLimitSeconds)! <= 60;
+  return steps.length === 1 && steps[0].status === "passed" && before.status === "PASS" && after.status === "PASS" &&
+    phase10ImageSetsMatch(before.manifest, after.manifest) && imagesMatchByBinary(before.manifest, after.manifest) &&
+    proof?.status === "passed" && proof.runtime === "local-docker" && proof.brokerDlqForwarding === "passed" &&
+    proof.intake === "passed" && typeof proof.quarantineId === "string" && proof.quarantineId.length > 0 &&
+    proof.approvalSubmissionAttempts === 1 && proof.approvalResubmitted === false && proof.approvalReconciliationRequired === false &&
+    proof.approvalStatus === "processing-confirmed" && proof.approvalOutcome === "approved" &&
+    typeof proof.replayRequestId === "string" && proof.replayRequestId.length > 0 && replayVisibleWithinLimit &&
+    proof.replay === "passed" && proof.downstreamEffects === "passed";
+}
+
+function performanceEvidenceBoundToE2e(input: LocalFollowupInput): boolean {
+  const performance = input.current.performance;
+  if (performance?.sealed !== true) return false;
+  const nfr = rec(performance.summary);
+  const categories = rec(nfr?.categories);
+  const category = rec(categories?.performance);
+  const checks = records(category?.checks);
+  const warmup = rec(performance.warmup);
+  const burst = rec(performance.burst);
+  const before = validatePhase10ImageManifest(performance.imageBeforeManifest, undefined, "before");
+  const after = validatePhase10ImageManifest(performance.imageManifest, undefined, "after");
+  const e2e = validatePhase10ImageManifest(input.e2e.imageAfter, undefined, "after");
+  return category?.status === "passed" && category.execution === "selected" &&
+    Array.isArray(category.checks) && category.checks.length === 3 && checks.length === 3 &&
+    ["Build NFR probe", "1 message durable consumer warm-up canary", "100 message durable consumer burst"]
+      .every(name => checks.filter(check => check.name === name && check.status === "passed").length === 1) &&
+    warmup?.Status === "passed" && warmup.ExpectedMessages === 1 && warmup.InventoryInboxCount === 1 &&
+    warmup.NotificationsInboxCount === 1 && warmup.InventoryEffectCount === 1 && warmup.NotificationEffectCount === 1 &&
+    number(warmup.P95Seconds) !== undefined && number(warmup.P95Seconds)! < 30 &&
+    burst?.Status === "passed" && burst.ExpectedMessages === 100 && burst.InventoryInboxCount === 100 &&
+    burst.NotificationsInboxCount === 100 && burst.InventoryEffectCount === 100 && burst.NotificationEffectCount === 100 &&
+    number(burst.P95Seconds) !== undefined && number(burst.P95Seconds)! < 30 &&
+    before.status === "PASS" && after.status === "PASS" && e2e.status === "PASS" &&
+    before.manifest.runId === after.manifest.runId && phase10ImageSetsMatch(before.manifest, after.manifest) &&
+    imagesMatchByBinary(after.manifest, e2e.manifest);
+}
+
 function customerDirectoryRetryValid(value: unknown): boolean {
   const result = rec(value);
   const rows = records(result?.results);
@@ -233,6 +332,11 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
   gates.push(gate("historical-e2e-payment-and-restoration", e2eStepComplete,
     `completion=${input.e2e.completion}; sandbox=${sandbox.length === 1 ? String(sandbox[0].status) : "missing-or-duplicate"};` +
       ` restored=${restoration?.allRestored === true}; this remains bound to its recorded source revision.`, e2eFailed));
+  const e2eFunctionsReplayBound = e2eFunctionsReplayEvidenceBound(input);
+  gates.push({ id: "supplemental-e2e-functions-replay-image-binding", status: e2eFunctionsReplayBound ? "PASS" : "BLOCKED",
+    detail: e2eFunctionsReplayBound
+      ? "The sealed E2E run's own Functions evidence passed DLQ forwarding, intake, one approval submission, replay visibility within its recorded limit, and downstream effects. Before/after manifests are stable for all 13 images; this does not assert the separate historical replay run or overall L5-R acceptance."
+      : "Same-run Functions replay evidence is accepted only when its proof is the sealed E2E run's artifact, its packet step passes, DLQ/intake/approval/replay/downstream effects pass without resubmission, and all 13 before/after runtime images are stable." });
 
   const paymentMatrices = input.current.paymentMatrices;
   if (paymentMatrices) {
@@ -256,6 +360,11 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
       detail: matrixSourceBound
         ? "Each payment summary and case-level ledger, provider confirmation/dependency trace, SQL proof, and verification report is hashed, correlated to its row, and contained in the sealed E2E run's unchanged source/image envelope."
         : "Payment evidence is blocked unless every case-level ledger, provider confirmation/dependency trace, SQL proof, and verification report is hashed, correlated to its row, and contained in the sealed E2E envelope." });
+    const linkedRun = paymentMatricesBoundToLinkedRun(input);
+    gates.push({ id: "supplemental-payment-run-image-binding", status: linkedRun ? "PASS" : "BLOCKED",
+      detail: linkedRun
+        ? "The separate payment follow-up's case artifacts are hashed and correlated; its clean-run before/after image manifests match each other and the sealed E2E's 13 runtime image binaries. This is linked multi-run evidence, not a single-run packet or source-build attestation."
+        : "Separate payment evidence is not accepted as linked unless its case artifacts are hashed/correlated and clean-run before/after manifests match the sealed E2E runtime image binaries." });
   }
   if (input.current.customerDirectoryRetry !== undefined) {
     const retryPassed = customerDirectoryRetryValid(input.current.customerDirectoryRetry);
@@ -389,6 +498,31 @@ export function reconcilePhase10LocalFollowup(input: LocalFollowupInput): LocalF
   gates.push(gate("current-image-rollback-and-restore", recoveryCategory?.status === "passed" && recoverySelected && rollbackPass && operationalImageBound,
     `recoveryCategory=${String(recoveryCategory?.status ?? "UNKNOWN")}; execution=${String(recoveryCategory?.execution ?? "UNKNOWN")}; rollback=${rollbackPass}; sameCandidateAndImages=${operationalImageBound}.`,
     recoveryCategory?.status === "failed" || rollback?.status === "failed" || rollback?.currentImageRestored === false));
+  const linkedOperationalRecovery = operationalRecoveryBoundToLinkedRun(input);
+  const linkedOperationsBefore = validatePhase10ImageManifest(input.current.operational?.imageBeforeManifest, undefined, "before");
+  const linkedOperationsAfter = validatePhase10ImageManifest(input.current.operational?.imageManifest, undefined, "after");
+  const linkedE2eAfter = validatePhase10ImageManifest(input.e2e.imageAfter, undefined, "after");
+  const operationsImageMismatches = linkedOperationsAfter.status === "PASS" && linkedE2eAfter.status === "PASS"
+    ? imageBinaryMismatchServices(linkedOperationsAfter.manifest, linkedE2eAfter.manifest) : [];
+  const linkedOperationsDetail = linkedOperationsBefore.status !== "PASS" || linkedOperationsAfter.status !== "PASS" || linkedE2eAfter.status !== "PASS"
+    ? "Required before, after, or E2E image manifest is missing or invalid."
+    : operationsImageMismatches.length > 0
+      ? `Operational images differ from the sealed E2E in ${operationsImageMismatches.length}/13 services: ${operationsImageMismatches.join(", ")}. Historical drill results cannot certify those E2E images.`
+      : input.current.operational?.sealed !== true
+        ? "The run-scoped operational evidence seal is missing or could not be verified."
+        : "Operational evidence is not accepted because the selected drill results, restoration, or rollback evidence are incomplete or failed.";
+  gates.push({ id: "supplemental-operational-recovery-image-binding", status: linkedOperationalRecovery ? "PASS" : "BLOCKED",
+    detail: linkedOperationalRecovery
+      ? "The selected operational/recovery run passed the 100-message, outage-recovery and rollback/restore checks. Its before/after manifests are stable and all 13 runtime image binaries match the sealed E2E run. This is linked multi-run evidence only; source-candidate identity and same-run acceptance are not asserted."
+      : linkedOperationsBefore.status === "PASS" && linkedOperationsAfter.status === "PASS" && linkedE2eAfter.status === "PASS" &&
+        imagesMatchByBinary(linkedOperationsBefore.manifest, linkedOperationsAfter.manifest)
+        ? linkedOperationsDetail
+        : "Operational/recovery evidence is not linked unless its selected categories and drill results pass, rollback restores the current image without database rollback, and stable before/after manifests match all 13 sealed E2E image binaries." });
+  const linkedPerformance = performanceEvidenceBoundToE2e(input);
+  gates.push({ id: "supplemental-performance-run-image-binding", status: linkedPerformance ? "PASS" : "BLOCKED",
+    detail: linkedPerformance
+      ? "The separately selected performance category passed its probe build, one-message warm-up, and 100-message burst with exact inbox/effect counts and P95 below 30 seconds. Stable before/after manifests match all 13 sealed E2E runtime image binaries. Other NFR categories were not run in that segment; this is linked multi-run evidence, not full single-run NFR acceptance."
+      : "Performance evidence requires a verified run seal, the selected category and exact named checks, message/effect counts, P95 threshold, stable before/after images, and all 13 E2E binary matches." });
 
   const persistence = input.current.persistence;
   const persistenceSummary = rec(persistence?.summary);

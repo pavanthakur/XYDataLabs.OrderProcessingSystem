@@ -122,6 +122,12 @@ try {
         $env:PHASE10_RUN_ID = 'current-id'
         $env:PHASE10_RUN_ROOT = 'current-root'
         if ($case.malformed) { Set-Content -LiteralPath (Join-Path $runRoot 'e2e-summary.json') -Value '{invalid' }
+        if ($case.name -eq 'success') {
+            $messaging = Join-Path $runRoot 'messaging'
+            [void][IO.Directory]::CreateDirectory($messaging)
+            Set-Content -LiteralPath (Join-Path $messaging 'functions-proof.json') -Value '{"status":"passed"}'
+            Set-Content -LiteralPath (Join-Path $runRoot 'e2e-summary.json') -Value '{"status":"passed","steps":[{"name":"messaging-functions","status":"passed"}]}'
+        }
         $observed = $null
         try {
             try {
@@ -150,11 +156,14 @@ try {
         }
         if ($case.name -in @('success', 'partial', 'execution-failed')) {
             $completion = Get-Content -LiteralPath $completionPath -Raw | ConvertFrom-Json
-            if ($completion.schema -ne 'phase10-completion-v4' -or $completion.runId -ne 'run' -or $completion.status -ne $case.expected) {
+            $expectedSchema = if ($case.name -eq 'success') { 'phase10-completion-v5' } else { 'phase10-completion-v4' }
+            if ($completion.schema -ne $expectedSchema -or $completion.runId -ne 'run' -or $completion.status -ne $case.expected) {
                 throw "$($case.name): completion record is invalid."
             }
-            foreach ($name in @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html',
-                'docker-image-identities-before.json', 'docker-image-identities-after.json')) {
+            $expectedPaths = @('acceptance-packet.json', 'run-summary.json', 'phase10-preview.html', 'phase10-coverage-summary.json', 'index.html',
+                'docker-image-identities-before.json', 'docker-image-identities-after.json')
+            if ($case.name -eq 'success') { $expectedPaths += 'messaging/functions-proof.json' }
+            foreach ($name in $expectedPaths) {
                 if ($completion.sha256.$name -ne (Get-FileHash -LiteralPath (Join-Path $runRoot $name) -Algorithm SHA256).Hash.ToLowerInvariant()) {
                     throw "$($case.name): completion hash mismatch."
                 }

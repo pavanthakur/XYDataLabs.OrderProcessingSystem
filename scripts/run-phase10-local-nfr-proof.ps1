@@ -42,6 +42,10 @@ $script:Phase10NfrRestorationFailed = $false
 $categorySelection = Resolve-Phase10NfrSelection -Categories $SelectedCategories -OperationalOnly:$OperationalOnly -SkipDynamicPaymentMatrix:$SkipDynamicPaymentMatrix
 $targetedNoChargeRun = $categorySelection.mode -eq 'targeted-no-charge'
 $skipOperationalExecution = $SkipOperationalChecks -or $targetedNoChargeRun
+$fullNoChargeRun = $categorySelection.mode -eq 'full' -and $SkipDynamicPaymentMatrix
+if ($fullNoChargeRun -and ($UseCleanReset -or $SkipOperationalChecks)) {
+    throw 'Full no-charge NFR preserves storage and requires operational and recovery checks.'
+}
 function Test-Phase10NfrCategorySelected {
     param([Parameter(Mandatory = $true)][string]$Name)
     return $categorySelection.selectedCategories -contains $Name
@@ -780,22 +784,15 @@ if ([string]::IsNullOrWhiteSpace($topicName)) {
 $sqlConnectionString = New-Phase10HostSqlConnectionString -Database 'OrderProcessingSystem_Dev' -Password $sqlPassword
 Assert-Phase10HostSqlIdentity -ConnectionString $sqlConnectionString
 $paymentSettingsBefore = $null
-if ($targetedNoChargeRun -and (Test-Phase10NfrCategorySelected -Name 'payments')) {
-    $paymentSettingsBefore = Get-Phase10NfrPaymentSettingsSnapshot -Settings $envValues
-    $beforePath = Join-Path $nfrRoot 'payment-settings-before.json'
-    if (Test-Path -LiteralPath $beforePath) { throw 'Payment settings evidence already exists; use a fresh NFR run directory.' }
-    $paymentSettingsBefore | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $beforePath -Encoding utf8
-    $summary.paymentSettingsIntegrity = 'awaiting-post-run-verification'
-    $summary.paymentSettingsEvidence += [ordered]@{ file = 'payment-settings-before.json'; sha256 = (Get-FileHash -LiteralPath $beforePath -Algorithm SHA256).Hash.ToLowerInvariant() }
-}
-if ($OperationalOnly) {
+if ($OperationalOnly -or $fullNoChargeRun) {
     Assert-Phase10ComposeProject
     Assert-Phase10LocalDockerEndpoint
     $activeLocks = @(
+        (Join-Path $workspaceRoot 'TestResults/phase10-docker-acceptance.lock'),
         (Join-Path $workspaceRoot 'TestResults/local-payment-test-state.lock'),
         (Get-ChildItem -LiteralPath (Join-Path $workspaceRoot 'TestResults') -Filter 'integration-active-*.lock' -File -ErrorAction SilentlyContinue | ForEach-Object FullName)
     ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
-    if ($activeLocks.Count -gt 0) { throw 'Active payment-fixture or integration lock exists; operational mutations are blocked.' }
+    if ($activeLocks.Count -gt 0) { throw 'Active Docker acceptance, payment-fixture or integration lock exists; operational mutations are blocked.' }
     $runningContainerIds = @(& docker ps -q)
     if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect running Docker workloads; operational mutations are blocked.' }
     foreach ($containerId in $runningContainerIds) {
@@ -804,6 +801,14 @@ if ($OperationalOnly) {
             throw 'A running container is not owned by xy-phase10; operational mutations are blocked.'
         }
     }
+}
+if ($SkipDynamicPaymentMatrix -and (Test-Phase10NfrCategorySelected -Name 'payments')) {
+    $paymentSettingsBefore = Get-Phase10NfrPaymentSettingsSnapshot -Settings $envValues
+    $beforePath = Join-Path $nfrRoot 'payment-settings-before.json'
+    if (Test-Path -LiteralPath $beforePath) { throw 'Payment settings evidence already exists; use a fresh NFR run directory.' }
+    $paymentSettingsBefore | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $beforePath -Encoding utf8
+    $summary.paymentSettingsIntegrity = 'awaiting-post-run-verification'
+    $summary.paymentSettingsEvidence += [ordered]@{ file = 'payment-settings-before.json'; sha256 = (Get-FileHash -LiteralPath $beforePath -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 $testProject = 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
 $functionalFilter = 'FullyQualifiedName~Outbox|FullyQualifiedName~Inbox|FullyQualifiedName~Dlq|FullyQualifiedName~Replay'

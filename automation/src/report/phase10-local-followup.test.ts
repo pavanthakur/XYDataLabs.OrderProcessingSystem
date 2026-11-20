@@ -60,8 +60,11 @@ const base = (): LocalFollowupInput => ({
     sourceIdentity: { commit: currentCommit, worktree: "dirty", dirtyStatusSha256: "c".repeat(64),
       worktreeContentSha256: "d".repeat(64), changedPaths: ["scripts/report-tool.ps1"] },
     foundation: { status: "passed", results: [{ status: "passed", exitCode: 0 }, { status: "passed", exitCode: 0 }] },
-    functions: { status: "passed", approvalStatus: "processing-confirmed", approvalOutcome: "approved",
-      approvalReconciliationRequired: false, intake: "passed", replay: "passed", downstreamEffects: "passed" },
+    functions: { status: "passed", runtime: "local-docker", brokerDlqForwarding: "passed", intake: "passed", quarantineId: "quarantine-1",
+      approvalSubmissionAttempts: 1, approvalResubmitted: false, approvalReconciliationRequired: false,
+      approvalStatus: "processing-confirmed", approvalOutcome: "approved", replayRequestId: "replay-1",
+      replayVisibilitySeconds: 3, replayVisibilityLimitSeconds: 60, replay: "passed", downstreamEffects: "passed" },
+    functionsProofBoundToE2e: true,
     nfr: { status: "incomplete", paymentSettingsIntegrity: "passed",
       paymentSettingsBefore: paymentSnapshot(), paymentSettingsAfter: paymentSnapshot(),
       categories: {
@@ -76,8 +79,18 @@ const base = (): LocalFollowupInput => ({
       backlogRecoverySeconds: 29, restorationStatus: "passed", environmentRestored: true },
     rollback: { status: "passed", rollbackObserved: true, currentImageRestored: true, databaseRollback: false,
       previousImageId: `sha256:${"d".repeat(64)}`, currentImageId: `sha256:${"e".repeat(64)}` },
-    operational: { summary: { categories: { operational: { status: "passed", execution: "selected" }, recovery: { status: "passed", execution: "selected" } } },
+    operational: { sealed: true, summary: { categories: { operational: { status: "passed", execution: "selected" }, recovery: { status: "passed", execution: "selected" } } },
+      imageBeforeManifest: imageManifest("ops-run", currentCommit, "dirty", "before"),
       imageManifest: imageManifest("ops-run", currentCommit, "dirty", "after") },
+    performance: { sealed: true, summary: { categories: { performance: { status: "passed", execution: "selected", checks: [
+      { name: "Build NFR probe", status: "passed" }, { name: "1 message durable consumer warm-up canary", status: "passed" }, { name: "100 message durable consumer burst", status: "passed" }
+    ] } } },
+      warmup: { Status: "passed", ExpectedMessages: 1, InventoryInboxCount: 1, NotificationsInboxCount: 1,
+        InventoryEffectCount: 1, NotificationEffectCount: 1, P95Seconds: 1.2 },
+      burst: { Status: "passed", ExpectedMessages: 100, InventoryInboxCount: 100, NotificationsInboxCount: 100,
+        InventoryEffectCount: 100, NotificationEffectCount: 100, P95Seconds: 2.2 },
+      imageBeforeManifest: imageManifest("performance-run", "b".repeat(40), "dirty", "before"),
+      imageManifest: imageManifest("performance-run", "b".repeat(40), "dirty", "after") },
     persistence: { summary: { status: "passed", imageIdentitiesUnchanged: true, disk: "G:\\DockerStorage\\DockerDesktopWSL", sqlVolume: "xy-phase10_phase10-sql-data" },
       before: [{ tenant: "TenantA", orderId: 1 }, { tenant: "TenantB", orderId: 2 }],
       after: [{ tenant: "TenantA", orderId: 1 }, { tenant: "TenantB", orderId: 2 }],
@@ -191,6 +204,34 @@ test("a sealed parent E2E envelope binds nested payment summaries to unchanged i
   assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
 });
 
+test("a linked payment follow-up binds to identical E2E image binaries without claiming a single run", () => {
+  const input = base();
+  input.current.paymentMatrices = {
+    deterministic: paymentMatrix("deterministic"), sandboxPositive: paymentMatrix("sandbox"),
+    sandboxNegative: paymentMatrix("sandbox", true)
+  };
+  input.current.paymentMatrixSource = {
+    summariesAndArtifactsNestedInE2e: false,
+    caseArtifactsHashedAndCorrelated: true,
+    linkedSupplementalRun: { artifactsHashedAndCorrelated: true, cleanCandidate: true, sameCandidate: true, imagesMatchE2e: true }
+  };
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-payment-run-image-binding")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "payment-matrix-source-image-binding")?.status, "BLOCKED");
+  assert.equal(report.verdict, "INCOMPLETE");
+
+  const linkedRun = input.current.paymentMatrixSource.linkedSupplementalRun;
+  assert.ok(linkedRun);
+  linkedRun.imagesMatchE2e = false;
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-payment-run-image-binding")?.status, "BLOCKED");
+
+  linkedRun.imagesMatchE2e = true;
+  linkedRun.cleanCandidate = false;
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-payment-run-image-binding")?.status, "BLOCKED");
+});
+
 test("payment matrix reconciliation rejects missing tenant/provider rows and simulated sandbox evidence", () => {
   const input = base();
   const sandbox = paymentMatrix("sandbox");
@@ -248,6 +289,84 @@ test("operational pass with not-selected execution metadata is blocked as contra
   assert.equal(report.gates.find(item => item.id === "current-image-operational-and-outage")?.status, "BLOCKED");
   assert.equal(report.gates.find(item => item.id === "full-current-image-nfr-categories")?.status, "BLOCKED");
   assert.equal(report.verdict, "INCOMPLETE");
+});
+
+test("supplemental operational and recovery evidence binds by stable runtime images, not source-candidate equality", () => {
+  const input = base();
+  const before = input.current.operational!.imageBeforeManifest as ReturnType<typeof imageManifest>;
+  const after = input.current.operational!.imageManifest as ReturnType<typeof imageManifest>;
+  before.candidate.commit = "b".repeat(40);
+  after.candidate.commit = "b".repeat(40);
+  const report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-operational-recovery-image-binding")?.status, "PASS");
+  assert.equal(report.gates.find(item => item.id === "current-image-operational-and-outage")?.status, "BLOCKED");
+  assert.equal(report.gates.find(item => item.id === "current-image-rollback-and-restore")?.status, "BLOCKED");
+
+  (before.images[0] as { imageId: string }).imageId = `sha256:${"f".repeat(64)}`;
+  (after.images[0] as { imageId: string }).imageId = `sha256:${"f".repeat(64)}`;
+  const mismatch = reconcilePhase10LocalFollowup(input);
+  assert.equal(mismatch.gates.find(item => item.id === "supplemental-operational-recovery-image-binding")?.status, "BLOCKED");
+  assert.match(mismatch.gates.find(item => item.id === "supplemental-operational-recovery-image-binding")?.detail ?? "", /1\/13 services: azurite/);
+
+  (before.images[0] as { imageId: string }).imageId = `sha256:${(1).toString(16).padStart(64, "0")}`;
+  (after.images[0] as { imageId: string }).imageId = (before.images[0] as { imageId: string }).imageId;
+  (input.current.rollback as { currentImageRestored: boolean }).currentImageRestored = false;
+  const unrestored = reconcilePhase10LocalFollowup(input);
+  assert.equal(unrestored.gates.find(item => item.id === "supplemental-operational-recovery-image-binding")?.status, "BLOCKED");
+});
+
+test("same-run E2E Functions replay evidence is independently image-bound", () => {
+  const input = base();
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-e2e-functions-replay-image-binding")?.status, "PASS");
+
+  input.current.functionsProofBoundToE2e = false;
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-e2e-functions-replay-image-binding")?.status, "BLOCKED");
+
+  input.current.functionsProofBoundToE2e = true;
+  (input.current.functions as { approvalSubmissionAttempts: number }).approvalSubmissionAttempts = 2;
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-e2e-functions-replay-image-binding")?.status, "BLOCKED");
+});
+
+test("supplemental performance evidence requires selected checks, thresholds, counts, and matching image binaries", () => {
+  const input = base();
+  let report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-performance-run-image-binding")?.status, "PASS");
+
+  const after = input.current.performance!.imageManifest as ReturnType<typeof imageManifest>;
+  (after.images[0] as { imageId: string }).imageId = `sha256:${"f".repeat(64)}`;
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-performance-run-image-binding")?.status, "BLOCKED");
+
+  (after.images[0] as { imageId: string }).imageId = `sha256:${(1).toString(16).padStart(64, "0")}`;
+  (input.current.performance!.burst as { P95Seconds: number }).P95Seconds = 30;
+  report = reconcilePhase10LocalFollowup(input);
+  assert.equal(report.gates.find(item => item.id === "supplemental-performance-run-image-binding")?.status, "BLOCKED");
+});
+
+test("linked NFR gates reject unsealed or mixed-run evidence and renamed or duplicate performance checks", () => {
+  const performanceGate = "supplemental-performance-run-image-binding";
+  const opsGate = "supplemental-operational-recovery-image-binding";
+  const checkBlocked = (input: LocalFollowupInput, gateId: string) =>
+    assert.equal(reconcilePhase10LocalFollowup(input).gates.find(item => item.id === gateId)?.status, "BLOCKED");
+  const input = base();
+  input.current.performance!.sealed = false;
+  input.current.operational!.sealed = false;
+  checkBlocked(input, performanceGate);
+  checkBlocked(input, opsGate);
+  for (const segment of ["performance", "operational"] as const) {
+    const mixed = base();
+    (mixed.current[segment]!.imageManifest as ReturnType<typeof imageManifest>).runId = "another-run";
+    checkBlocked(mixed, segment === "performance" ? performanceGate : opsGate);
+  }
+  for (const name of ["wrong check", "Build NFR probe"]) {
+    const renamed = base();
+    const summary = renamed.current.performance!.summary as { categories: { performance: { checks: Array<{ name: string }> } } };
+    summary.categories.performance.checks[1].name = name;
+    checkBlocked(renamed, performanceGate);
+  }
 });
 
 test("no-payment reporting finalization requires canonical run identity and hashed final coverage", () => {
