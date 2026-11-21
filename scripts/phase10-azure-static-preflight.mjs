@@ -199,15 +199,42 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
     || !/--parameters existingFunctionsSqlDatabaseName=/.test(infraDeployWorkflow)) {
     failures.push('Deployment what-if/create must pass existing Functions SQL targets from the runtime target catalog when the SQL module is skipped.');
   }
+  const deployJob = infraDeployWorkflow.match(/(?:^|\r?\n)  deploy:\r?\n([\s\S]*?)(?=\r?\n  [A-Za-z0-9_-]+:\r?\n|$)/)?.[1] ?? '';
+  const deployParameterStep = deployJob.match(/      - name: Determine parameters\r?\n([\s\S]*?)(?=\r?\n      - name: |$)/)?.[1] ?? '';
+  if (!/SQL_ENTRA_ADMIN_OBJECT_ID:\s*\$\{\{\s*vars\.SQL_ENTRA_ADMIN_OBJECT_ID\s*\}\}/.test(deployParameterStep)
+    || !/SQL_ENTRA_ADMIN_LOGIN:\s*\$\{\{\s*vars\.SQL_ENTRA_ADMIN_LOGIN\s*\}\}/.test(deployParameterStep)
+    || !/SQL_ENTRA_ADMIN_OBJECT_ID[\s\S]*?SQL_ENTRA_ADMIN_LOGIN[\s\S]*?must be configured as environment variables before deploying SQL/.test(deployParameterStep)
+    || !/echo\s+"aadAdminObjectId=\$\{SQL_ENTRA_ADMIN_OBJECT_ID\}"\s*>>\s*\$GITHUB_OUTPUT/.test(deployParameterStep)
+    || !/echo\s+"aadAdminLogin=\$\{SQL_ENTRA_ADMIN_LOGIN\}"\s*>>\s*\$GITHUB_OUTPUT/.test(deployParameterStep)
+    || !/echo\s+"deploySql=\$\{\{\s*inputs\.deploySql\s*\}\}"\s*>>\s*\$GITHUB_OUTPUT/.test(deployParameterStep)
+    || !/echo\s+"deployRedis=\$\{\{\s*inputs\.deployRedis\s*\}\}"\s*>>\s*\$GITHUB_OUTPUT/.test(deployParameterStep)
+    || /SQL_ADMIN_PASSWORD=|openssl rand/.test(deployParameterStep)) {
+    failures.push('The deployment job must forward its explicit SQL/Redis selections, pass and validate the configured SQL Entra administrator, and resolve the bootstrap credential separately.');
+  }
   const sqlMigrationStep = infraDeployWorkflow.indexOf('name: Run Azure SQL Migrations');
+  const sqlAdminVerificationStep = infraDeployWorkflow.indexOf('name: Verify SQL Entra administrator before migrations');
+  const credentialResolutionStep = deployJob.indexOf('name: Resolve SQL bootstrap credential');
+  const existingSqlProbe = deployJob.indexOf('name: Verify existing SQL bootstrap login before updating SQL');
+  const armCreate = deployJob.indexOf('az deployment sub create');
+  const sqlVaultProbe = deployJob.indexOf('name: Verify deployed SQL bootstrap login and Key Vault read-back');
+  const deployMigration = deployJob.indexOf('name: Run Azure SQL Migrations');
+  if (credentialResolutionStep < 0 || existingSqlProbe <= credentialResolutionStep || armCreate <= existingSqlProbe
+    || sqlVaultProbe <= armCreate || deployMigration <= sqlVaultProbe
+    || !/resolve-phase10-sql-bootstrap-credential\.sh/.test(deployJob)
+    || !/Test-Phase10SqlBootstrapLogin\.ps1 -VerifyVault/.test(deployJob)) {
+    failures.push('The Azure deploy job must resolve the SQL bootstrap credential, verify existing login before ARM create, and verify Key Vault read-back and login before migrations.');
+  }
   const sqlIdentityGrantStep = infraDeployWorkflow.indexOf('name: Grant Phase 10 Runtime SQL Managed Identity Access');
   const functionPackageStep = infraDeployWorkflow.indexOf('name: Deploy exact Functions package and verify host indexing');
   const triggerActivationStep = infraDeployWorkflow.indexOf('name: Enable Functions triggers after identity, SQL, and package gates');
-  if (sqlMigrationStep < 0 || sqlIdentityGrantStep <= sqlMigrationStep || functionPackageStep <= sqlIdentityGrantStep || triggerActivationStep <= functionPackageStep
+  if (sqlMigrationStep < 0 || sqlAdminVerificationStep < 0 || sqlAdminVerificationStep >= sqlMigrationStep
+    || !/az sql server ad-admin list/.test(infraDeployWorkflow)
+    || !/actual_sid[\s\S]*?EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID[\s\S]*?actual_login[\s\S]*?EXPECTED_SQL_ENTRA_ADMIN_LOGIN/.test(infraDeployWorkflow)
+    || sqlIdentityGrantStep <= sqlMigrationStep || functionPackageStep <= sqlIdentityGrantStep || triggerActivationStep <= functionPackageStep
     || !infraDeployWorkflow.includes('AzureWebJobs.DlqIntakeFunction.Disabled=false')
     || !infraDeployWorkflow.includes('AzureWebJobs.DlqReplayFunction.Disabled=false')
     || !infraDeployWorkflow.includes('az functionapp config appsettings list')) {
-    failures.push('Functions DLQ/replay triggers must remain paused until SQL migrations, runtime identity grants, and exact package/index checks pass, then be enabled and verified.');
+    failures.push('SQL Entra administrator must be verified before migrations; Functions DLQ/replay triggers must remain paused until SQL migrations, runtime identity grants, and exact package/index checks pass, then be enabled and verified.');
   }
   if (/:phase10\b|:latest\b/.test(infraDeployWorkflow) || !/@sha256:\[0-9a-f\]\{64\}/.test(infraDeployWorkflow)) failures.push('Reusable deployment must reject mutable image tags and require digest-qualified references.');
   if (!/candidateSha/.test(orchestratorWorkflow) || !/releaseRunId/.test(orchestratorWorkflow) || !/approvedParameterIdentity/.test(orchestratorWorkflow)) failures.push('Orchestrator must require exact candidate, producer run, and reviewed parameter identity.');

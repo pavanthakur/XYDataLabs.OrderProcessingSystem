@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -78,7 +79,7 @@ const valid = {
   serviceBusBicep: "resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' output replayRequestQueueName string = replayRequestQueue.name",
   functionsPackageVerifier: "execFile('az', ['account', 'get-access-token']); authorization: `Bearer \${accessToken}`",
   mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName param replayRequestQueueName string replayRequestQueueName: serviceBus.outputs.replayRequestQueueName output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName",
-  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after identity, SQL, and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
+  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after identity, SQL, and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
   deploymentWorkflows: [{ path: '.github/workflows/phase10-azure-transport-smoke.yml', content: 'az functionapp config show --query alwaysOn refusing to publish transport test messages' }],
   orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs dryRun: default: true',
   azurePreflightScript: 'phase10-azure-preflight.mjs Microsoft.Authorization/roleAssignments/write',
@@ -90,6 +91,33 @@ const valid = {
   runtimeTargets: { targets: [runtimeTarget('azure-dev', 'dev'), runtimeTarget('azure-stg', 'stg'), runtimeTarget('azure-prod', 'prod')] },
 };
 
+valid.infraDeployWorkflow += [
+  '',
+  '  deploy:',
+  '    steps:',
+  '      - name: Determine parameters',
+  '        env:',
+  '          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}',
+  '          SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}',
+  '        run: |',
+  '          echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT',
+  '          echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT',
+  '          if [ "${{ inputs.deploySql }}" = "true" ]; then',
+  '            [[ "$SQL_ENTRA_ADMIN_OBJECT_ID" =~ ^[0-9a-fA-F-]{36}$ && -n "$SQL_ENTRA_ADMIN_LOGIN" ]] || { echo "SQL_ENTRA_ADMIN_OBJECT_ID and SQL_ENTRA_ADMIN_LOGIN must be configured as environment variables before deploying SQL." >&2; exit 1; }',
+  '            echo "aadAdminObjectId=${SQL_ENTRA_ADMIN_OBJECT_ID}" >> $GITHUB_OUTPUT',
+  '            echo "aadAdminLogin=${SQL_ENTRA_ADMIN_LOGIN}" >> $GITHUB_OUTPUT',
+  '          fi',
+  '      - name: Resolve SQL bootstrap credential',
+  '        run: bash scripts/resolve-phase10-sql-bootstrap-credential.sh',
+  '      - name: Verify existing SQL bootstrap login before updating SQL',
+  '      - name: Deploy (subscription scope)',
+  '        run: az deployment sub create',
+  '      - name: Verify deployed SQL bootstrap login and Key Vault read-back',
+  '        run: ./Resources/Azure-Deployment/Test-Phase10SqlBootstrapLogin.ps1 -VerifyVault',
+  '      - name: Run Azure SQL Migrations',
+].join('\n');
+valid.infraDeployWorkflow = valid.infraDeployWorkflow.replace('az sql server ad-admin show', 'az sql server ad-admin list');
+
 valid.functionsBicep = `@minLength(1) param sqlServerFqdn string @minLength(1) param sqlDatabaseName string ${valid.functionsBicep} name: 'AzureWebJobs.DlqIntakeFunction.Disabled' value: 'true' name: 'AzureWebJobs.DlqReplayFunction.Disabled' value: 'true'`;
 valid.mainBicep += " param existingFunctionsSqlServerName string param existingFunctionsSqlDatabaseName string sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}' sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName";
 valid.mainBicep += " var sqlConnectionString = deploySql ? 'Server=tcp:sql.database.windows.net;Authentication=Active Directory Managed Identity;' : ''";
@@ -97,6 +125,35 @@ valid.mainBicep += " var sqlConnectionString = deploySql ? 'Server=tcp:sql.datab
 test('static Azure deployment contract accepts explicit host, transport, immutable release and package settings', () => {
   const result = auditAzureDeployContract(valid);
   assert.equal(result.status, 'PASS', JSON.stringify(result));
+});
+
+const resolverBash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
+test('SQL bootstrap resolver distinguishes new, existing and unverified Azure state', {
+  skip: process.platform === 'win32' && !existsSync(resolverBash),
+}, () => {
+  const output = execFileSync(resolverBash, ['scripts/tests/phase10-sql-bootstrap-credential.test.sh'], {
+    cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8',
+  });
+  assert.match(output, /5 mocked cases passed/);
+});
+
+test('Azure deploy contract requires the runtime deployment job to forward and validate SQL Entra admin inputs', () => {
+  const missingRuntimeJobMapping = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replace('          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}', ''),
+  });
+  assert.match(missingRuntimeJobMapping.failures.join('\n'), /deployment job must forward its explicit SQL\/Redis selections, pass and validate the configured SQL Entra administrator/);
+
+  const missingDeployedAdminVerification = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replace('name: Verify SQL Entra administrator before migrations', ''),
+  });
+  assert.match(missingDeployedAdminVerification.failures.join('\n'), /SQL Entra administrator must be verified before migrations/);
+  const missingVaultProbe = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replace('name: Verify deployed SQL bootstrap login and Key Vault read-back', ''),
+  });
+  assert.match(missingVaultProbe.failures.join('\n'), /verify Key Vault read-back and login before migrations/);
 });
 
 test('Azure payment verifier treats dedicated tenants generically instead of hardcoding TenantC', () => {

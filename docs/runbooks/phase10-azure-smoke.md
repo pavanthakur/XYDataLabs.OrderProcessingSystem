@@ -807,7 +807,9 @@ To launch the deployment from GitHub:
 3. Click `01 Phase 10 Azure Deploy Orchestrator`.
 4. Click `Run workflow`.
 5. Choose the target branch.
-6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`. Leave `deploySql` and `deployRedis` off for a routine redeploy; select them only when the corresponding baseline slice must be provisioned or intentionally updated. `deploySql=true` rotates the SQL admin password, so make sure the Entra SQL administrator variables are configured and that dependent operator credentials are handled before selecting it.
+6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`. Select `deploySql` and `deployRedis` only for the slices being provisioned or intentionally updated. With `deploySql=true`, configure the environment's SQL Entra administrator object ID and login. The OIDC-authenticated deployment generates a bootstrap credential only for a new SQL server. For an existing server, it reads the environment vault and verifies the credential with `SELECT 1` before ARM can update SQL. Missing, unreadable or rejected credentials block deployment; recover them separately rather than resetting the password during a retry.
+
+   After ARM deploys SQL, the workflow checks the Entra administrator and then verifies that the Key Vault value matches and can open a SQL session before migrations and workload grants. Passing those checks does not replace the runtime managed-identity tenant-registry check. What-if uses a placeholder, not the live bootstrap credential. The local SQL firewall hook is not a deployment prerequisite; use the scoped Entra verifier and its temporary firewall lease for local evidence when authorized.
 7. Click `Run workflow` to start the deployment.
 
 After the deploy finishes:

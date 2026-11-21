@@ -353,7 +353,8 @@ jobs:
             echo "envSuffix=${ENV_SUFFIX}" >> $GITHUB_OUTPUT
             echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
             if [ "${{ inputs.deploySql }}" = "true" ]; then
-              SQL_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)Aa1!"
+              # What-if only: never retrieve or generate a live bootstrap credential.
+              SQL_ADMIN_PASSWORD="$(openssl rand -hex 16)Aa1!"
               echo "::add-mask::${SQL_ADMIN_PASSWORD}"
               echo "sqlAdminPassword=${SQL_ADMIN_PASSWORD}" >> $GITHUB_OUTPUT
             else
@@ -683,6 +684,8 @@ jobs:
           INVENTORY_IMAGE_INPUT: ${{ inputs.inventoryImage }}
           NOTIFICATIONS_IMAGE_INPUT: ${{ inputs.notificationsImage }}
           UI_IMAGE_INPUT: ${{ inputs.uiImage }}
+          SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
+          SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
         run: |
           set -euo pipefail
           echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
@@ -693,9 +696,17 @@ jobs:
           echo "template=infra/main.phase10.bicep" >> $GITHUB_OUTPUT
           echo "file=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
           echo "phase10=true" >> $GITHUB_OUTPUT
-          echo "deploySql=true" >> $GITHUB_OUTPUT
-          echo "deployRedis=true" >> $GITHUB_OUTPUT
+          echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT
+          echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT
           echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.deploySql }}" = "true" ]; then
+            [[ "$SQL_ENTRA_ADMIN_OBJECT_ID" =~ ^[0-9a-fA-F-]{36}$ && -n "$SQL_ENTRA_ADMIN_LOGIN" && "$SQL_ENTRA_ADMIN_LOGIN" != *$'\n'* && "$SQL_ENTRA_ADMIN_LOGIN" != *$'\r'* ]] || { echo "SQL_ENTRA_ADMIN_OBJECT_ID and SQL_ENTRA_ADMIN_LOGIN must be configured as environment variables before deploying SQL." >&2; exit 1; }
+            echo "aadAdminObjectId=${SQL_ENTRA_ADMIN_OBJECT_ID}" >> $GITHUB_OUTPUT
+            echo "aadAdminLogin=${SQL_ENTRA_ADMIN_LOGIN}" >> $GITHUB_OUTPUT
+          else
+            echo "aadAdminObjectId=" >> $GITHUB_OUTPUT
+            echo "aadAdminLogin=" >> $GITHUB_OUTPUT
+          fi
           TARGET_KEY="azure-${{ inputs.environment }}"
           if [ "${{ inputs.environment }}" = "staging" ]; then TARGET_KEY="azure-stg"; fi
           RUNTIME_TARGET="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc=require("./automation/config/runtime-targets.json"); const target=doc.targets.find((item)=>item.key===process.env.TARGET_KEY); if(!target) process.exit(2); process.stdout.write(JSON.stringify(target));')"
@@ -704,9 +715,6 @@ jobs:
           [[ -n "$EXISTING_FUNCTIONS_SQL_SERVER" && -n "$EXISTING_FUNCTIONS_SQL_DATABASE" ]] || { echo "Runtime target is missing the existing Functions SQL server/database fallback." >&2; exit 1; }
           echo "existingFunctionsSqlServerName=${EXISTING_FUNCTIONS_SQL_SERVER}" >> $GITHUB_OUTPUT
           echo "existingFunctionsSqlDatabaseName=${EXISTING_FUNCTIONS_SQL_DATABASE}" >> $GITHUB_OUTPUT
-          SQL_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)Aa1!"
-          echo "::add-mask::${SQL_ADMIN_PASSWORD}"
-          echo "sqlAdminPassword=${SQL_ADMIN_PASSWORD}" >> $GITHUB_OUTPUT
           PLATFORM_SUFFIX="platform"
           ACR_NAME="${{ inputs.acrName }}"
           if [ -z "$ACR_NAME" ]; then
@@ -745,6 +753,27 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Resolve SQL bootstrap credential
+        id: sql-bootstrap
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: bash
+        env:
+          ENV_SUFFIX: ${{ steps.params.outputs.envSuffix }}
+          SQL_SERVER_NAME: ${{ steps.params.outputs.existingFunctionsSqlServerName }}
+        run: |
+          [[ "$SQL_SERVER_NAME" == "orderprocessing-sql-$ENV_SUFFIX" ]] || { echo 'SQL catalog does not match the IaC server name.' >&2; exit 1; }
+          bash scripts/resolve-phase10-sql-bootstrap-credential.sh "rg-orderprocessing-$ENV_SUFFIX" "$SQL_SERVER_NAME" "kv-orderprocessing-$ENV_SUFFIX"
+
+      - name: Verify existing SQL bootstrap login before updating SQL
+        if: ${{ steps.sql-bootstrap.outputs.source == 'existing' }}
+        shell: pwsh
+        env:
+          SQL_RESOURCE_GROUP: rg-orderprocessing-${{ steps.params.outputs.envSuffix }}
+          SQL_SERVER_NAME: ${{ steps.params.outputs.existingFunctionsSqlServerName }}
+          SQL_ADMIN_USERNAME: ${{ steps.params.outputs.sqlAdminUsername }}
+          SQL_ADMIN_PASSWORD: ${{ steps.sql-bootstrap.outputs.sqlAdminPassword }}
+        run: ./Resources/Azure-Deployment/Test-Phase10SqlBootstrapLogin.ps1
 
       - name: Resolve deployment principal
         id: deployment_principal
@@ -964,6 +993,9 @@ jobs:
       - name: Deploy (subscription scope)
         id: deploy
         env:
+          SQL_ADMIN_PASSWORD: ${{ steps.sql-bootstrap.outputs.sqlAdminPassword }}
+          SQL_ENTRA_ADMIN_ID: ${{ steps.params.outputs.aadAdminObjectId }}
+          SQL_ENTRA_ADMIN_LOGIN: ${{ steps.params.outputs.aadAdminLogin }}
           IDENTITY_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
           ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
           ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
@@ -974,6 +1006,10 @@ jobs:
           ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
           IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
         run: |
+          set -euo pipefail
+          if [ "${{ steps.params.outputs.deploySql }}" = "true" ]; then
+            [[ -n "$SQL_ADMIN_PASSWORD" && -n "$SQL_ENTRA_ADMIN_ID" && -n "$SQL_ENTRA_ADMIN_LOGIN" ]] || { echo 'SQL bootstrap inputs are incomplete; refusing ARM deployment.' >&2; exit 1; }
+          fi
           IDENTITY_ARGS=()
           if [ "${{ steps.params.outputs.template }}" = "infra/main.phase10.bicep" ]; then
             node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
@@ -990,9 +1026,9 @@ jobs:
             --parameters existingFunctionsSqlServerName="${{ steps.params.outputs.existingFunctionsSqlServerName }}" \
             --parameters existingFunctionsSqlDatabaseName="${{ steps.params.outputs.existingFunctionsSqlDatabaseName }}" \
             --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
-            --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
-            --parameters aadAdminObjectId="${{ steps.params.outputs.aadAdminObjectId }}" \
-            --parameters aadAdminLogin="${{ steps.params.outputs.aadAdminLogin }}" \
+            --parameters sqlAdminPassword="$SQL_ADMIN_PASSWORD" \
+            --parameters aadAdminObjectId="$SQL_ENTRA_ADMIN_ID" \
+            --parameters aadAdminLogin="$SQL_ENTRA_ADMIN_LOGIN" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
@@ -1103,9 +1139,50 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Verify SQL Entra administrator before migrations
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: bash
+        env:
+          SQL_SERVER_NAME: ${{ steps.outputs.outputs.sqlServer }}
+          EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID: ${{ steps.params.outputs.aadAdminObjectId }}
+          EXPECTED_SQL_ENTRA_ADMIN_LOGIN: ${{ steps.params.outputs.aadAdminLogin }}
+        run: |
+          set -euo pipefail
+          [[ -n "$SQL_SERVER_NAME" && -n "$EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID" && -n "$EXPECTED_SQL_ENTRA_ADMIN_LOGIN" ]] || {
+            echo "SQL deployment outputs are missing the server or configured Entra administrator." >&2
+            exit 1
+          }
+
+          actual_admin="$(az sql server ad-admin list \
+            --resource-group "${{ steps.outputs.outputs.rg }}" \
+            --server "$SQL_SERVER_NAME" \
+            --query "[0].{sid:sid,login:login}" -o json)"
+          actual_sid="$(jq -r '.sid // empty' <<< "$actual_admin")"
+          actual_login="$(jq -r '.login // empty' <<< "$actual_admin")"
+
+          [[ "${actual_sid,,}" == "${EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID,,}" && "${actual_login,,}" == "${EXPECTED_SQL_ENTRA_ADMIN_LOGIN,,}" ]] || {
+            echo "Configured SQL Entra administrator does not match the deployed server; refusing SQL migrations and managed-identity grants." >&2
+            exit 1
+          }
+
+          echo "✅ SQL Entra administrator verified before migrations and runtime identity grants." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify deployed SQL bootstrap login and Key Vault read-back
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: pwsh
+        env:
+          SQL_RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
+          SQL_SERVER_NAME: ${{ steps.outputs.outputs.sqlServer }}
+          SQL_KEY_VAULT: ${{ steps.outputs.outputs.keyvault }}
+          SQL_ADMIN_USERNAME: ${{ steps.params.outputs.sqlAdminUsername }}
+          SQL_ADMIN_PASSWORD: ${{ steps.sql-bootstrap.outputs.sqlAdminPassword }}
+        run: ./Resources/Azure-Deployment/Test-Phase10SqlBootstrapLogin.ps1 -VerifyVault
+
       - name: Run Azure SQL Migrations
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         shell: pwsh
+        env:
+          SQL_ADMIN_PASSWORD: ${{ steps.sql-bootstrap.outputs.sqlAdminPassword }}
         run: |
           Write-Host "Running Phase 10 Azure SQL migrations for ${{ steps.params.outputs.env }}..."
 
@@ -1113,7 +1190,7 @@ jobs:
             -Environment "${{ steps.params.outputs.env }}" `
             -BaseName "orderprocessing" `
             -AdminUsername "${{ steps.params.outputs.sqlAdminUsername }}" `
-            -AdminPassword "${{ steps.params.outputs.sqlAdminPassword }}" `
+            -AdminPassword $env:SQL_ADMIN_PASSWORD `
             -Owner "${{ github.repository_owner }}"
 
           if ($LASTEXITCODE -ne 0) {
@@ -1134,6 +1211,8 @@ jobs:
         id: phase10-sql-identities
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         shell: pwsh
+        env:
+          SQL_ADMIN_PASSWORD: ${{ steps.sql-bootstrap.outputs.sqlAdminPassword }}
         run: |
           Write-Host "Granting Azure SQL access to Phase 10 runtime identities for ${{ steps.params.outputs.env }}..."
 
@@ -1142,7 +1221,7 @@ jobs:
             -BaseName "orderprocessing" `
             -UseSqlAuthentication `
             -SqlAdminUsername "${{ steps.params.outputs.sqlAdminUsername }}" `
-            -SqlAdminPassword "${{ steps.params.outputs.sqlAdminPassword }}"
+            -SqlAdminPassword $env:SQL_ADMIN_PASSWORD
 
           if ($LASTEXITCODE -ne 0) {
               throw "Phase 10 runtime SQL identity setup failed with exit code $LASTEXITCODE."

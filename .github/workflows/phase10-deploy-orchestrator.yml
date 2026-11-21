@@ -46,7 +46,7 @@ on:
         default: false
         type: boolean
       deploySql:
-        description: 'Provision/update the SQL baseline. This can rotate its SQL admin password; leave off for routine redeploys.'
+        description: 'Provision/update SQL. Generates a bootstrap credential only for a new server; verifies and reuses it on existing servers.'
         required: true
         default: false
         type: boolean
@@ -673,7 +673,7 @@ jobs:
           echo "|----------|------------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| OIDC + GitHub Secrets | ✅ Prerequisite | Azure Initial Setup workflow |" >> $GITHUB_STEP_SUMMARY
           echo "| Platform foundation RG + persistent ACR + pull identity | ✅ Yes | 00 Azure Platform Foundation |" >> $GITHUB_STEP_SUMMARY
-          echo "| SQL Server baseline | ${{ inputs.deploySql }} | Explicit workflow input; enabling it updates the slice and rotates the SQL admin password |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Server baseline | ${{ inputs.deploySql }} | Explicit workflow input; new server generates a bootstrap credential, existing server verifies and reuses it |" >> $GITHUB_STEP_SUMMARY
           echo "| Redis baseline | ${{ inputs.deployRedis }} | Explicit workflow input; enabling it updates the slice |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 service images | No | A separately approved immutable release build must exist before the wrapper consumes it |" >> $GITHUB_STEP_SUMMARY
           echo "| Resource Group + Service Bus + Log Analytics + App Insights + Container Apps + Function App + Key Vault | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
