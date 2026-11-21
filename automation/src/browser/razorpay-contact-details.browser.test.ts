@@ -2,9 +2,59 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chromium } from "playwright";
 import { completeRazorpayContactDetails } from "./razorpay-contact-details.js";
+import { finishRazorpayPostCard, type RazorpayPostCardState } from "./razorpay-post-card.js";
+import { PaymentJourneyRunner } from "./payment-journey-runner.js";
 
 const phoneFixture = "9111191111";
 const emailFixture = "sandbox@example.test";
+
+test("missing operator session cannot be reported as verified sign-out", async () => {
+  const runner = new PaymentJourneyRunner();
+  await assert.rejects(runner.closeOperatorAssistedSession(undefined, true), /No operator session/);
+  await runner.closeOperatorAssistedSession();
+});
+
+test("Razorpay direct callback bypasses the optional mock bank", async () => {
+  assert.equal(await finishRazorpayPostCard(
+    async () => "callback", async () => assert.fail("no save prompt"), async () => assert.fail("no mock bank")
+  ), false);
+});
+
+test("Razorpay save-card prompt is dismissed once before completing the mock bank", async () => {
+  const actions: string[] = [];
+  const states: RazorpayPostCardState[] = ["save-card", "mock-bank"];
+  assert.equal(await finishRazorpayPostCard(async (allowSave) => {
+    actions.push(`observe:${allowSave}`);
+    return states.shift()!;
+  }, async () => { actions.push("skip"); }, async () => { actions.push("bank"); }), true);
+  assert.deepEqual(actions, ["observe:true", "skip", "observe:false", "bank"]);
+});
+
+test("Razorpay validation and timeout remain distinct without further clicks", async () => {
+  for (const [state, message] of [["validation-error", /card field validation/], ["timeout", /outcome is unknown/]] as const) {
+    await assert.rejects(finishRazorpayPostCard(
+      async () => state, async () => assert.fail("no save prompt"), async () => assert.fail("no mock bank")
+    ), message);
+  }
+});
+
+test("Razorpay post-card observer detects validation in the card frame without reading field values", async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<iframe srcdoc="<input autocomplete=cc-number aria-invalid=true>"></iframe>');
+    const frame = await page.locator("iframe").elementHandle();
+    const cardScope = await frame?.contentFrame();
+    assert.ok(cardScope);
+    await cardScope.locator("input").waitFor();
+    const runner = new PaymentJourneyRunner();
+    assert.equal(await runner["waitForRazorpayPostCardAdvance"](page, cardScope, 1000, true), "validation-error");
+    await page.locator("body").evaluate(body => body.insertAdjacentHTML("beforeend", "<h1>Review the final payment outcome</h1>"));
+    assert.equal(await runner["waitForRazorpayPostCardAdvance"](page, cardScope, 1000, true), "callback");
+  } finally {
+    await browser.close();
+  }
+});
 
 test("Razorpay contact step validates sandbox phone and advances once before card entry", { timeout: 30000 }, async () => {
   const browser = await chromium.launch({ headless: true });

@@ -262,7 +262,7 @@ async function main(): Promise<void> {
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
   let hasFailures = targetRuns.some((targetRun) =>
-    targetRun.operatorAuthPreflight?.status === "FAIL" || targetRun.rows.some((row) => {
+    targetRun.operatorAuthPreflight?.status === "FAIL" || targetRun.operatorSignOut?.status === "FAIL" || targetRun.rows.some((row) => {
       const journeyFailed = options.authPreflightOnly
         ? row.journeyOutcome !== "auth-preflight-passed"
         : !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
@@ -314,6 +314,11 @@ async function main(): Promise<void> {
       targetSections.push(`Entra no-charge preflight: ${targetRun.operatorAuthPreflight.status}`);
       targetSections.push(`Evidence: ${targetRun.operatorAuthPreflight.evidence}`);
       if (targetRun.operatorAuthPreflight.error) targetSections.push(`Error: ${targetRun.operatorAuthPreflight.error}`);
+      targetSections.push("");
+    }
+    if (targetRun.operatorSignOut) {
+      targetSections.push(`Entra sign-out verification: ${targetRun.operatorSignOut.status}`);
+      if (targetRun.operatorSignOut.error) targetSections.push(targetRun.operatorSignOut.error);
       targetSections.push("");
     }
     targetSections.push("| Tenant | Provider | Journey | Challenge | Verification | Cleanup |");

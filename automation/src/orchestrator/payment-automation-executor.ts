@@ -57,6 +57,7 @@ export interface PaymentAutomationRunOutput {
   verificationSummary: string;
   verificationSafety?: "established" | "unknown";
   operatorAuthPreflight?: { status: "PASS" | "FAIL"; startedUtc: string; finishedUtc: string; evidence: string; error?: string };
+  operatorSignOut?: { status: "PASS" | "FAIL"; error?: string };
 }
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -519,26 +520,15 @@ export async function executePaymentAutomationRun(
     }
   }
 
-  if (options.operatorAssistedEntra && !options.authPreflightOnly) {
+  let operatorSignOut: PaymentAutomationRunOutput["operatorSignOut"];
+  if (options.operatorAssistedEntra && !options.authPreflightOnly && !options.dryRun && operatorAuthPreflight?.status !== "FAIL") {
     try {
-      await paymentJourneyRunner.closeOperatorAssistedSession(log);
-    } catch (error) {
-      const message = safePaymentDiagnostic(error instanceof Error ? error.message : "Entra sign-out verification failed.");
-      const lastRow = rows.at(-1);
-      if (lastRow) {
-        lastRow.journeyOutcome = `failed: ${message}`;
-        lastRow.errorDetail = [lastRow.errorDetail, message].filter(Boolean).join(" | ");
-        if (checkpointEnabled) {
-          const receipt = checkpoint.cases.find((item) => item.key === `${lastRow.tenantCode.toLowerCase()}|${lastRow.paymentProvider.toLowerCase()}`);
-          if (receipt) { receipt.state = "started"; delete receipt.row; }
-          await saveCheckpoint(checkpointPath, checkpoint);
-        }
-      }
-      if (operatorAuthPreflight) {
-        operatorAuthPreflight.status = "FAIL";
-        operatorAuthPreflight.error = [operatorAuthPreflight.error, message].filter(Boolean).join(" | ");
-      }
-      log(`Operator-assisted Entra sign-out verification failed: ${message}`);
+      await paymentJourneyRunner.closeOperatorAssistedSession(log, true);
+      operatorSignOut = { status: "PASS" };
+    } catch {
+      const message = "Entra sign-out could not be verified.";
+      operatorSignOut = { status: "FAIL", error: message };
+      log(message);
     }
   }
 
@@ -554,7 +544,8 @@ export async function executePaymentAutomationRun(
     rows,
     verificationSummary,
     verificationSafety:verificationSafetySignals.length>0&&verificationSafetySignals.every(Boolean)?"established":"unknown",
-    ...(operatorAuthPreflight ? { operatorAuthPreflight } : {})
+    ...(operatorAuthPreflight ? { operatorAuthPreflight } : {}),
+    ...(operatorSignOut ? { operatorSignOut } : {})
   };
 
   await writeFile(path.join(reportDirectory, "summary.md"), markdownSummary, "utf8");

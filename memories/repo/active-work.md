@@ -12,7 +12,7 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 - Evidence scope: `Selected Docker E2E, payment, restart, migration and NFR checks; strict clean-source/same-candidate L5-R reconciliation remains incomplete; Azure excluded from this evidence`
 - Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-232300248/acceptance-packet.json`
 - This local Docker evidence is historical and not the Azure deployment revision.
-- Current local branch/HEAD: `dev` / `6e03e4885c9a48d331beb20c3f94be02698e3637` (handoff commit, not pushed). The Azure workflow runs below used GitHub `dev` SHA `6fbc5454d56f4f9159ff027f620bc2135c9fd600`, which remains the deployed/tested code revision; the local commit only updated this handoff.
+- Latest handoff base: `dev` / `26f1e153` (documentation only). The Azure workflow runs below used workflow SHA `6fbc5454`; the immutable deployed app release source is `47970357`.
 - Local Docker Phase 10 remains **INCOMPLETE/BLOCKED**. The 20 Nov baseline, payment, persistence and NFR evidence is linked across runs and does not satisfy strict clean-source/same-candidate L5-R reconciliation. Do not rerun successful charges just to refresh evidence.
 - Local evidence index: `TestResults/Phase10/local-followup-20261120-b9-current-payments-v12/index.html`; authoritative limitations and run-specific reports remain under ignored `TestResults/`. The deterministic payment runner's customer-growth drift check failed despite restored provider settings; the original seal remains unchanged.
 - Baseline payment evidence: six deterministic and six real sandbox positives for TenantA/B/C × Razorpay/OpenPay passed with provider confirmation and SQL correlation. Razorpay decline/dismissal evidence is from an earlier candidate. Do not overclaim that it is current-candidate acceptance.
@@ -31,7 +31,7 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Next actions
 
-1. Complete normal Entra sign-in in the supported headed local operator runner, then run the serial TenantA/B/C × Razorpay/OpenPay sandbox matrix once with provider/SQL/callback verification and exact provider-setting restoration. Do not bypass MFA or retry an ambiguous charge.
+1. The earlier desktop matrix stopped at TenantA Razorpay checkout (`ORDER-1`); settings were restored and Razorpay Test Mode showed zero attempts/no payments. Do not reuse that order or resume its started checkpoint. After the runner fix, two fresh TenantA/Razorpay assigned-route cases (`ORDER-2`, `ORDER-3`) passed provider, callback, SQL, App Insights, and Entra sign-out checks. Final reports: `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-21T16-22-40-602Z/` and `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-21T16-30-36-495Z/`. They used the local checkout and did not switch provider settings or prove alternate routes. Next: run the approved six-case matrix from a visible desktop terminal against the reviewed commit and wait for final verification, restoration, and sign-out.
 2. Keep approved DLQ replay separate; workflow 03 did not prove replay. Keep Azure cleanup separate as well.
 3. Do not run staging/prod or modify deployment, directory, provider or database settings without specific approval.
 

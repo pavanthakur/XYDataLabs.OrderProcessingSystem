@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, request as playwrightRequest } from "playwright";
 import type { Browser, BrowserContext, Page } from "playwright";
+import { finishRazorpayPostCard, type RazorpayPostCardState } from "./razorpay-post-card.js";
 import type { ChallengeOutcome } from "../contracts/provider-challenge-handler.js";
 import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { RuntimeTargetDefinition } from "../contracts/runtime-target-catalog.js";
@@ -577,10 +578,13 @@ export class PaymentJourneyRunner {
     }
   }
 
-  public async closeOperatorAssistedSession(logger?: (message: string) => void): Promise<void> {
+  public async closeOperatorAssistedSession(logger?: (message: string) => void, requireAuthenticated = false): Promise<void> {
     const session = this.operatorSession;
     this.operatorSession = undefined;
-    if (!session) return;
+    if (!session) {
+      if (requireAuthenticated) throw new Error("No operator session remained to verify sign-out.");
+      return;
+    }
     let logoutError: Error | undefined;
     try {
       if (session.authenticated) {
@@ -598,6 +602,8 @@ export class PaymentJourneyRunner {
         }
         await page.getByRole("heading", { name: /Signed out of the application/i }).waitFor({ state: "visible", timeout: 10000 });
         logger?.("One Entra sign-out completed after the selected tenant payment journeys; the application token was cleared.");
+      } else if (requireAuthenticated) {
+        throw new Error("No authenticated operator session remained to verify sign-out.");
       }
     } catch (error) {
       logoutError = error instanceof Error ? error : new Error("Entra sign-out verification failed after the payment matrix.");
@@ -1023,16 +1029,20 @@ export class PaymentJourneyRunner {
 
     log("Waiting for Razorpay hosted checkout UI.");
     await completeRazorpayContactDetails(page, razorpayAutomationPhone, payerEmail, log);
-    await this.fillRazorpayCardDetails(page, log);
-    await this.dismissRazorpaySaveCardPrompt(page, log);
-    await this.completeRazorpayMockBankChallenge(page, log,failPayment);
-    return true;
+    if (await callbackHeading.isVisible().catch(() => false)) return false;
+    const cardScope = await this.fillRazorpayCardDetails(page, log);
+    if (!cardScope) return false;
+    return finishRazorpayPostCard(
+      (allowSaveCard) => this.waitForRazorpayPostCardAdvance(page, cardScope, 60000, allowSaveCard),
+      () => this.dismissRazorpaySaveCardPrompt(page, log),
+      () => this.completeRazorpayMockBankChallenge(page, log, failPayment)
+    );
   }
 
   private async fillRazorpayCardDetails(
     page: import("playwright").Page,
     log: (message: string) => void
-  ): Promise<void> {
+  ): Promise<AutomationScope | undefined> {
     await this.tryClickVisible(page, [
       (scope) => scope.getByText(/^Cards$/i),
       (scope) => scope.getByRole("tab", { name: /^Cards$/i })
@@ -1041,41 +1051,26 @@ export class PaymentJourneyRunner {
     let cardScope: { scope: AutomationScope; label: string };
     try {
       cardScope = await this.findScope(page, [
-        (scope) => scope.getByText(/Add a new card/i),
-        (scope) => scope.getByText(/Payment Options/i),
-        (scope) => scope.getByText(/Debit \/ Credit Card/i),
-        (scope) => scope.getByText(/Cards/i)
+        (scope) => scope.locator('input[autocomplete="cc-number"]'),
+        (scope) => scope.locator('input[name="card[number]"]'),
+        (scope) => scope.getByPlaceholder(/card number/i)
       ], 20000, "Razorpay card entry");
     }
     catch {
-      log("Razorpay card section labels were not found; falling back to generic card input discovery.");
-      try {
-        cardScope = await this.findScope(page, [
-          (scope) => scope.locator('input[autocomplete="cc-number"]').first(),
-          (scope) => scope.locator('input[name="card[number]"]').first(),
-          (scope) => scope.locator('input[name*="card"]').first(),
-          (scope) => scope.locator('input[placeholder*="card" i]').first(),
-          (scope) => scope.locator('input[type="tel"]').first()
-        ], 20000, "Razorpay generic card input");
+      const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
+      if (await callbackHeading.isVisible().catch(() => false)) {
+        log("Razorpay checkout already transitioned to the callback page; card entry was not required.");
+        return;
       }
-      catch {
-        const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
-        if (await callbackHeading.isVisible().catch(() => false)) {
-          log("Razorpay checkout already transitioned to the callback page; card entry was not required.");
-          return;
-        }
-
-        log(`Razorpay checkout surfaces at failure: ${JSON.stringify(await this.describeAutomationSurfaces(page))}`);
-        throw new Error("Unable to locate Razorpay hosted checkout card entry or callback page.");
-      }
+      throw new Error("Unable to identify the Razorpay card-number field; card Continue was not clicked.");
     }
 
-    log(`Completing Razorpay card entry in ${cardScope.label}.`);
+    log("Completing Razorpay hosted card entry.");
 
     const cardNumberFilled = await this.tryFillWithinScope(cardScope.scope, [
       (scope) => scope.locator('input[autocomplete="cc-number"]').first(),
       (scope) => scope.locator('input[name="card[number]"]').first(),
-      (scope) => scope.getByPlaceholder(/card/i).first()
+      (scope) => scope.getByPlaceholder(/card number/i).first()
     ], razorpayAutomationCardNumber, true);
 
     const expiryFilled = await this.tryFillWithinScope(cardScope.scope, [
@@ -1091,7 +1086,7 @@ export class PaymentJourneyRunner {
     ], razorpayAutomationCardCvv, true);
 
     if (!cardNumberFilled || !expiryFilled || !cvvFilled) {
-      await this.fillCardInputsByOrder(cardScope.scope);
+      throw new Error("Razorpay card fields could not all be identified; card Continue was not clicked.");
     }
 
     // Submit once. A quiet/slow provider is an ambiguous result, not permission to charge again.
@@ -1100,8 +1095,7 @@ export class PaymentJourneyRunner {
         (scope) => scope.getByText(/^Continue$/i)
       ], "Razorpay card continue");
 
-    if (await this.waitForRazorpayPostCardAdvance(page, 60000)) return;
-    throw new Error("Razorpay checkout outcome is ambiguous after one card submission; no automatic resubmission is permitted.");
+    return cardScope.scope;
   }
 
   private async dismissRazorpaySaveCardPrompt(
@@ -1115,6 +1109,8 @@ export class PaymentJourneyRunner {
 
     if (dismissed) {
       log("Dismissed the optional Razorpay save-card prompt.");
+    } else {
+      throw new Error("Razorpay save-card prompt could not be dismissed; provider outcome is unknown. Do not resubmit.");
     }
   }
 
@@ -1144,33 +1140,6 @@ export class PaymentJourneyRunner {
       (scope) => scope.getByRole("button", { name: new RegExp(`^${outcome}$`,"i") }),
       (scope) => scope.getByText(new RegExp(`^${outcome}$`,"i"))
     ], "Razorpay mock bank outcome");
-  }
-
-  private async fillCardInputsByOrder(scope: AutomationScope): Promise<void> {
-    const inputs = scope.locator('input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]):not([type="button"]):not([type="submit"])');
-    const visibleInputs: import("playwright").Locator[] = [];
-    const deadline=Date.now()+60000;
-    do {
-      visibleInputs.length=0;
-      for (let index = 0; index < await inputs.count(); index += 1) {
-      const candidate = inputs.nth(index);
-      const isVisible = await candidate.isVisible().catch(() => false);
-      const inputType = (await candidate.getAttribute("type").catch(() => null))?.toLowerCase() ?? "text";
-      if (isVisible && !["radio", "checkbox", "hidden", "button", "submit"].includes(inputType)) {
-        visibleInputs.push(candidate);
-      }
-      }
-      if(visibleInputs.length>=3) break;
-      await new Promise(resolve=>setTimeout(resolve,250));
-    }while(Date.now()<deadline);
-
-    if (visibleInputs.length < 3) {
-      throw new Error("Unable to identify Razorpay card entry inputs.");
-    }
-
-    await this.typeIntoInput(visibleInputs[0], razorpayAutomationCardNumber);
-    await this.typeIntoInput(visibleInputs[1], razorpayAutomationCardExpiry);
-    await this.typeIntoInput(visibleInputs[2], razorpayAutomationCardCvv);
   }
 
   private async fillVisibleInput(
@@ -1270,8 +1239,10 @@ export class PaymentJourneyRunner {
 
   private async waitForRazorpayPostCardAdvance(
     page: import("playwright").Page,
-    timeoutMs: number
-  ): Promise<boolean> {
+    cardScope: AutomationScope,
+    timeoutMs: number,
+    allowSaveCard: boolean
+  ): Promise<RazorpayPostCardState> {
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
@@ -1280,15 +1251,19 @@ export class PaymentJourneyRunner {
         const successVisible = await surface.scope.getByRole("button", { name: /^Success$/i }).first().isVisible().catch(() => false);
         const callbackVisible = await surface.scope.getByRole("heading", { name: /Review the final payment outcome/i }).first().isVisible().catch(() => false);
 
-        if (maybeLaterVisible || successVisible || callbackVisible) {
-          return true;
-        }
+        if (callbackVisible) return "callback";
+        if (successVisible) return "mock-bank";
+        if (allowSaveCard && maybeLaterVisible) return "save-card";
       }
 
+      const invalidCardField = cardScope.locator(
+        'input[autocomplete^="cc-"][aria-invalid="true"], input[name^="card["][aria-invalid="true"]'
+      ).first();
+      if (await invalidCardField.isVisible().catch(() => false)) return "validation-error";
       await page.waitForTimeout(250);
     }
 
-    return false;
+    return "timeout";
   }
 
   private async findScope(

@@ -233,6 +233,8 @@ Run the wrapper from PowerShell 7 in your signed-in Windows desktop, not through
 
 The executor writes `checkpoint.json` atomically in its child `payment-automation-*` directory, plus a per-case `partial-summary.json`. Intent is persisted **before** fixture/order mutation. An interrupted or failed case remains unresolved even if its fixture was restored. Do not retry its charge. Inspect provider/SQL state and recovery manifests read-only first. Legacy runs without checkpoints cannot be automatically resumed.
 
+For Razorpay hosted checkout, the runner clicks the card Continue control once. It distinguishes visible card-field validation from an unknown checkout outcome, and handles a direct callback without requiring the mock bank screen. Neither a browser error nor an absent callback proves that no payment was created. Azure matrix reports record end-of-run `operatorSignOut` separately from Entra preflight and per-case evidence; failed sign-out still fails the run.
+
 After reviewing the checkpoint, a separately approved continuation can use:
 
 ```powershell
