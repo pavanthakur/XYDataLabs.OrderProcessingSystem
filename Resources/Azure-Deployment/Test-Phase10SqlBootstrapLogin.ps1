@@ -2,6 +2,21 @@ param([switch]$VerifyVault)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+function New-Phase10SqlBootstrapConnection {
+    param([string]$ServerFqdn, [string]$Username, [string]$Password)
+
+    $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new()
+    $builder['Data Source'] = "tcp:$ServerFqdn,1433"
+    $builder['Initial Catalog'] = 'master'
+    $builder['User ID'] = $Username
+    $builder['Password'] = $Password
+    $builder['Encrypt'] = $true
+    $builder['TrustServerCertificate'] = $false
+    $builder['Connect Timeout'] = 15
+    return [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)
+}
+
 $password = $env:SQL_ADMIN_PASSWORD
 if ([string]::IsNullOrWhiteSpace($password) -or [string]::IsNullOrWhiteSpace($env:SQL_ADMIN_USERNAME)) {
     throw 'SQL bootstrap credentials were not supplied by the deployment workflow.'
@@ -19,15 +34,7 @@ if ($LASTEXITCODE -ne 0 -or $fqdn -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]+$') {
     throw 'Could not resolve the expected Azure SQL server hostname.'
 }
 
-$builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new()
-$builder['Data Source'] = "tcp:$fqdn,1433"
-$builder['Initial Catalog'] = 'master'
-$builder['User ID'] = $env:SQL_ADMIN_USERNAME
-$builder['Password'] = $password
-$builder['Encrypt'] = $true
-$builder['Trust Server Certificate'] = $false
-$builder['Connect Timeout'] = 15
-$connection = [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)
+$connection = New-Phase10SqlBootstrapConnection -ServerFqdn $fqdn -Username $env:SQL_ADMIN_USERNAME -Password $password
 try {
     $connection.Open()
     $command = $connection.CreateCommand()
