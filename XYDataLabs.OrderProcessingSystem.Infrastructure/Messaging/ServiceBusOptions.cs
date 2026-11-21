@@ -23,6 +23,12 @@ public sealed class ServiceBusOptions
 
     public string ReplayRequestQueueName { get; init; } = "dlq-replay-requests";
 
+    /// <summary>
+    /// Optional one-request publication scope used only by an explicitly isolated replay drill.
+    /// When unset, the publisher retains its normal batch behavior.
+    /// </summary>
+    public Guid? ReplayRequestId { get; init; }
+
     public int MaxDeliveryCount { get; init; } = 10;
 
     public int MaxReplayAttempts { get; init; } = 5;

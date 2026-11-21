@@ -196,12 +196,12 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
 
     [Fact]
     [Trait("Category", "InfrastructureIntegration")]
-    public async Task RunCoreAsync_WhenPublisherAcceptedButCheckpointFailed_RedeliveryKeepsStableBusinessMessageId()
+    public async Task RunCoreAsync_WhenPublishAcknowledgementAndSettlementFail_RedeliveryKeepsStableIdAndCheckpoint()
     {
         await using var seedContext = CreateContext();
         var quarantine = await AddQuarantineAsync(seedContext, DlqQuarantineStates.Approved, replayAttemptCount: 1);
         var request = await AddReplayRequestAsync(seedContext, quarantine.Id, processedUtc: null);
-        var publisher = new FakeDlqReplayPublisher { FailAfterFirstAcceptedPublish = true };
+        var publisher = new FakeDlqReplayPublisher { FaultQuarantineId = quarantine.Id };
         var firstMessageActions = new FakeReplayMessageActions();
         using var provider = BuildProvider(replayEnabled: true, publisher, maxReplayAttempts: 5);
         var function = new DlqReplayFunction(provider, TimeProvider.System, NullLogger<DlqReplayFunction>.Instance);
@@ -209,7 +209,7 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
 
         // Model the broker accepting the event while the sender observes an error before
         // the Function checkpoints SQL state or completes the replay-request delivery.
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<SimulatedPublishAcknowledgementLoss>(
             () => function.RunCoreAsync(redeliveredRequest, firstMessageActions, CancellationToken.None));
 
         firstMessageActions.Completed.Should().BeFalse();
@@ -224,17 +224,37 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
             pendingQuarantine.ReplayAttemptCount.Should().Be(1);
         }
 
-        var redeliveryActions = new FakeReplayMessageActions();
-        await function.RunCoreAsync(redeliveredRequest, redeliveryActions, CancellationToken.None);
+        // Fail before settling this delivery, after the Function has saved the SQL checkpoint.
+        var redeliveryActions = new FakeReplayMessageActions { FailBeforeCompletion = true };
+        await Assert.ThrowsAsync<SimulatedSettlementFailure>(
+            () => function.RunCoreAsync(redeliveredRequest, redeliveryActions, CancellationToken.None));
 
-        redeliveryActions.Completed.Should().BeTrue();
+        redeliveryActions.Completed.Should().BeFalse();
+        redeliveryActions.Abandoned.Should().BeFalse();
+        redeliveryActions.DeadLetterReason.Should().BeNull();
         publisher.PublishedMessages.Should().HaveCount(2);
+        firstBusinessMessageId.Should().NotBeNullOrWhiteSpace();
         publisher.PublishedMessages[1].MessageId.Should().Be(firstBusinessMessageId);
         await using var finalContext = CreateContext();
         var processedRequest = await finalContext.DlqReplayRequests.SingleAsync(item => item.Id == request.Id);
         var replayedQuarantine = await finalContext.DlqQuarantineRecords.SingleAsync(item => item.Id == quarantine.Id);
         processedRequest.ProcessedUtc.Should().NotBeNull();
         replayedQuarantine.State.Should().Be(DlqQuarantineStates.Replayed);
+
+        var processedUtc = processedRequest.ProcessedUtc;
+        var processedAttemptCount = replayedQuarantine.ReplayAttemptCount;
+        // Reuse the one-shot settlement double: the third delivery must settle normally.
+        await function.RunCoreAsync(redeliveredRequest, redeliveryActions, CancellationToken.None);
+
+        redeliveryActions.Completed.Should().BeTrue();
+        redeliveryActions.Abandoned.Should().BeFalse();
+        redeliveryActions.DeadLetterReason.Should().BeNull();
+        publisher.PublishedMessages.Should().HaveCount(2);
+        await finalContext.Entry(processedRequest).ReloadAsync();
+        await finalContext.Entry(replayedQuarantine).ReloadAsync();
+        processedRequest.ProcessedUtc.Should().Be(processedUtc);
+        replayedQuarantine.State.Should().Be(DlqQuarantineStates.Replayed);
+        replayedQuarantine.ReplayAttemptCount.Should().Be(processedAttemptCount);
     }
 
     [Fact]
@@ -432,6 +452,10 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
 
     private sealed class FakeReplayMessageActions : IDlqReplayMessageActions
     {
+        private int _completionAttempts;
+
+        public bool FailBeforeCompletion { get; init; }
+
         public bool Abandoned { get; private set; }
 
         public bool Completed { get; private set; }
@@ -455,6 +479,11 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
 
         public Task CompleteAsync(CancellationToken cancellationToken)
         {
+            if (FailBeforeCompletion && Interlocked.Increment(ref _completionAttempts) == 1)
+            {
+                throw new SimulatedSettlementFailure();
+            }
+
             Completed = true;
             return Task.CompletedTask;
         }
@@ -462,19 +491,32 @@ public sealed class DlqReplayFunctionOwnershipTests(SqlServerFixture fixture)
 
     private sealed class FakeDlqReplayPublisher : IDlqReplayPublisher
     {
+        private int _publishFaults;
+
         public List<ServiceBusMessage> PublishedMessages { get; } = [];
 
-        public bool FailAfterFirstAcceptedPublish { get; init; }
+        public Guid? FaultQuarantineId { get; init; }
 
         public Task PublishAsync(ServiceBusMessage message, CancellationToken cancellationToken)
         {
-            PublishedMessages.Add(message);
-            if (FailAfterFirstAcceptedPublish && PublishedMessages.Count == 1)
+            if (FaultQuarantineId is Guid fixtureId &&
+                (!message.ApplicationProperties.TryGetValue("QuarantineId", out var quarantineId) ||
+                 !Guid.TryParse(quarantineId as string, out var publishedFixtureId) || publishedFixtureId != fixtureId))
             {
-                throw new InvalidOperationException("Simulated sender acknowledgement lost after broker acceptance.");
+                throw new InvalidOperationException("Replay fault test refused a foreign quarantine fixture.");
+            }
+
+            PublishedMessages.Add(message);
+            if (FaultQuarantineId.HasValue && Interlocked.Increment(ref _publishFaults) == 1)
+            {
+                throw new SimulatedPublishAcknowledgementLoss();
             }
 
             return Task.CompletedTask;
         }
     }
+
+    private sealed class SimulatedPublishAcknowledgementLoss : Exception;
+
+    private sealed class SimulatedSettlementFailure : Exception;
 }

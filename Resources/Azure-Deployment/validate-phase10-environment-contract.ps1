@@ -93,6 +93,39 @@ function Assert-ParameterValue {
         -FailMessage "$RelativePath -> parameter '$ParameterName' expected '$ExpectedValue' but found '$actualValue'"
 }
 
+function Assert-RuntimeTargetValue {
+    param(
+        [string] $TargetKey,
+        [string] $PropertyName,
+        [AllowNull()][object] $ExpectedValue
+    )
+
+    $catalog = Get-Content -LiteralPath (Join-Path $repoRoot 'automation/config/runtime-targets.json') -Raw | ConvertFrom-Json
+    $target = $catalog.targets | Where-Object { $_.key -eq $TargetKey } | Select-Object -First 1
+    $actualValue = if ($null -eq $target) { $null } else { $target.$PropertyName }
+    Assert-Condition `
+        -Condition (($null -eq $ExpectedValue -and $null -eq $actualValue) -or ($null -ne $ExpectedValue -and $actualValue -eq $ExpectedValue)) `
+        -PassMessage "Runtime target '$TargetKey' -> '$PropertyName' has the approved value" `
+        -FailMessage "Runtime target '$TargetKey' -> '$PropertyName' does not match the approved environment contract"
+}
+
+function Assert-RuntimeTargetFieldsDistinct {
+    param(
+        [string] $TargetKey,
+        [string] $FirstPropertyName,
+        [string] $SecondPropertyName
+    )
+
+    $catalog = Get-Content -LiteralPath (Join-Path $repoRoot 'automation/config/runtime-targets.json') -Raw | ConvertFrom-Json
+    $matches = @($catalog.targets | Where-Object { $_.key -eq $TargetKey })
+    $first = if ($matches.Count -eq 1) { [string]$matches[0].$FirstPropertyName } else { '' }
+    $second = if ($matches.Count -eq 1) { [string]$matches[0].$SecondPropertyName } else { '' }
+    Assert-Condition `
+        -Condition ($matches.Count -eq 1 -and -not [string]::IsNullOrWhiteSpace($first) -and -not [string]::IsNullOrWhiteSpace($second) -and -not [string]::Equals($first, $second, [StringComparison]::OrdinalIgnoreCase)) `
+        -PassMessage "Runtime target '$TargetKey' keeps '$FirstPropertyName' distinct from '$SecondPropertyName'" `
+        -FailMessage "Runtime target '$TargetKey' must define distinct non-empty '$FirstPropertyName' and '$SecondPropertyName' values"
+}
+
 Write-Host '========================================' -ForegroundColor Cyan
 Write-Host 'Phase 10 Environment Contract Validation' -ForegroundColor Cyan
 Write-Host '========================================' -ForegroundColor Cyan
@@ -129,6 +162,26 @@ Assert-ParameterValue -RelativePath 'infra/parameters/phase10-prod.json' -Parame
 Assert-ParameterValue -RelativePath 'infra/parameters/phase10-dev.json' -ParameterName 'replayRequestQueueName' -ExpectedValue 'dlq-replay-requests-dev'
 Assert-ParameterValue -RelativePath 'infra/parameters/phase10-staging.json' -ParameterName 'replayRequestQueueName' -ExpectedValue 'dlq-replay-requests-stg'
 Assert-ParameterValue -RelativePath 'infra/parameters/phase10-prod.json' -ParameterName 'replayRequestQueueName' -ExpectedValue 'dlq-replay-requests-prod'
+Assert-ParameterValue -RelativePath 'infra/parameters/phase10-dev.json' -ParameterName 'replayDrillRequestQueueName' -ExpectedValue 'dlq-replay-drill-requests-dev'
+Assert-ParameterValue -RelativePath 'infra/parameters/phase10-staging.json' -ParameterName 'replayDrillRequestQueueName' -ExpectedValue ''
+Assert-ParameterValue -RelativePath 'infra/parameters/phase10-prod.json' -ParameterName 'replayDrillRequestQueueName' -ExpectedValue ''
+Assert-RuntimeTargetValue -TargetKey 'azure-dev' -PropertyName 'azureOrderEventsTopicName' -ExpectedValue 'order-events-dev'
+Assert-RuntimeTargetValue -TargetKey 'azure-stg' -PropertyName 'azureOrderEventsTopicName' -ExpectedValue 'order-events-staging'
+Assert-RuntimeTargetValue -TargetKey 'azure-prod' -PropertyName 'azureOrderEventsTopicName' -ExpectedValue 'order-events-prod'
+Assert-RuntimeTargetValue -TargetKey 'azure-dev' -PropertyName 'azureServiceBusFullyQualifiedNamespace' -ExpectedValue 'sb-orderprocessing-dev.servicebus.windows.net'
+Assert-RuntimeTargetValue -TargetKey 'azure-stg' -PropertyName 'azureServiceBusFullyQualifiedNamespace' -ExpectedValue 'sb-orderprocessing-stg.servicebus.windows.net'
+Assert-RuntimeTargetValue -TargetKey 'azure-prod' -PropertyName 'azureServiceBusFullyQualifiedNamespace' -ExpectedValue 'sb-orderprocessing-prod.servicebus.windows.net'
+Assert-RuntimeTargetValue -TargetKey 'azure-dev' -PropertyName 'azureReplayDrillRequestQueueName' -ExpectedValue 'dlq-replay-drill-requests-dev'
+Assert-RuntimeTargetValue -TargetKey 'azure-stg' -PropertyName 'azureReplayDrillRequestQueueName' -ExpectedValue $null
+Assert-RuntimeTargetValue -TargetKey 'azure-prod' -PropertyName 'azureReplayDrillRequestQueueName' -ExpectedValue $null
+Assert-RuntimeTargetFieldsDistinct -TargetKey 'azure-dev' -FirstPropertyName 'azureReplayDrillRequestQueueName' -SecondPropertyName 'azureReplayRequestQueueName'
+$devParameterSet = Get-Content -LiteralPath (Join-Path $repoRoot 'infra/parameters/phase10-dev.json') -Raw | ConvertFrom-Json
+$normalReplayQueue = [string]$devParameterSet.parameters.replayRequestQueueName.value
+$drillReplayQueue = [string]$devParameterSet.parameters.replayDrillRequestQueueName.value
+Assert-Condition `
+    -Condition (-not [string]::IsNullOrWhiteSpace($normalReplayQueue) -and -not [string]::IsNullOrWhiteSpace($drillReplayQueue) -and -not [string]::Equals($normalReplayQueue, $drillReplayQueue, [StringComparison]::OrdinalIgnoreCase)) `
+    -PassMessage 'Azure dev parameter file keeps the isolated replay queue distinct from the normal Function queue' `
+    -FailMessage 'Azure dev replay drill queue must be distinct from the normal Function queue'
 
 Assert-ParameterValue -RelativePath 'infra/parameters/phase10-staging.json' -ParameterName 'orderEventsTopicName' -ExpectedValue 'order-events-staging'
 Assert-ParameterValue -RelativePath 'infra/parameters/phase10-staging.json' -ParameterName 'inventorySubscriptionName' -ExpectedValue 'inventory-order-created-staging'
@@ -161,8 +214,27 @@ Assert-FileNotContains -RelativePath 'Resources/Azure-Deployment/open-local-sql-
 Assert-FileContains -RelativePath 'infra/modules/functions.bicep' -RegexPattern "name: 'Phase10DlqTopicName'[\s\S]*?value: deadLetterTopicName[\s\S]*?name: 'Phase10DlqIntakeSubscriptionName'[\s\S]*?value: deadLetterSubscriptionName[\s\S]*?name: 'Phase10ReplayRequestQueueName'[\s\S]*?value: replayRequestQueueName" -Description 'Functions trigger settings match the IaC-managed DLQ topic, subscription, and replay queue'
 Assert-FileContains -RelativePath 'infra/modules/functions.bicep' -RegexPattern "name: 'ServiceBus__ReplayRequestQueueName'[\s\S]*?value: replayRequestQueueName" -Description 'Functions application replay publisher options match the trigger queue'
 Assert-FileContains -RelativePath 'infra/modules/servicebus.bicep' -RegexPattern "resource replayRequestQueue 'Microsoft\.ServiceBus/namespaces/queues@[\s\S]*?name: replayRequestQueueName" -Description 'Service Bus IaC creates the approved Functions replay request queue'
+Assert-FileContains -RelativePath 'infra/modules/servicebus.bicep' -RegexPattern "resource replayDrillRequestQueue 'Microsoft\.ServiceBus/namespaces/queues@[\s\S]*?if \(environment == 'dev' && !empty\(replayDrillRequestQueueName\)\)[\s\S]*?name: replayDrillRequestQueueName" -Description 'isolated replay drill queue is created only for Azure dev'
+Assert-FileContains -RelativePath 'infra/modules/servicebus.bicep' -RegexPattern "replayDrillReceiverRoleAssignment 'Microsoft\.Authorization/roleAssignments@[\s\S]*?scope: replayDrillRequestQueue[\s\S]*?serviceBusDataReceiverRoleDefinitionId" -Description 'optional drill receiver RBAC is scoped to the isolated queue'
+Assert-FileContains -RelativePath 'infra/modules/servicebus.bicep' -RegexPattern "replayDrillBusinessTopicSenderRoleAssignment 'Microsoft\.Authorization/roleAssignments@[\s\S]*?scope: orderTopic[\s\S]*?serviceBusDataSenderRoleDefinitionId" -Description 'optional drill sender RBAC is scoped to the business topic'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var ordersEnv = concat\(publisherEnv,[\s\S]*?replayPublisherEnabledEnv\)" -Description 'Orders is the sole Container App that runs the replay approval publisher'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var inventoryEnv = concat\(publisherEnv,[\s\S]*?replayPublisherDisabledEnv\)[\s\S]*?var notificationsEnv = concat\(publisherEnv,[\s\S]*?replayPublisherDisabledEnv\)" -Description 'Inventory and Notifications do not compete to publish replay approvals'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "name: 'payments'[\s\S]*?env: concat\(runtimeCommonEnv, publisherEnv, replayPublisherDisabledEnv\)" -Description 'Payments does not compete to publish replay approvals'
+Assert-FileNotContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var publisherEnv = \[[\s\S]*?name: 'ServiceBus__ReplayRequestId'" -Description 'normal runtime configuration does not pin the publisher to a drill request'
+Assert-FileContains -RelativePath 'infra/main.phase10.bicep' -RegexPattern "replayDrillRequestQueueName: replayDrillRequestQueueName[\s\S]*?replayDrillRunnerPrincipalObjectId: replayDrillRunnerPrincipalObjectId[\s\S]*?output replayDrillRequestQueueName string = serviceBus\.outputs\.replayDrillRequestQueueName" -Description 'top-level IaC passes drill queue/RBAC inputs and reports the queue output'
+Assert-FileNotContains -RelativePath 'infra/modules/functions.bicep' -RegexPattern 'replayDrillRequestQueueName|ReplayDrill' -Description 'deployed Functions trigger remains on the normal replay queue'
+Assert-FileNotContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern 'ServiceBus__ReplayRequestId' -Description 'normal deployment does not enable targeted replay-drill routing'
 Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "name: 'ServiceBus__ReplayRequestQueueName'[\s\S]*?value: replayRequestQueueName" -Description 'Container App replay publisher receives the same approved queue name'
 Assert-FileContains -RelativePath 'infra/main.phase10.bicep' -RegexPattern "replayRequestQueueName: serviceBus\.outputs\.replayRequestQueueName[\s\S]*?output replayRequestQueueName string = serviceBus\.outputs\.replayRequestQueueName" -Description 'top-level IaC passes and reports the replay queue name from its Service Bus owner module'
+Assert-FileContains -RelativePath 'scripts/phase10-azure-replay-drill-preflight.ps1' -RegexPattern "ValidateSet\('dev'\)[\s\S]*?function Get-ReplayDrillRuntimeChecks[\s\S]*?ServiceBus__ReplayEnabled[\s\S]*?ServiceBus__ReplayRequestQueueName[\s\S]*?ServiceBus__ReplayRequestId" -Description 'Azure replay-drill preflight checks dev-only publisher state and exact request scoping'
+Assert-FileNotContains -RelativePath 'scripts/phase10-azure-replay-drill-preflight.ps1' -RegexPattern 'az\s+(containerapp\s+update|role\s+assignment\s+create|servicebus\s+(queue\s+create|namespace\s+create))' -Description 'Azure replay-drill preflight is read-only and cannot deploy or assign roles'
+Assert-FileContains -RelativePath 'scripts/phase10-azure-replay-drill-config.ps1' -RegexPattern 'ValidateSet\(''Pause'', ''Route'', ''Restore'', ''RestoreSafe''\)[\s\S]*?MUTATE AZURE DEV REPLAY SETTINGS[\s\S]*?if \(-not \$Execute\)[\s\S]*?Read-only plan only[\s\S]*?ShouldProcess' -Description 'Azure replay config controller is read-only by default and requires explicit confirmation for writes'
+Assert-FileContains -RelativePath 'scripts/phase10-azure-replay-drill-config.ps1' -RegexPattern 'preflight\.status -ne .PASS.[\s\S]*?Replay routing requires a fully verified paused manifest[\s\S]*?recovery-required' -Description 'replay configuration transitions require a passing preflight, verified pause, and recovery manifest'
+Assert-FileContains -RelativePath 'scripts/phase10-azure-replay-drill-config.ps1' -RegexPattern 'pendingReplayRequestCount -ne 0[\s\S]*?RestoreSafe' -Description 'normal restore requires evidence that the selected request checkpointed and no requests remain pending'
+Assert-FileNotContains -RelativePath 'scripts/phase10-azure-replay-drill-config.ps1' -RegexPattern 'az\s+(role\s+assignment\s+create|servicebus\s+(queue\s+create|namespace\s+create)|containerapp\s+revision\s+copy)' -Description 'replay config controller cannot create roles/resources or copy unreviewed images'
+Assert-FileContains -RelativePath '.github/workflows/infra-deploy.yml' -RegexPattern 'REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID:\s*\$\{\{\s*vars\.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID\s*\}\}[\s\S]*?valid only as a GUID in the dev GitHub Environment[\s\S]*?replayDrillRunnerPrincipalObjectId="\$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID"' -Description 'optional replay-drill runner RBAC identity is sourced from the environment variable, validated as dev-only, and passed to deployment'
+Assert-FileContains -RelativePath '.github/workflows/infra-deploy.yml' -RegexPattern 'name: What-If \(subscription scope\)[\s\S]*?REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID:\s*\$\{\{\s*vars\.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID\s*\}\}[\s\S]*?replayDrillRunnerPrincipalObjectId="\$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID"' -Description 'what-if previews the same optional replay-drill runner grant as deployment'
+Assert-FileContains -RelativePath '.github/workflows/infra-deploy.yml' -RegexPattern '(replayDrillRunnerPrincipalObjectId="\$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID"[^\r\n]*\r?\n\s*--parameters replayDrillRunnerPrincipalType=User[\s\S]*?){2}' -Description 'what-if and deployment explicitly restrict the drill runner to the named-user principal type'
 Assert-FileContains -RelativePath 'infra/modules/functions.bicep' -RegexPattern "type: 'SystemAssigned, UserAssigned'[\s\S]*?userAssignedIdentities:[\s\S]*?hostStorageIdentity\.id[\s\S]*?dependsOn:[\s\S]*?hostStorageBlobDataOwner" -Description 'Function App attaches the dedicated storage identity only after its storage RBAC grant is provisioned'
 Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'[\s\S]*value: ordersInternalAddress" -Description 'gateway orders cluster consumes ACA FQDN address'
 Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "ReverseProxy__Clusters__payments-cluster__Destinations__payments-primary__Address'[\s\S]*value: paymentsInternalAddress" -Description 'gateway payments cluster consumes ACA FQDN address'

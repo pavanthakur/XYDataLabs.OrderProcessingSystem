@@ -526,7 +526,15 @@ jobs:
           ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
           ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
           IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
+          REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID: ${{ vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID }}
+          DEPLOYMENT_ENVIRONMENT: ${{ steps.params.outputs.env }}
         run: |
+          if [[ -n "$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" ]]; then
+            [[ "$DEPLOYMENT_ENVIRONMENT" == "dev" && "$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || {
+              echo 'Replay-drill runner object ID is valid only as a GUID in the dev GitHub Environment.' >&2
+              exit 1
+            }
+          fi
           IDENTITY_ARGS=()
           if [ "${{ steps.params.outputs.phase10 }}" = "true" ]; then
             node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
@@ -553,6 +561,8 @@ jobs:
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
+            --parameters replayDrillRunnerPrincipalType=User \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
             --parameters ordersImage="${{ steps.params.outputs.ordersImage }}" \
             --parameters paymentsImage="${{ steps.params.outputs.paymentsImage }}" \
@@ -1005,8 +1015,15 @@ jobs:
           ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
           ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
           IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
+          REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID: ${{ vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID }}
         run: |
           set -euo pipefail
+          if [[ -n "$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" ]]; then
+            [[ "$IDENTITY_ENVIRONMENT" == "dev" && "$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || {
+              echo 'Replay-drill runner object ID is valid only as a GUID in the dev GitHub Environment.' >&2
+              exit 1
+            }
+          fi
           if [ "${{ steps.params.outputs.deploySql }}" = "true" ]; then
             [[ -n "$SQL_ADMIN_PASSWORD" && -n "$SQL_ENTRA_ADMIN_ID" && -n "$SQL_ENTRA_ADMIN_LOGIN" ]] || { echo 'SQL bootstrap inputs are incomplete; refusing ARM deployment.' >&2; exit 1; }
           fi
@@ -1032,6 +1049,8 @@ jobs:
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
+            --parameters replayDrillRunnerPrincipalType=User \
             --parameters deploymentPrincipalObjectId="${{ steps.deployment_principal.outputs.objectId }}" \
             --parameters acrRegistryUsername="${{ steps.acr_pull_token.outputs.username }}" \
             --parameters acrRegistryPassword="${{ steps.acr_pull_token.outputs.password }}" \

@@ -1125,11 +1125,13 @@ Confirm the deployed runtime settings include:
 - `ServiceBus__TopicName=order-events`
 - `ServiceBus__DeadLetterTopicName=order-events-dlq`
 - `ServiceBus__DeadLetterSubscriptionName=dlq-replay-<environment>`
-- `ServiceBus__ReplayEnabled=true`
+- `ServiceBus__ReplayEnabled=true` only on Orders; it is explicitly `false` on Payments, Inventory, and Notifications so only the approval-owning Orders slice can publish replay requests
 - `KeyVault__Uri`
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`
 - `ServiceBus__SubscriptionName` on Inventory and Notifications
 - `ServiceBus__SubscriptionName` is not required on Orders because it is the publisher slice
+
+For the isolated Azure-dev replay drill, the additional `dlq-replay-drill-requests-dev` queue is separate from the normal Functions-triggered `dlq-replay-requests-dev` queue. The drill harness may read the isolated queue and publish only the selected replay request to the existing order-events topic; the deployed Function remains bound to the normal queue. Optional drill-runner role assignments are entity-scoped and omitted unless explicitly provided to the deployment. Do not enable the drill or change role assignments as part of routine deployment verification.
 
 Confirm the runtime can read the Service Bus connection string from configuration instead of falling back to in-memory, and that the connection string was derived from the transport auth rule rather than hand-entered into app settings.
 
@@ -1244,6 +1246,71 @@ Expected workflow summary:
 | Inventory second-message processing | PASS |
 | Notifications second-message processing | PASS |
 | Approved deployed Functions replay | NOT RUN by this smoke |
+
+For the local preflight, the `DlqReplayFunctionOwnershipTests` sender-ack-loss regression also delivers the same request after successful recovery. It checks stable business message identity, no extra publish, and unchanged persisted completion state. Run it through `scripts/invoke-integration-tests-isolated.ps1` with a `FullyQualifiedName~DlqReplayFunctionOwnershipTests` filter and disposable, run-owned SQL. Its fake publisher and settlement actions do not prove live broker redelivery or downstream effects.
+
+The isolated drill contract is defined in IaC/runtime targets: Azure dev has `dlq-replay-drill-requests-dev`; staging and production explicitly have no drill queue. Optional Azure Service Bus Data Receiver access is scoped only to that queue, and Data Sender access only to the existing order-events topic; neither is assigned by default. The test adapters use the configured namespace/topic/queue and Entra `TokenCredential`; they reject non-dev targets and mismatched fixtures. An optional `ServiceBus:ReplayRequestId` filter restricts the Orders publisher to one exact unpublished request; with the setting absent, normal batch behavior is unchanged. The deployed Function remains configured for `dlq-replay-requests-dev`.
+
+Do **not** start the isolated drill against a deployment where multiple application publishers have replay enabled. The latest read-only Azure-dev inspection found `ServiceBus__ReplayEnabled=true` on Orders, Payments, Inventory, and Notifications, all targeting the normal queue, with no request-ID filter; the current deployment predates the IaC correction above. First deploy and verify the single-publisher baseline. Before approving a fixture, pause all enabled publishers; route only Orders to the isolated queue with the exact request-ID filter, publish and verify that one request, then restore and verify the exact pre-drill settings. If any original setting is unknown, any publisher cannot be paused, or restoration/readiness is unproven, stop and preserve the run manifest for recovery.
+
+Before the separately approved live drill, run the read-only target preflight and require `PASS`:
+
+```powershell
+pwsh -NoProfile -File scripts/phase10-azure-replay-drill-preflight.ps1 `
+  -Environment dev `
+  -ExpectedSubscriptionId '<approved-dev-subscription-id>' `
+  -RunnerPrincipalObjectId '<dedicated-drill-runner-object-id>' `
+  -ReportPath 'TestResults/Phase10/<unique-run-id>-replay-preflight.json'
+```
+
+This command only inspects Azure state and writes a sanitized local report. `BLOCKED` is a stop condition; it does not create the queue, grant roles, pause apps, approve replay, or prove consumer effects.
+
+This is infrastructure/test plumbing, not live acceptance. `scripts/phase10-azure-replay-drill-config.ps1` now supplies a guarded publisher-settings controller. It is read-only unless `-Execute` and the exact confirmation phrase are supplied, and still prompts through PowerShell `ShouldProcess`. `Pause` requires a passing preflight bound to the current publisher revisions/images and refuses any non-baseline setting; `Route` requires all four publishers paused, an exact request ID and the saved pause manifest. Normal `Restore` requires sanitized completion evidence proving that request checkpointed and no replay requests remain pending, then restores the exact recorded values. `RestoreSafe` instead returns all four publishers to the normal queue but leaves replay disabled for manual recovery. Both restore paths refuse image/config drift and verify readiness. A failed/interrupted change leaves a recovery-required manifest. The controller does not approve a request through the protected API, consume/publish broker messages, or create RBAC/resources. Its tested contract is not permission to run it: the latest live preflight is BLOCKED, and neither Azure settings nor role assignments have been changed.
+
+After Azure deployment/RBAC and a fresh passing preflight, inspect a configuration plan without `-Execute` first. Example pause plan (read-only):
+
+```powershell
+pwsh -NoProfile -File scripts/phase10-azure-replay-drill-config.ps1 `
+  -Action Pause `
+  -ExpectedSubscriptionId '<approved-dev-subscription-id>' `
+  -PreflightReportPath 'TestResults/Phase10/<passing-preflight>.json'
+```
+
+Live `Pause`, `Route`, `Restore`, and `RestoreSafe` each require `-Execute`, `-ConfirmMutation 'MUTATE AZURE DEV REPLAY SETTINGS'`, and interactive `ShouldProcess` confirmation. `Route` additionally requires the saved manifest and one request ID returned by the protected approval API. Run `Restore` only with completion evidence from the runner; if that evidence is unavailable or the drill failed, use `RestoreSafe` and keep Orders replay disabled pending investigation. Verify the report plus publisher readiness. Do not suppress confirmation or use the controller to repair a non-baseline deployment.
+
+The intended sequence is: deploy the reviewed dev-only IaC; assign the separately approved queue receiver/topic sender roles; verify the single-publisher baseline and pass read-only preflight; pause all four publishers; approve one valid candidate through the protected API and capture its returned request ID; route only Orders to the isolated queue with that exact ID; run the harness against the existing business topic while the deployed Function remains on its normal queue; restore exact settings and verify readiness. The in-process Function-core harness plus real broker redelivery can prove the replay algorithm and live consumer effects, but does not prove the deployed Function host consumed the isolated queue. Normal deployed replay must separately be verified on the Function's unchanged standard queue. No controller execution, Azure deployment, role assignment, or live broker mutation has been run as part of this implementation.
+
+To include the optional drill RBAC grant in a separately approved Phase 10 deployment, configure the non-secret `PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID` GitHub Environment variable in **dev only** with the named runner user's Entra object ID. What-if and deploy validate the GUID and dev target, and both explicitly use principal type `User`. Do not supply a service principal or the deployment OIDC identity; this workflow does not support them as drill runners. Leaving the variable unset creates no drill role assignments. Do not use a subscription Owner by default or set the variable in staging or production.
+
+The controller records each paused publisher's ready revision and exact image. Route rejects drift from that snapshot, and each update must reach the exact new ready revision on the unchanged image. Older manifests without pause-revision evidence cannot authorize Route. For a local, no-Azure regression of the controller entrypoints, run `pwsh -NoProfile -File scripts/tests/test-phase10-azure-replay-drill-controller.ps1`.
+
+### Opt-in isolated redelivery harness
+
+`AzureReplayDrillAcceptanceTests.RunOneSelectedAzureDevReplayFailureScenario` is a separate, explicitly skipped-by-default integration test. It uses `AzureCliCredential` (no password/connection string), reads the `azure-dev` runtime target, verifies the current subscription, routed publisher settings, normal Function queue, a fresh PASS preflight (including Application Insights query access), and the exact `routed` manifest before receiving one message. It requires an already-approved request created through the protected application API; the harness does not create or approve replay requests. Use a unique `RunId` per invocation and one request per scenario. The selected business database is checked against the authoritative tenant registry before any queue receive. For a dedicated tenant, the harness also reads the tenant's configured Key Vault connection-string reference in memory, verifies its SQL host and database name against the explicit target, and never writes that secret to the report or console. This requires narrowly scoped Key Vault secret-read access; otherwise the harness stops before broker receive.
+
+Set these process-scoped values in PowerShell only after the separately approved live setup is complete; replace placeholders locally and do not paste environment dumps into chat or logs:
+
+```powershell
+$env:PHASE10_REPLAY_DRILL_ENABLE = 'I_APPROVE_AZURE_DEV_REPLAY_DRILL'
+$env:PHASE10_REPLAY_DRILL_EXPECTED_SUBSCRIPTION_ID = '<approved-dev-subscription-guid>'
+$env:PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID = '<preflighted-dedicated-operator-object-guid>'
+$env:PHASE10_REPLAY_DRILL_TENANT_CODE = '<active-tenant-code>'
+$env:PHASE10_REPLAY_DRILL_BUSINESS_DATABASE = '<verified-shared-or-dedicated-database>'
+$env:PHASE10_REPLAY_DRILL_REQUEST_ID = '<protected-api-approved-request-guid>'
+$env:PHASE10_REPLAY_DRILL_RUN_ID = [guid]::NewGuid().ToString()
+$env:PHASE10_REPLAY_DRILL_SCENARIO = 'ProcessedCheckpoint' # or SendAcceptedBeforeCheckpoint
+$env:PHASE10_REPLAY_DRILL_PREFLIGHT_REPORT = '<absolute-path-to-fresh-passing-preflight.json>'
+$env:PHASE10_REPLAY_DRILL_CONFIG_MANIFEST = '<absolute-path-to-routed-manifest.json>'
+
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj `
+  --filter FullyQualifiedName~AzureReplayDrillAcceptanceTests.RunOneSelectedAzureDevReplayFailureScenario
+```
+
+`ProcessedCheckpoint` intentionally abandons the request after the SQL checkpoint and proves redelivery completes without another publish. `SendAcceptedBeforeCheckpoint` sends the business event, injects the acknowledgement-loss boundary, abandons the request, and proves the redelivery uses the same business message ID; both Inventory and Notifications inbox/effect rows must each be exactly one. Each successful case writes a sanitized report under `TestResults/Phase10`. A report left `RUNNING` means interruption/unknown outcome: inspect the controller manifest, SQL checkpoint, queue delivery count and durable effects before any retry. The environment opt-in is a local safety gate, not authorization for Azure deployment, role assignment, settings mutation, or a live broker run.
+
+Keep fault injection out of deployed application binaries. Require an isolated Azure-dev target, a separately approved operator identity, unique fixture, bounded execution, exact restoration, and evidence tied to the replay request, business message and consumer effects. Do not substitute a Function restart for evidence that the failure occurred after acceptance and before the SQL checkpoint. Live harness orchestration and run remain pending.
+
+Important acceptance distinction: the existing business topic has broker duplicate detection enabled. In `SendAcceptedBeforeCheckpoint`, the test adapter deliberately assigns the second send a distinct broker `MessageId` while preserving the original `EnvelopeMessageId`, allowing Inventory and Notifications to receive the redelivery and exercise their SQL inbox idempotency. The harness requires each consumer's duplicate-handling trace in Application Insights and exactly one durable inbox/effect per consumer. SQL counts alone cannot prove delivery because broker duplicate detection could suppress a repeated broker ID. Missing telemetry access or traces blocks this scenario; it is not a pass. The sanitized PASS report includes the `dev` environment, subscription, replay request ID, checkpoint flag and zero unprocessed-request count required by the guarded `Restore` action. A nonzero pending count cannot yield PASS; use `RestoreSafe` after review. The deployed Function remains on the normal replay queue; this in-process core harness does not certify the Function host's queue trigger.
 
 Local equivalent:
 

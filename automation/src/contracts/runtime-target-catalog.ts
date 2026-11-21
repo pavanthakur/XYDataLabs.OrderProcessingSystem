@@ -36,7 +36,10 @@ export interface RuntimeTargetDefinition {
   azureRedisName?: string;
   azureBrokerSuffix?: string;
   azureServiceBusNamespaceName?: string;
+  azureServiceBusFullyQualifiedNamespace?: string;
+  azureOrderEventsTopicName?: string;
   azureReplayRequestQueueName?: string;
+  azureReplayDrillRequestQueueName?: string | null;
   azureApplicationInsightsName?: string;
   azureKeyVaultName?: string;
   ignoreHttpsErrors: boolean;

@@ -183,8 +183,11 @@
       "azureKeyVaultName": "kv-orderprocessing-dev",
       "azureApplicationInsightsName": "ai-orderprocessing-dev",
       "azureServiceBusNamespaceName": "sb-orderprocessing-dev",
+      "azureServiceBusFullyQualifiedNamespace": "sb-orderprocessing-dev.servicebus.windows.net",
       "azureBrokerSuffix": "dev",
-      "azureReplayRequestQueueName": "dlq-replay-requests-dev"
+      "azureOrderEventsTopicName": "order-events-dev",
+      "azureReplayRequestQueueName": "dlq-replay-requests-dev",
+      "azureReplayDrillRequestQueueName": "dlq-replay-drill-requests-dev"
     },
     {
       "key": "azure-stg",
@@ -218,8 +221,11 @@
       "azureKeyVaultName": "kv-orderprocessing-stg",
       "azureApplicationInsightsName": "ai-orderprocessing-stg",
       "azureServiceBusNamespaceName": "sb-orderprocessing-stg",
+      "azureServiceBusFullyQualifiedNamespace": "sb-orderprocessing-stg.servicebus.windows.net",
       "azureBrokerSuffix": "staging",
-      "azureReplayRequestQueueName": "dlq-replay-requests-stg"
+      "azureOrderEventsTopicName": "order-events-staging",
+      "azureReplayRequestQueueName": "dlq-replay-requests-stg",
+      "azureReplayDrillRequestQueueName": null
     },
     {
       "key": "azure-prod",
@@ -253,8 +259,11 @@
       "azureKeyVaultName": "kv-orderprocessing-prod",
       "azureApplicationInsightsName": "ai-orderprocessing-prod",
       "azureServiceBusNamespaceName": "sb-orderprocessing-prod",
+      "azureServiceBusFullyQualifiedNamespace": "sb-orderprocessing-prod.servicebus.windows.net",
       "azureBrokerSuffix": "prod",
-      "azureReplayRequestQueueName": "dlq-replay-requests-prod"
+      "azureOrderEventsTopicName": "order-events-prod",
+      "azureReplayRequestQueueName": "dlq-replay-requests-prod",
+      "azureReplayDrillRequestQueueName": null
     }
   ]
 }

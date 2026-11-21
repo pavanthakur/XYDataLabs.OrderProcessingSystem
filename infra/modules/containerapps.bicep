@@ -189,9 +189,17 @@ var publisherEnv = [
     name: 'ServiceBus__MessageTtl'
     value: messageTtl
   }
+]
+var replayPublisherEnabledEnv = [
   {
     name: 'ServiceBus__ReplayEnabled'
     value: 'true'
+  }
+]
+var replayPublisherDisabledEnv = [
+  {
+    name: 'ServiceBus__ReplayEnabled'
+    value: 'false'
   }
 ]
 var identityEnv = [
@@ -209,19 +217,19 @@ var ordersEnv = concat(publisherEnv, [
     name: 'ServiceBus__PaymentStateSubscriptionName'
     value: ordersPaymentStateSubscriptionName
   }
-])
+], replayPublisherEnabledEnv)
 var inventoryEnv = concat(publisherEnv, [
   {
     name: 'ServiceBus__SubscriptionName'
     value: inventorySubscriptionName
   }
-])
+], replayPublisherDisabledEnv)
 var notificationsEnv = concat(publisherEnv, [
   {
     name: 'ServiceBus__SubscriptionName'
     value: notificationsSubscriptionName
   }
-])
+], replayPublisherDisabledEnv)
 var uiEnv = concat(runtimeCommonEnv, [
   { name: 'IDENTITY_MODE', value: 'Entra' }
   { name: 'APP_ENVIRONMENT', value: environment }
@@ -368,7 +376,7 @@ resource paymentsApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'payments'
           image: paymentsImage
-          env: concat(runtimeCommonEnv, publisherEnv)
+          env: concat(runtimeCommonEnv, publisherEnv, replayPublisherDisabledEnv)
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'

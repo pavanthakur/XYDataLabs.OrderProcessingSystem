@@ -30,6 +30,20 @@ param deadLetterSubscriptionName string = 'dlq-replay'
 @description('Name of the approved replay request queue')
 param replayRequestQueueName string = 'dlq-replay-requests'
 
+@description('Optional Azure-dev-only queue used by the isolated duplicate-delivery drill')
+param replayDrillRequestQueueName string = ''
+
+@description('Optional operator/test-runner object ID granted isolated drill receive and business-topic send access')
+param replayDrillRunnerPrincipalObjectId string = ''
+
+@allowed([
+  'User'
+  'ServicePrincipal'
+  'Group'
+])
+@description('Principal type for the optional isolated replay-drill receiver grant')
+param replayDrillRunnerPrincipalType string = 'User'
+
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -136,6 +150,45 @@ resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-p
   }
 }
 
+resource replayDrillRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' = if (environment == 'dev' && !empty(replayDrillRequestQueueName)) {
+  parent: sbNamespace
+  name: replayDrillRequestQueueName
+  properties: {
+    defaultMessageTimeToLive: messageTtl
+    maxDeliveryCount: maxDeliveryCount
+    deadLetteringOnMessageExpiration: true
+  }
+}
+
+var serviceBusDataReceiverRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
+)
+var serviceBusDataSenderRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'
+)
+
+resource replayDrillReceiverRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (environment == 'dev' && !empty(replayDrillRequestQueueName) && !empty(replayDrillRunnerPrincipalObjectId)) {
+  name: guid(replayDrillRequestQueue.id, replayDrillRunnerPrincipalObjectId, serviceBusDataReceiverRoleDefinitionId)
+  scope: replayDrillRequestQueue
+  properties: {
+    principalId: replayDrillRunnerPrincipalObjectId
+    principalType: replayDrillRunnerPrincipalType
+    roleDefinitionId: serviceBusDataReceiverRoleDefinitionId
+  }
+}
+
+resource replayDrillBusinessTopicSenderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (environment == 'dev' && !empty(replayDrillRequestQueueName) && !empty(replayDrillRunnerPrincipalObjectId)) {
+  name: guid(orderTopic.id, replayDrillRunnerPrincipalObjectId, serviceBusDataSenderRoleDefinitionId)
+  scope: orderTopic
+  properties: {
+    principalId: replayDrillRunnerPrincipalObjectId
+    principalType: replayDrillRunnerPrincipalType
+    roleDefinitionId: serviceBusDataSenderRoleDefinitionId
+  }
+}
+
 output serviceBusNamespaceName string = sbNamespace.name
 output orderEventsTopic string = orderTopic.name
 output ordersPaymentStateSubscription string = ordersPaymentStateSubscription.name
@@ -144,6 +197,8 @@ output notificationsSubscription string = notificationsSubscription.name
 output deadLetterTopic string = dlqTopic.name
 output deadLetterSubscription string = dlqReplaySubscription.name
 output replayRequestQueueName string = replayRequestQueue.name
+output replayDrillRequestQueueName string = environment == 'dev' ? replayDrillRequestQueueName : ''
+output replayDrillRequestQueueId string = environment == 'dev' && !empty(replayDrillRequestQueueName) ? replayDrillRequestQueue.id : ''
 output transportAuthRuleName string = transportAuthRule.name
 #disable-next-line use-resource-symbol-reference
 var transportAuthRuleConnectionString = listKeys(transportAuthRule.id, '2022-10-01-preview').primaryConnectionString

@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
@@ -60,9 +61,14 @@ public sealed class DlqReplayRequestPublisher(
         using var scope = scopeFactory.CreateScope();
         var client = scope.ServiceProvider.GetRequiredService<ServiceBusClient>();
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
-        var pending = await dbContext.DlqReplayRequests
+        var pendingQuery = dbContext.DlqReplayRequests
             .Include(item => item.Quarantine)
             .Where(item => item.PublishedUtc == null)
+            .AsQueryable();
+
+        pendingQuery = ScopePendingRequests(pendingQuery, _options.ReplayRequestId);
+
+        var pending = await pendingQuery
             .OrderBy(item => item.ApprovedUtc)
             .Take(20)
             .ToListAsync(cancellationToken)
@@ -141,5 +147,20 @@ public sealed class DlqReplayRequestPublisher(
         }
 
         return result;
+    }
+
+    internal static IQueryable<DlqReplayRequest> ScopePendingRequests(
+        IQueryable<DlqReplayRequest> pendingQuery,
+        Guid? replayRequestId)
+    {
+        ArgumentNullException.ThrowIfNull(pendingQuery);
+        if (replayRequestId == Guid.Empty)
+        {
+            throw new ArgumentException("A targeted replay request ID cannot be empty.", nameof(replayRequestId));
+        }
+
+        return replayRequestId is Guid id
+            ? pendingQuery.Where(item => item.Id == id)
+            : pendingQuery;
     }
 }
