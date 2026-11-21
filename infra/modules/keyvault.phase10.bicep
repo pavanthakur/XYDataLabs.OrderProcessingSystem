@@ -41,6 +41,9 @@ param sqlAdminPassword string = ''
 @secure()
 param dedicatedTenantConnectionStrings object = {}
 
+@description('Non-secret keys corresponding to dedicatedTenantConnectionStrings. Kept separate so ARM What-If can evaluate the deployment loop without inspecting secret values.')
+param dedicatedTenantCodes array = []
+
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
 var shortBaseName = take(baseName, 15)
 var keyVaultName = 'kv-${shortBaseName}-${effectiveResourceSuffix}'
@@ -166,11 +169,11 @@ resource sqlAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
   }
 }
 
-resource dedicatedTenantConnectionStringSecrets 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = [for dedicatedTenant in items(dedicatedTenantConnectionStrings): {
+resource dedicatedTenantConnectionStringSecrets 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = [for tenantCode in dedicatedTenantCodes: {
   parent: keyVault
-  name: 'DedicatedTenantConnectionStrings--${dedicatedTenant.key}'
+  name: 'DedicatedTenantConnectionStrings--${tenantCode}'
   properties: {
-    value: string(dedicatedTenant.value)
+    value: string(dedicatedTenantConnectionStrings[tenantCode])
   }
 }]
 

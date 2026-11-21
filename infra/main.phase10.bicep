@@ -192,6 +192,10 @@ var baselineDedicatedTenantConnectionStrings = deploySql ? {
   #disable-next-line BCP318
   TenantC: 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.tenantCDatabaseName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default'
 } : {}
+// Keep this non-secret loop bound independently evaluable by ARM What-If. The current
+// Phase 10 seed has one dedicated baseline tenant; add tenants here when the approved
+// bootstrap manifest is expanded.
+var baselineDedicatedTenantCodes = deploySql ? ['TenantC'] : []
 #disable-next-line BCP318
 var redisConnectionString = deployRedis ? '${redis.outputs.redisHostName}:${string(redis.outputs.redisSslPort)},password=${redis.outputs.redisPrimaryKey},ssl=True,abortConnect=False' : ''
 
@@ -321,6 +325,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     functionsPrincipalId: functions.outputs.functionPrincipalId
     deploymentPrincipalObjectId: deploymentPrincipalObjectId
     sqlAdminPassword: sqlAdminPassword
+    dedicatedTenantCodes: baselineDedicatedTenantCodes
     dedicatedTenantConnectionStrings: baselineDedicatedTenantConnectionStrings
   }
 }

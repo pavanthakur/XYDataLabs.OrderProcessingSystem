@@ -653,3 +653,18 @@ test('dry-run routes to validation and what-if only, never deployment token crea
   assert.match(orchestrator, /dry-run what-if path using prebuilt immutable release/);
   assert.doesNotMatch(orchestrator, /build-phase10-images\.yml/, 'orchestration must not build or publish images during validation');
 });
+
+test('Phase 10 what-if can expand dedicated Key Vault secrets and preserves ACA environment settings', async () => {
+  const [mainTemplate, keyVaultTemplate, acaTemplate] = await Promise.all([
+    readFile('infra/main.phase10.bicep', 'utf8'),
+    readFile('infra/modules/keyvault.phase10.bicep', 'utf8'),
+    readFile('infra/modules/aca-environment.phase10.bicep', 'utf8'),
+  ]);
+  assert.match(mainTemplate, /dedicatedTenantCodes:\s*baselineDedicatedTenantCodes/);
+  assert.match(keyVaultTemplate, /param\s+dedicatedTenantCodes\s+array/);
+  assert.match(keyVaultTemplate, /for\s+tenantCode\s+in\s+dedicatedTenantCodes/);
+  assert.match(keyVaultTemplate, /dedicatedTenantConnectionStrings\[tenantCode\]/);
+  assert.match(acaTemplate, /peerAuthentication:\s*\{\s*mtls:\s*\{\s*enabled:\s*false/s);
+  assert.match(acaTemplate, /peerTrafficConfiguration:\s*\{\s*encryption:\s*\{\s*enabled:\s*false/s);
+  assert.match(acaTemplate, /workloadProfiles:\s*\[\s*\{\s*name:\s*'Consumption'\s*workloadProfileType:\s*'Consumption'/s);
+});

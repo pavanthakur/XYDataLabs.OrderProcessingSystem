@@ -12,6 +12,16 @@ resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: 'aca-${baseName}-${effectiveResourceSuffix}'
   location: location
   properties: {
+    peerAuthentication: {
+      mtls: {
+        enabled: false
+      }
+    }
+    peerTrafficConfiguration: {
+      encryption: {
+        enabled: false
+      }
+    }
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -19,6 +29,12 @@ resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: listKeys(logAnalyticsWorkspaceId, '2021-06-01').primarySharedKey
       }
     }
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
   }
 }
 
