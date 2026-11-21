@@ -237,6 +237,28 @@ try {
         if ($summary.status -ne $expectedStatus) { throw 'Incomplete foundation runner reported success.' }
     }
     Write-Host 'PASS foundation-interruption-summary'
+    $matrixPath = Join-Path $root 'scripts/run-phase10-sealed-payment-matrix.ps1'
+    $matrixErrors = $null
+    $matrixAst = [Management.Automation.Language.Parser]::ParseFile($matrixPath, [ref]$null, [ref]$matrixErrors)
+    if ($matrixErrors.Count) { throw 'Payment matrix runner syntax is invalid.' }
+    $projectionFunction = $matrixAst.Find({
+        param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-PaymentRestorationProjection'
+    }, $true)
+    . ([scriptblock]::Create($projectionFunction.Extent.Text))
+    $seedJson = '{"scope":"docker-dev","status":"passed","activeTenantCount":1,"supportedProviders":["OpenPay"],"tenants":[{"tenant":"TenantA","registryRoute":"OpenPay","customerCount":10,"productCount":3,"providers":[{"threeDs":false}]}]}'
+    $original = $seedJson | ConvertFrom-Json
+    $restored = $seedJson | ConvertFrom-Json
+    $restored.tenants[0].customerCount = 12
+    $expected = Get-PaymentRestorationProjection $original | ConvertTo-Json -Depth 12 -Compress
+    if ((Get-PaymentRestorationProjection $restored | ConvertTo-Json -Depth 12 -Compress) -cne $expected) {
+        throw 'Test-created customer growth was incorrectly treated as configuration drift.'
+    }
+    $restored.tenants[0].providers[0].threeDs = $true
+    if ((Get-PaymentRestorationProjection $restored | ConvertTo-Json -Depth 12 -Compress) -ceq $expected) {
+        throw 'Provider configuration drift was hidden.'
+    }
+    Write-Host 'PASS payment-restoration-customer-growth'
 } finally {
     $script:failLockRemoval = $false
     Remove-Item -LiteralPath $tempRoot -Recurse -Force

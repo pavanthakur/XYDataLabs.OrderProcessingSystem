@@ -74,9 +74,11 @@ export async function verifyStandalonePaymentEvidence(root: string, expectedKind
     "docker-image-identities-before.json", "docker-image-identities-after.json"];
   if (required.some(name => !loaded.has(name))) return undefined;
   const paymentRun = record(parse(loaded.get("payment-run.json")));
-  if (paymentRun?.schema !== "phase10-sealed-payment-run-v1" || paymentRun.runId !== runId || paymentRun.matrix !== expectedKind ||
-      !((paymentRun.status === "passed" && paymentRun.rawExitCode === 0) ||
-        (paymentRun.status === "failed" && typeof paymentRun.rawExitCode === "number" && paymentRun.rawExitCode !== 0))) return undefined;
+  const finalizedRestoration = paymentRun?.schema === "phase10-sealed-payment-run-v2";
+  if (!(finalizedRestoration || paymentRun?.schema === "phase10-sealed-payment-run-v1") ||
+      paymentRun?.runId !== runId || paymentRun.matrix !== expectedKind || !Number.isInteger(paymentRun.rawExitCode) ||
+      !((paymentRun.status === "passed" && paymentRun.rawExitCode === 0 && (!finalizedRestoration || paymentRun.restorationVerified === true)) ||
+        (paymentRun.status === "failed" && (paymentRun.rawExitCode !== 0 || (finalizedRestoration && paymentRun.restorationVerified === false))))) return undefined;
   if (paymentRun.status === "failed") {
     const seed = parse(loaded.get("seed-contract.json"));
     return { kind: expectedKind, status: "FAIL", report: normalizePaymentMatrix(expectedKind, undefined, seed),
@@ -183,7 +185,11 @@ export async function verifyStandalonePaymentEvidence(root: string, expectedKind
   const beforeSettings = record(settings);
   const afterSettings = record(restoration);
   const seedProjection = (value: JsonRecord | undefined) => value && ({ scope: value.scope, status: value.status,
-    activeTenantCount: value.activeTenantCount, supportedProviders: value.supportedProviders, tenants: value.tenants });
+    activeTenantCount: value.activeTenantCount, supportedProviders: value.supportedProviders,
+    tenants: finalizedRestoration && Array.isArray(value.tenants) ? value.tenants.map(tenant => {
+      const entry = record(tenant);
+      return entry ? Object.fromEntries(Object.entries(entry).filter(([key]) => key !== "customerCount")) : tenant;
+    }) : value.tenants });
   const configurationMatched = !!beforeSettings && !!afterSettings &&
     isDeepStrictEqual(seedProjection(beforeSettings), seedProjection(afterSettings));
   if (before.status !== "PASS" || after.status !== "PASS" || before.manifest.candidate.commit !== expectedCommit ||

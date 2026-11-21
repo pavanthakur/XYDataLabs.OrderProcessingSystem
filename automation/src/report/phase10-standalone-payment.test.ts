@@ -23,12 +23,13 @@ async function writeJson(root: string, relativePath: string, value: unknown): Pr
   await writeFile(path, JSON.stringify(value) + "\n");
 }
 
-async function createSealedFixture(root: string, kind: "deterministic" | "sandbox-positive" | "sandbox-negative"): Promise<void> {
+async function createSealedFixture(root: string, kind: "deterministic" | "sandbox-positive" | "sandbox-negative",
+  variation?: "provider-drift" | "legacy" | "unverified-restoration" | "failed-restoration"): Promise<void> {
   const runId = root.split(/[\\/]/).at(-1)!;
   const mode = kind === "deterministic" ? "deterministic" : "sandbox";
   const negative = kind === "sandbox-negative";
   const providers = negative ? ["Razorpay"] : ["Razorpay", "OpenPay"];
-  const tenants = [{ tenant: "TenantA", status: "Active", tier: "SharedPool", providers: [
+  const tenants = [{ tenant: "TenantA", status: "Active", tier: "SharedPool", customerCount: 10, productCount: 3, providers: [
     { provider: "Razorpay", threeDs: false }, { provider: "OpenPay", threeDs: false }
   ] }];
   const seed = { status: "passed", scope: "docker-dev", activeTenantCount: 1, supportedProviders: ["Razorpay", "OpenPay"], tenants };
@@ -89,8 +90,13 @@ async function createSealedFixture(root: string, kind: "deterministic" | "sandbo
     coveragePassed: true, primaryPassed: true, skippedTenants: [], results: groups };
   await writeJson(root, `${matrixRoot}/summary.json`, summary);
   await writeJson(root, "seed-contract.json", seed);
-  await writeJson(root, "restoration-contract.json", { ...seed, capturedUtc: "later" });
-  await writeJson(root, "payment-run.json", { schema: "phase10-sealed-payment-run-v1", runId, matrix: kind, status: "passed", rawExitCode: 0 });
+  const restoredTenants = structuredClone(tenants);
+  restoredTenants[0].customerCount += 2;
+  if (variation === "provider-drift") restoredTenants[0].providers[0].threeDs = true;
+  await writeJson(root, "restoration-contract.json", { ...seed, tenants: restoredTenants, capturedUtc: "later" });
+  await writeJson(root, "payment-run.json", { schema: variation === "legacy" ? "phase10-sealed-payment-run-v1" : "phase10-sealed-payment-run-v2",
+    runId, matrix: kind, status: variation === "failed-restoration" ? "failed" : "passed", rawExitCode: 0,
+    restorationVerified: variation !== "legacy" && variation !== "unverified-restoration" && variation !== "failed-restoration" });
   await writeJson(root, "docker-image-identities-before.json", imageManifest(runId, "before"));
   await writeJson(root, "docker-image-identities-after.json", imageManifest(runId, "after"));
   const sha256: Record<string, string> = {};
@@ -119,6 +125,13 @@ test("standalone payment verification accepts each complete sealed matrix and bl
       assert.equal((await verifyStandalonePaymentEvidence(root, kind, commit))?.status, "PASS", kind);
       await writeFile(join(root, "payment-run.json"), "{}\n");
       assert.equal(await verifyStandalonePaymentEvidence(root, kind, commit), undefined, `${kind} tamper`);
+    }
+    for (const variation of ["provider-drift", "legacy", "unverified-restoration", "failed-restoration"] as const) {
+      const root = join(parent, variation);
+      await mkdir(root);
+      await createSealedFixture(root, "deterministic", variation);
+      const result = await verifyStandalonePaymentEvidence(root, "deterministic", commit);
+      assert.equal(result?.status, variation === "failed-restoration" ? "FAIL" : undefined, variation);
     }
   } finally {
     await rm(parent, { recursive: true, force: true });

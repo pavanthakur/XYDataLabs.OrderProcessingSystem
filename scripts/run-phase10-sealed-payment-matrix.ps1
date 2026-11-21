@@ -7,6 +7,17 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ApproveExecution) { throw 'Explicit execution approval is required for the selected matrix.' }
+function Get-PaymentRestorationProjection($Contract) {
+    $tenants = @(foreach ($tenant in $Contract.tenants) {
+        $projected = [ordered]@{}
+        foreach ($property in $tenant.PSObject.Properties) {
+            # A journey can intentionally persist a new customer. All other tenant evidence remains strict.
+            if ($property.Name -cne 'customerCount') { $projected[$property.Name] = $property.Value }
+        }
+        $projected
+    })
+    [ordered]@{scope=$Contract.scope; status=$Contract.status; activeTenantCount=$Contract.activeTenantCount; supportedProviders=@($Contract.supportedProviders); tenants=$tenants}
+}
 . (Join-Path $PSScriptRoot 'phase10-docker-safety.ps1')
 . (Join-Path $PSScriptRoot 'phase10-docker-image-evidence.ps1')
 Assert-Phase10ComposeProject
@@ -66,22 +77,25 @@ finally {
     if (Test-Path -LiteralPath (Join-Path $results 'local-payment-test-state.lock')) {
         $status = 'failed'
     }
-    @{ schema = 'phase10-sealed-payment-run-v1'; runId = $runId; matrix = $Matrix; status = $status; rawExitCode = $runExit } |
+    @{ schema = 'phase10-sealed-payment-run-v2'; runId = $runId; matrix = $Matrix; status = 'incomplete'; rawExitCode = $runExit; restorationVerified = $false } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runRoot 'payment-run.json')
 }
 & pwsh -NoProfile -File $seedScript -OutputPath (Join-Path $runRoot 'restoration-contract.json')
 if ($LASTEXITCODE -ne 0) { throw 'Payment restoration baseline did not pass.' }
 $beforeContract = Get-Content -LiteralPath (Join-Path $runRoot 'seed-contract.json') -Raw | ConvertFrom-Json
 $afterContract = Get-Content -LiteralPath (Join-Path $runRoot 'restoration-contract.json') -Raw | ConvertFrom-Json
-$beforeProjection = [ordered]@{ scope=$beforeContract.scope; status=$beforeContract.status; activeTenantCount=$beforeContract.activeTenantCount; supportedProviders=@($beforeContract.supportedProviders); tenants=@($beforeContract.tenants) }
-$afterProjection = [ordered]@{ scope=$afterContract.scope; status=$afterContract.status; activeTenantCount=$afterContract.activeTenantCount; supportedProviders=@($afterContract.supportedProviders); tenants=@($afterContract.tenants) }
+$beforeProjection = Get-PaymentRestorationProjection $beforeContract
+$afterProjection = Get-PaymentRestorationProjection $afterContract
 $configurationRestored = (ConvertTo-Json -InputObject $beforeProjection -Depth 12 -Compress) -ceq (ConvertTo-Json -InputObject $afterProjection -Depth 12 -Compress)
 if (-not $configurationRestored) {
     $status = 'failed'
 }
 if ($configurationRestored -and $runExit -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $results 'local-payment-test-state.lock'))) { $restorationVerified = $true }
+if (-not $restorationVerified) { $status = 'failed' }
 $after = Get-Phase10DockerImageManifest @imageArgs -CapturePoint after -OutputPath (Join-Path $runRoot 'docker-image-identities-after.json')
 Assert-Phase10DockerImageManifestMatches -Expected $before -Actual $after
+@{ schema = 'phase10-sealed-payment-run-v2'; runId = $runId; matrix = $Matrix; status = $status; rawExitCode = $runExit; restorationVerified = $restorationVerified } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runRoot 'payment-run.json')
 
 $hashes = [ordered]@{}
 $allowed = @('payment-run.json','seed-contract.json','restoration-contract.json','docker-image-identities-before.json',

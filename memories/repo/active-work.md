@@ -2,17 +2,17 @@
 
 Session navigation, not proof. Verify Git, runtime and evidence before acting.
 
-## Phase 10 local checkpoint — 20 November 2026
+## Phase 10 local checkpoint — 21 November 2026
 
-- Review revision: `b9d21165ab8c77e9108dbf7473b35febc13bda4b`
+- Review revision: `9a433be5955a2a9769f989e32109434aacf331ae`
 - Worktree state: DIRTY
 - Evidence status: `BLOCKED`
-- Evidence revision: `b9d21165`
+- Evidence revision: `9a433be5`
 - Evidence environment: `LOCAL_DOCKER_DESKTOP_G`
-- Evidence scope: `20 Nov cold-build plus separately approved payment follow-up and restart; full Phase 10/L5-R packet incomplete; Azure excluded`
-- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-030636948/payments/`
-- Review revision is the baseline, not the published candidate; verify the candidate with Git. The evidence below predates the standalone sealing changes. Azure remains excluded from this checkpoint.
-- The latest cold-build/no-payment run is `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-015424885/`. Its 36 foundations, smoke, isolated integration, identity, customer directory, currency/order entry, messaging/Functions, settings restoration and storage checks passed. Its sealed packet remains `partial`; its own payment, continuation and in-run persistence steps were NOT-RUN.
+- Evidence scope: `Clean candidate; no-charge Docker E2E, restart, migration and NFR passed selected checks; deterministic journeys 6/6 but strict seal gate blocked; Azure excluded`
+- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-232300248/acceptance-packet.json`
+- Other same-SHA evidence: `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261120-234222416/`, `TestResults/Phase10/clean-migration-20261120-232215555/`, and `TestResults/Phase10/sealed-payments/phase10-payment-20261120-235753124/`. The deterministic runner exited 1 because customer growth was incorrectly treated as configuration drift. Provider settings and sandbox mode were verified restored; only its retained lock was removed after approval. The original seal is unchanged. The following entries are historical.
+- The earlier cold-build/no-payment run is `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-015424885/`. Its 36 foundations, smoke, isolated integration, identity, customer directory, currency/order entry, messaging/Functions, settings restoration and storage checks passed. Its sealed packet remains `partial`; its own payment, continuation and in-run persistence steps were NOT-RUN.
 - Approved post-run payment evidence is `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-030636948/payments/`: deterministic 6/6 and sandbox positive 6/6 across TenantA/B/C × Razorpay/OpenPay. Each sandbox case has `Simulation=False` create/fetch evidence, remote completed confirmation, amount/currency match, SQL proof, one successful charge and Paid-order projection; fixtures reset. The separate packet did not run decline/dismissal cases. Do not repeat successful charges just to update reports.
 - Post-payment seed validation passed: A/B remain Razorpay, C remains OpenPay; both providers exist for all tenants, all are non-production, both 3DS flags are off, and local credential comparisons match. Payments runtime is back in sandbox mode; no fixture lock remains.
 - Payment-run image IDs match the 13 cold-built images. The build manifest is from base `93ed259b` plus a dirty worktree; the committed `b9d21165` changes only automation/reporting/tests/docs, with no application source changes. The full worktree content hash differs because report-identity files and checkpoint docs were added or updated after the build; do not claim an exact whole-repository build fingerprint.
@@ -30,4 +30,4 @@ Session navigation, not proof. Verify Git, runtime and evidence before acting.
 
 The strict local verifier now supports either a sealed payment-capable E2E packet or three separate sealed payment-only runs (deterministic, sandbox-positive, sandbox-negative) alongside the no-charge E2E/NFR evidence. Each standalone run must match the same clean SHA and all 13 image identities, preserve provider settings, and pass case-level provider/dependency, SQL, callback and order-state proof. The runner uses the normal Phase 10 acceptance lock. This is forward-only; old packets and verdicts remain unchanged.
 
-Standalone runner, loader, acceptance linkage, and operator commands are implemented but have not been exercised against live Docker or providers. Focused acceptance tests and report tests pass; TypeScript and PowerShell syntax checks pass. v12 predates the new seals and remains unchanged; do not relabel it. The worktree is still dirty and requires review/freeze before a clean-candidate run. No live Docker, provider, Azure, or Git operation was performed. Do not repeat successful charges solely to repackage old evidence. Canonical scope is in [the Phase 10 checklist](../../docs/internal/phase10-implementation-checklist.md), [pre-Azure LLD](../../docs/internal/phase10-preazure-lld.md) and [Docker runbook](../../docs/runbooks/phase10-docker-fresh-ssd.md).
+Review the uncommitted restoration fix before freezing a new candidate. The new runner ignores only customer counts when comparing restored provider configuration, and v2 records the final restoration verdict before sealing. Targeted regression tests passed; no new matrix or Azure operation ran. Keep the old deterministic verdict blocked; do not re-label it or repeat sandbox charges to repackage old evidence. Canonical scope is in [the Phase 10 checklist](../../docs/internal/phase10-implementation-checklist.md), [pre-Azure LLD](../../docs/internal/phase10-preazure-lld.md) and [Docker runbook](../../docs/runbooks/phase10-docker-fresh-ssd.md).
