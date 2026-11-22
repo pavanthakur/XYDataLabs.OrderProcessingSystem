@@ -5,7 +5,7 @@ import { isAuthPreflightSignOutVerified } from "./operator-sign-out.js";
 test("auth-only operator run accepts sign-out verified by its no-charge journey", () => {
   assert.equal(isAuthPreflightSignOutVerified([{
     journeyOutcome: "auth-preflight-passed",
-    outcomeMessage: "Authenticated tenant access and application sign-out verified. No payment was attempted."
+    outcomeMessage: "No payment was attempted. Application sign-out verified. Verification used the original sign-in tab after closing the temporary tab."
   }]), true);
 });
 

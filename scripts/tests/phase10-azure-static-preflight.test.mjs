@@ -724,8 +724,11 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
   assert.match(runner, /if \(headedOperatorEntra\) await page\.bringToFront\(\)/);
   assert.match(runner, /WAITING_FOR_SIGN_IN/);
   assert.match(runner, /SESSION_EXPIRED/);
-  assert.match(runner, /await this\.verifyOperatorSignOut\(page, request\.target\.baseUrl, 60000\)/);
-  assert.match(runner, /await this\.verifyOperatorSignOut\(page, session\.baseUrl, timeoutMs\)/);
+  const originalTabPreflight = runner.indexOf('await this.verifyOriginalOperatorSignOut(page, request.target.baseUrl, 60000)');
+  assert.ok(originalTabPreflight >= 0 && originalTabPreflight < orderCreation);
+  assert.match(runner, /await context\.newPage\(\);\s+await this\.verifyOriginalOperatorSignOut\(page, request\.target\.baseUrl, 60000\)/);
+  assert.match(runner, /const signInPage = previousSession\?\.signInPage \?\? journeyPage/);
+  assert.match(runner, /await this\.verifyOriginalOperatorSignOut\(session\.signInPage, session\.baseUrl, timeoutMs\)/);
   assert.match(runner, /identity-provider logout could not be confirmed/);
   assert.match(runner, /heading && localStorage\.getItem\("orderprocessing\.accessToken"\) === null/);
   assert.doesNotMatch(runner, /observedHeading|allTextContents\(\)/);

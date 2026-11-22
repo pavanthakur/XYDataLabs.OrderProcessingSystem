@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { PaymentJourneyRunner } from "./payment-journey-runner.js";
 
 type RunnerWithOperatorSession = {
   operatorSession?: {
     browser: Browser;
     context: BrowserContext;
+    signInPage: Page;
     sessionStorage: Record<string, string>;
     baseUrl: string;
     authenticated: boolean;
@@ -22,7 +23,7 @@ async function startFixtureServer(mode: FixtureMode): Promise<{ origin: string; 
     if (request.url === "/payments/new") {
       response.end(mode !== "missing-button"
         ? `<script>
-             if (sessionStorage.getItem("fixture.account") !== "test-account") throw new Error("Missing restored session");
+             if (sessionStorage.getItem("fixture.account") !== "test-account") throw new Error("Missing original session");
              localStorage.setItem("orderprocessing.accessToken", "fixture-token");
              document.addEventListener("DOMContentLoaded", () => {
                document.querySelector("button").hidden = false;
@@ -34,6 +35,10 @@ async function startFixtureServer(mode: FixtureMode): Promise<{ origin: string; 
              });
            </script><button hidden>Sign out</button>`
         : "<main>Payment page</main>");
+      return;
+    }
+    if (request.url === "/fixture-sign-in") {
+      response.end('<script>sessionStorage.setItem("fixture.account", "test-account")</script>');
       return;
     }
     if (request.url === "/fixture-logout-return") {
@@ -63,16 +68,21 @@ async function startFixtureServer(mode: FixtureMode): Promise<{ origin: string; 
   };
 }
 
-async function attachAuthenticatedFixtureSession(runner: PaymentJourneyRunner, origin: string): Promise<void> {
+async function attachAuthenticatedFixtureSession(runner: PaymentJourneyRunner, origin: string): Promise<{ context: BrowserContext; signInPage: Page }> {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
+  const signInPage = await context.newPage();
+  await signInPage.goto(`${origin}/fixture-sign-in`);
+  await signInPage.goto(`${origin}/payments/new`);
   (runner as unknown as RunnerWithOperatorSession).operatorSession = {
     browser,
     context,
-    sessionStorage: { "fixture.account": "test-account" },
+    signInPage,
+    sessionStorage: {},
     baseUrl: origin,
     authenticated: true
   };
+  return { context, signInPage };
 }
 
 test("operator sign-out verifies provider return and clears the application token without payment activity", async () => {
@@ -80,9 +90,18 @@ test("operator sign-out verifies provider return and clears the application toke
   const runner = new PaymentJourneyRunner();
   const logs: string[] = [];
   try {
-    await attachAuthenticatedFixtureSession(runner, fixture.origin);
+    const { context, signInPage } = await attachAuthenticatedFixtureSession(runner, fixture.origin);
+    const paymentTab = await context.newPage();
+    let replacementTabs = 0;
+    context.on("page", () => replacementTabs++);
+    await signInPage.route("**/fixture-logout-return", async route => {
+      // The route guards ordering: the payment tab must already be closed when logout starts.
+      if (!paymentTab.isClosed()) await route.abort();
+      else await route.continue();
+    });
     await runner.closeOperatorAssistedSession(message => logs.push(message), true, 1000);
-    assert.deepEqual(logs, ["One Entra sign-out completed after the selected tenant payment journeys; the application token was cleared."]);
+    assert.equal(replacementTabs, 0);
+    assert.deepEqual(logs, ["One Entra sign-out completed in the original sign-in tab; the application token was cleared."]);
   } finally {
     await fixture.close();
   }
@@ -104,12 +123,27 @@ test("operator sign-out reports a safe failing stage when the application contro
   }
 });
 
-test("matrix sign-out waits for token clearance after a redirect without restoring the old session again", async () => {
+test("matrix sign-out waits for token clearance after a redirect in the original tab", async () => {
   const fixture = await startFixtureServer("delayed-clear");
   const runner = new PaymentJourneyRunner();
   try {
     await attachAuthenticatedFixtureSession(runner, fixture.origin);
     await runner.closeOperatorAssistedSession(undefined, true, 2000);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("matrix sign-out fails without creating a replacement when the original tab is lost", async () => {
+  const fixture = await startFixtureServer("normal");
+  const runner = new PaymentJourneyRunner();
+  try {
+    const { context, signInPage } = await attachAuthenticatedFixtureSession(runner, fixture.origin);
+    await signInPage.close();
+    let replacementTabs = 0;
+    context.on("page", () => replacementTabs++);
+    await assert.rejects(runner.closeOperatorAssistedSession(undefined, true, 1000), /original Entra sign-in tab is closed/);
+    assert.equal(replacementTabs, 0);
   } finally {
     await fixture.close();
   }

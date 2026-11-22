@@ -97,7 +97,7 @@ export interface PaymentJourneyResult {
 
 export class PaymentJourneyRunner {
   private readonly challengeHandler = new OpenPaySandboxChallengeHandler();
-  private operatorSession?: { browser: Browser; context: BrowserContext; sessionStorage: Record<string, string>; baseUrl: string; authenticated: boolean };
+  private operatorSession?: { browser: Browser; context: BrowserContext; signInPage: Page; sessionStorage: Record<string, string>; baseUrl: string; authenticated: boolean };
 
   public async execute(request: PaymentJourneyRequest): Promise<PaymentJourneyResult> {
     const log = (message:string) => request.logger?.(safePaymentDiagnostic(message));
@@ -121,9 +121,13 @@ export class PaymentJourneyRunner {
       this.operatorSession = undefined;
       throw new Error("The operator-assisted Entra browser session closed before all tenant journeys completed; refusing to start a new sign-in or resubmit a payment.");
     }
+    if (previousSession?.signInPage.isClosed()) {
+      throw new Error("The original Entra sign-in tab was closed; refusing to continue the payment matrix.");
+    }
     if (!previousSession && headedOperatorEntra) log("BROWSER_LAUNCHING: local Playwright window; independent of the chat browser connection.");
     const browser = previousSession?.browser ?? await launchLocalBrowser((options) => chromium.launch(options), request.headless, headedOperatorEntra);
     let authenticatedEntra = previousSession?.authenticated ?? false;
+    let journeyPage: Page | undefined;
     const abortBrowser=()=>{void browser.close();};
     request.signal?.addEventListener("abort",abortBrowser,{once:true});
     if(request.signal?.aborted) abortBrowser();
@@ -133,7 +137,7 @@ export class PaymentJourneyRunner {
         ignoreHTTPSErrors: request.target.ignoreHttpsErrors,
         viewport: headedOperatorEntra ? null : undefined,
       });
-      const page = await context.newPage();
+      const page = journeyPage = await context.newPage();
       if (headedOperatorEntra) await page.bringToFront();
       if (previousSession) {
         await page.addInitScript((storedSession) => {
@@ -283,8 +287,10 @@ export class PaymentJourneyRunner {
         }
         log(`Admin UI tenant-switch cycle passed across ${activeTenantCodes.length} active tenants and returned to ${activeTenantCodes[0]}. Provider sandbox routes verified for all active tenants.`);
         if (request.retainOperatorSessionAfterAuthPreflight !== true) {
-          await this.verifyOperatorSignOut(page, request.target.baseUrl, 60000);
-          log("Authenticated tenant access, sandbox configuration, and application sign-out verified. No customer, order, or payment was created.");
+          // Exercise the matrix tab cleanup without navigating a payment tab or submitting anything.
+          await context.newPage();
+          await this.verifyOriginalOperatorSignOut(page, request.target.baseUrl, 60000);
+          log("Authenticated tenant access, sandbox configuration, and application sign-out verified in the original tab. No customer, order, or payment was created.");
         } else {
           log("No-charge Entra access and tenant-switch preflight passed; preserving this in-memory session for the serial payment matrix.");
         }
@@ -299,7 +305,7 @@ export class PaymentJourneyRunner {
           orderAmount: 0,
           orderCurrencyCode: "not-applicable",
           finalUrl: (() => { const url = new URL(page.url()); return `${url.origin}${url.pathname}`; })(),
-          statusMessage: `Entra access and tenant switching passed; providers=${tenantPreflightResults.map((item) => `${item.tenantCode}:${item.paymentProvider}/${item.adapterMode}`).join(",")}; no payment was attempted.${request.retainOperatorSessionAfterAuthPreflight === true ? " In-memory session retained for this run." : " Application sign-out verified."}`,
+          statusMessage: `Entra access and tenant switching passed; providers=${tenantPreflightResults.map((item) => `${item.tenantCode}:${item.paymentProvider}/${item.adapterMode}`).join(",")}; no payment was attempted.${request.retainOperatorSessionAfterAuthPreflight === true ? " In-memory session retained for this run." : " Application sign-out verified. Verification used the original sign-in tab after closing the temporary tab."}`,
           adapterMode: paymentConfiguration.adapterMode,
           collectionMode: paymentConfiguration.collectionMode,
           observedChallenge: "not-applicable",
@@ -546,22 +552,25 @@ export class PaymentJourneyRunner {
     finally {
       request.signal?.removeEventListener("abort",abortBrowser);
       if (reuseOperatorSession && browser.isConnected()) {
-        const context = previousSession?.context ?? browser.contexts()[0];
-        const page = context?.pages().at(-1);
-        const sessionStorage = page
-          ? await page.evaluate(() => Object.fromEntries(Array.from({ length: window.sessionStorage.length }, (_, index) => {
-            const key = window.sessionStorage.key(index);
-            return key === null ? null : [key, window.sessionStorage.getItem(key) ?? ""] as const;
-          }).filter((entry): entry is readonly [string, string] => entry !== null))).catch(() => ({} as Record<string, string>))
-          : {};
-        if (page) await page.close().catch(() => undefined);
-        if (context) this.operatorSession = { browser, context, sessionStorage, baseUrl: request.target.baseUrl, authenticated: authenticatedEntra };
+        const signInPage = previousSession?.signInPage ?? journeyPage;
+        const sessionStorage = journeyPage
+          ? await this.snapshotOperatorSessionStorage(journeyPage).catch(() => previousSession?.sessionStorage ?? {})
+          : previousSession?.sessionStorage ?? {};
+        if (journeyPage && journeyPage !== signInPage) await journeyPage.close().catch(() => undefined);
+        if (signInPage) this.operatorSession = { browser, context: signInPage.context(), signInPage, sessionStorage, baseUrl: request.target.baseUrl, authenticated: authenticatedEntra };
         else { this.operatorSession = undefined; await browser.close(); }
       } else {
         if (reuseOperatorSession) this.operatorSession = undefined;
         await browser.close();
       }
     }
+  }
+
+  private snapshotOperatorSessionStorage(page: Page): Promise<Record<string, string>> {
+    return page.evaluate(() => Object.fromEntries(Array.from({ length: window.sessionStorage.length }, (_, index) => {
+      const key = window.sessionStorage.key(index);
+      return key === null ? null : [key, window.sessionStorage.getItem(key) ?? ""] as const;
+    }).filter((entry): entry is readonly [string, string] => entry !== null)));
   }
 
   public async closeOperatorAssistedSession(logger?: (message: string) => void, requireAuthenticated = false, verificationTimeoutMs = 60000): Promise<void> {
@@ -575,22 +584,8 @@ export class PaymentJourneyRunner {
     const timeoutMs = Math.max(1, Math.floor(verificationTimeoutMs));
     try {
       if (session.authenticated) {
-        const page = await session.context.newPage();
-        try {
-          const entry = new URL("/payments/new", session.baseUrl);
-          await page.addInitScript(({ entryUrl, storedSession }) => {
-            if (window !== window.top || location.href !== entryUrl) return;
-            const restored = "phase10.browserAutomation.logoutSessionRestored";
-            if (sessionStorage.getItem(restored) === "true") return;
-            for (const [key, value] of Object.entries(storedSession)) sessionStorage.setItem(key, value);
-            sessionStorage.setItem(restored, "true");
-          }, { entryUrl: entry.href, storedSession: session.sessionStorage });
-          await page.goto(entry.href, { waitUntil: "domcontentloaded", timeout: timeoutMs });
-        } catch {
-          throw new Error("Entra sign-out verification failed while opening the application sign-out page.");
-        }
-        await this.verifyOperatorSignOut(page, session.baseUrl, timeoutMs);
-        logger?.("One Entra sign-out completed after the selected tenant payment journeys; the application token was cleared.");
+        await this.verifyOriginalOperatorSignOut(session.signInPage, session.baseUrl, timeoutMs);
+        logger?.("One Entra sign-out completed in the original sign-in tab; the application token was cleared.");
       } else if (requireAuthenticated) {
         throw new Error("No authenticated operator session remained to verify sign-out.");
       }
@@ -603,6 +598,21 @@ export class PaymentJourneyRunner {
     if (logoutError) throw logoutError;
   }
 
+  private async verifyOriginalOperatorSignOut(page: Page, baseUrl: string, timeoutMs: number): Promise<void> {
+    if (page.isClosed() || new URL(page.url()).origin !== new URL(baseUrl).origin) {
+      throw new Error("The original Entra sign-in tab is closed or no longer on the application origin; sign-out could not be verified.");
+    }
+    try {
+      for (const otherTab of page.context().pages()) {
+        if (otherTab !== page && !otherTab.isClosed()) await otherTab.close();
+      }
+      await page.bringToFront();
+    } catch {
+      throw new Error("Entra sign-out verification failed while returning to the original sign-in tab.");
+    }
+    await this.verifyOperatorSignOut(page, baseUrl, timeoutMs);
+  }
+
   private async verifyOperatorSignOut(page: Page, baseUrl: string, timeoutMs: number): Promise<void> {
     const origin = new URL(baseUrl).origin;
     let stage = "wait for the application sign-out control";
@@ -610,8 +620,9 @@ export class PaymentJourneyRunner {
     try {
       const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
       await signOutButton.waitFor({ state: "visible", timeout: Math.min(30000, timeoutMs) });
-      stage = "complete the identity-provider sign-out redirect";
+      stage = "click Sign out in the original application tab";
       await signOutButton.click({ timeout: Math.min(30000, timeoutMs) });
+      stage = "complete the identity-provider sign-out redirect";
       await page.waitForURL(url => url.origin === origin && url.pathname === "/signed-out", { timeout: timeoutMs });
       stage = "verify the signed-out screen and application token clearance";
       const state = await page.waitForFunction(expectedOrigin => {
