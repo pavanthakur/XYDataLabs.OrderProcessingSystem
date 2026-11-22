@@ -724,8 +724,10 @@ test('operator-assisted Azure Entra mode fails closed before mutations and is de
   assert.match(runner, /if \(headedOperatorEntra\) await page\.bringToFront\(\)/);
   assert.match(runner, /WAITING_FOR_SIGN_IN/);
   assert.match(runner, /SESSION_EXPIRED/);
-  assert.match(runner, /Identity-provider sign-out did not complete cleanly/);
-  assert.match(runner, /signedOutHeading\.waitFor\(\{ state: "visible", timeout: 10000 \}\)/);
+  assert.match(runner, /await this\.verifyOperatorSignOut\(page, request\.target\.baseUrl, 60000\)/);
+  assert.match(runner, /await this\.verifyOperatorSignOut\(page, session\.baseUrl, timeoutMs\)/);
+  assert.match(runner, /identity-provider logout could not be confirmed/);
+  assert.match(runner, /heading && localStorage\.getItem\("orderprocessing\.accessToken"\) === null/);
   assert.doesNotMatch(runner, /observedHeading|allTextContents\(\)/);
   assert.match(runner, /return `\$\{url\.origin\}\$\{url\.pathname\}`/);
   assert.match(runner, /No credentials or browser state will be saved/);

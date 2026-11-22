@@ -11,7 +11,7 @@ on:
         options:
           - dev
       runMode:
-        description: 'Dev-only. Default service preflight may use a temporary SQL firewall lease; supervised modes print desktop instructions only.'
+        description: 'Service preflight runs in GitHub without payments and may use a temporary SQL firewall lease. Supervised modes only print desktop commands. Fill lookup fields only for Razorpay order lookup.'
         required: true
         default: service-preflight
         type: choice
@@ -21,15 +21,15 @@ on:
           - supervised-sandbox-payments
           - razorpay-order-lookup
       lookupTenantCode:
-        description: 'Exact tenant for diagnostic-only provider secret alias'
+        description: 'Razorpay lookup only: exact tenant code for the existing order. Otherwise leave blank.'
         required: false
         type: string
       lookupOrderId:
-        description: 'Exact existing Razorpay order_* ID; diagnostic mode only'
+        description: 'Razorpay lookup only: existing order_* ID, not a pay_* ID. Otherwise leave blank.'
         required: false
         type: string
       lookupAmountMinor:
-        description: 'Expected INR amount in paise; diagnostic mode only'
+        description: 'Razorpay lookup only: expected amount in paise (INR 200 = 20000), not a charge amount. Otherwise keep 0.'
         required: false
         default: 0
         type: number
@@ -63,6 +63,7 @@ jobs:
           $desktopMode = if ($env:RUN_MODE -eq 'supervised-browser-auth') { 'AuthPreflight' } else { 'ProviderMatrix' }
           @(
             '## Awaiting supervised evidence — browser and payments NOT RUN'
+            'No browser or payment test ran in GitHub. Run the command below on your desktop.'
             "Use a clean desktop checkout of workflow SHA $env:GITHUB_SHA (handoff run $env:GITHUB_RUN_ID)."
             'First verify a passing service-preflight packet for the same candidate and deployment. Replace the subscription placeholder with the approved dev subscription ID.'
             'ProviderMatrix requires separate approval to create sandbox transactions. Selecting this mode is not that approval.'

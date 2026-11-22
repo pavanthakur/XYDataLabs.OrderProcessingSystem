@@ -283,21 +283,7 @@ export class PaymentJourneyRunner {
         }
         log(`Admin UI tenant-switch cycle passed across ${activeTenantCodes.length} active tenants and returned to ${activeTenantCodes[0]}. Provider sandbox routes verified for all active tenants.`);
         if (request.retainOperatorSessionAfterAuthPreflight !== true) {
-          const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
-          await signOutButton.waitFor({ state: "visible", timeout: 10000 });
-          await signOutButton.click();
-          await page.waitForURL((url) => url.origin === new URL(request.target.baseUrl).origin && url.pathname === "/signed-out", { timeout: 60000 });
-          const applicationTokenRemains = await page.evaluate(() => Boolean(localStorage.getItem("orderprocessing.accessToken")));
-          if (applicationTokenRemains) throw new Error("Application sign-out did not clear the browser API token.");
-          const signedOutHeading = page.getByRole("heading", { name: /Signed out of the application/i });
-          try {
-            await signedOutHeading.waitFor({ state: "visible", timeout: 10000 });
-          } catch {
-            throw new Error("Identity-provider sign-out did not render the signed-out state; no payment was submitted.");
-          }
-          if (!(await signedOutHeading.isVisible().catch(() => false))) {
-            throw new Error("Identity-provider sign-out did not complete cleanly; no payment was submitted.");
-          }
+          await this.verifyOperatorSignOut(page, request.target.baseUrl, 60000);
           log("Authenticated tenant access, sandbox configuration, and application sign-out verified. No customer, order, or payment was created.");
         } else {
           log("No-charge Entra access and tenant-switch preflight passed; preserving this in-memory session for the serial payment matrix.");
@@ -586,39 +572,64 @@ export class PaymentJourneyRunner {
       return;
     }
     let logoutError: Error | undefined;
-    let verificationStage = "open the application sign-out page";
     const timeoutMs = Math.max(1, Math.floor(verificationTimeoutMs));
     try {
       if (session.authenticated) {
         const page = await session.context.newPage();
-        await page.addInitScript((storedSession) => {
-          for (const [key, value] of Object.entries(storedSession as Record<string, string>)) window.sessionStorage.setItem(key, value);
-        }, session.sessionStorage);
-        await page.goto(`${session.baseUrl}/payments/new`, { waitUntil: "domcontentloaded" });
-        verificationStage = "wait for the application sign-out control";
-        const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
-        await signOutButton.waitFor({ state: "visible", timeout: Math.min(30000, timeoutMs) });
-        verificationStage = "complete the identity-provider sign-out redirect";
-        await signOutButton.click({ timeout: Math.min(30000, timeoutMs) });
-        await page.waitForURL((url) => url.origin === new URL(session.baseUrl).origin && url.pathname === "/signed-out", { timeout: timeoutMs });
-        verificationStage = "verify that the application access token was cleared";
-        if (await page.evaluate(() => Boolean(localStorage.getItem("orderprocessing.accessToken")))) {
-          throw new Error("Application sign-out did not clear the browser API token after the payment matrix.");
+        try {
+          const entry = new URL("/payments/new", session.baseUrl);
+          await page.addInitScript(({ entryUrl, storedSession }) => {
+            if (window !== window.top || location.href !== entryUrl) return;
+            const restored = "phase10.browserAutomation.logoutSessionRestored";
+            if (sessionStorage.getItem(restored) === "true") return;
+            for (const [key, value] of Object.entries(storedSession)) sessionStorage.setItem(key, value);
+            sessionStorage.setItem(restored, "true");
+          }, { entryUrl: entry.href, storedSession: session.sessionStorage });
+          await page.goto(entry.href, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+        } catch {
+          throw new Error("Entra sign-out verification failed while opening the application sign-out page.");
         }
-        verificationStage = "verify the signed-out confirmation screen";
-        await page.getByRole("heading", { name: /Signed out of the application/i }).waitFor({ state: "visible", timeout: Math.min(10000, timeoutMs) });
+        await this.verifyOperatorSignOut(page, session.baseUrl, timeoutMs);
         logger?.("One Entra sign-out completed after the selected tenant payment journeys; the application token was cleared.");
       } else if (requireAuthenticated) {
         throw new Error("No authenticated operator session remained to verify sign-out.");
       }
     } catch (error) {
-      const timedOut = error instanceof Error && error.name === "TimeoutError";
-      logoutError = new Error(`Entra sign-out verification ${timedOut ? "timed out" : "failed"} while attempting to ${verificationStage}.`);
+      logoutError = error instanceof Error ? error : new Error("Entra sign-out verification failed.");
       logger?.(logoutError.message);
     } finally {
       await session.browser.close().catch(() => undefined);
     }
     if (logoutError) throw logoutError;
+  }
+
+  private async verifyOperatorSignOut(page: Page, baseUrl: string, timeoutMs: number): Promise<void> {
+    const origin = new URL(baseUrl).origin;
+    let stage = "wait for the application sign-out control";
+    let outcome: "cleared" | "provider-error";
+    try {
+      const signOutButton = page.getByRole("button", { name: /^Sign out$/i });
+      await signOutButton.waitFor({ state: "visible", timeout: Math.min(30000, timeoutMs) });
+      stage = "complete the identity-provider sign-out redirect";
+      await signOutButton.click({ timeout: Math.min(30000, timeoutMs) });
+      await page.waitForURL(url => url.origin === origin && url.pathname === "/signed-out", { timeout: timeoutMs });
+      stage = "verify the signed-out screen and application token clearance";
+      const state = await page.waitForFunction(expectedOrigin => {
+        if (location.origin !== expectedOrigin || location.pathname !== "/signed-out") return false;
+        if (Array.from(document.querySelectorAll('[role="alert"]')).some(alert =>
+          alert.getClientRects().length > 0 && getComputedStyle(alert).visibility === "visible" &&
+          /identity-provider logout could not be confirmed/i.test(alert.textContent ?? ""))) return "provider-error";
+        const heading = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6,[role='heading']"))
+          .some(element => element.getClientRects().length > 0 && getComputedStyle(element).visibility === "visible" &&
+            /Signed out of the application/i.test(element.textContent ?? ""));
+        return heading && localStorage.getItem("orderprocessing.accessToken") === null ? "cleared" : false;
+      }, origin, { timeout: Math.min(10000, timeoutMs) });
+      outcome = await state.jsonValue() as typeof outcome;
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "TimeoutError";
+      throw new Error(`Entra sign-out verification ${timedOut ? "timed out" : "failed"} while attempting to ${stage}.`);
+    }
+    if (outcome !== "cleared") throw new Error("Entra sign-out verification failed: the application reported that identity-provider logout could not be confirmed.");
   }
 
   private async resolvePaymentConfiguration(
