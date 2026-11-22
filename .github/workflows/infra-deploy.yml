@@ -544,6 +544,10 @@ jobs:
           LOCATION=${{ steps.params.outputs.location }}
           TEMPLATE_FILE="${{ steps.params.outputs.template }}"
           PARAM_FILE="${{ steps.params.outputs.params }}"
+          # Keep What-If's registry-auth shape aligned with the deploy job without
+          # creating or retrieving an ACR token. These placeholders are never deployed.
+          WHAT_IF_ACR_USERNAME='phase10-what-if-only'
+          WHAT_IF_ACR_PASSWORD='not-a-real-acr-credential-phase10-what-if'
           az deployment sub what-if \
             "${IDENTITY_ARGS[@]}" \
             --location "$LOCATION" \
@@ -561,6 +565,8 @@ jobs:
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            --parameters acrRegistryUsername="$WHAT_IF_ACR_USERNAME" \
+            --parameters acrRegistryPassword="$WHAT_IF_ACR_PASSWORD" \
             --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
             --parameters replayDrillRunnerPrincipalType=User \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \

@@ -705,6 +705,14 @@ test('dry-run routes to validation and what-if only, never deployment token crea
   assert.doesNotMatch(dryRunBranch[1], /RUN_DEPLOY="true"|RUN_CLEANUP="true"/);
   assert.match(workflow.jobs.validate.if, /run_validate == 'true'/);
   assert.match(workflow.jobs.deploy.if, /run_deploy == 'true'/);
+  const whatIfStep = workflow.jobs.validate.steps.find((step) => step.name === 'What-If (subscription scope)');
+  assert.ok(whatIfStep, 'dry-run must have a dedicated what-if step');
+  assert.match(whatIfStep.run, /WHAT_IF_ACR_USERNAME='phase10-what-if-only'/);
+  assert.match(whatIfStep.run, /WHAT_IF_ACR_PASSWORD='not-a-real-acr-credential-phase10-what-if'/);
+  assert.match(whatIfStep.run, /--parameters acrRegistryUsername="\$WHAT_IF_ACR_USERNAME"/);
+  assert.match(whatIfStep.run, /--parameters acrRegistryPassword="\$WHAT_IF_ACR_PASSWORD"/);
+  assert.doesNotMatch(whatIfStep.run, /az acr token credential generate|acr_pull_token/,
+    'dry-run must model registry-auth shape without creating or retrieving a real ACR token');
   const deploySteps = workflow.jobs.deploy.steps;
   assert.ok(deploySteps.some((step) => step.id === 'acr_pull_token'), 'ACR scoped-token mutation must be isolated to the deploy job');
   assert.match(orchestrator, /dry-run what-if path using prebuilt immutable release/);
