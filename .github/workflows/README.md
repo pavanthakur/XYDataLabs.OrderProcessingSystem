@@ -34,7 +34,7 @@ Use this rule before removing anything:
 | `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that verifies a separately produced immutable release, then validates/deploys it or performs selected cleanup |
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
-| `04 Phase 10 Azure Payment Matrix` | Validation | Yes, after transport smoke | Runs the all-tenant Azure browser/payment matrix against live Phase 10 Container Apps URLs and uploads one run packet |
+| `04 Phase 10 Azure Payment Matrix` | Validation | Yes, after transport smoke | Dev-only service preflight by default; optional desktop browser/payment handoff or read-only Razorpay lookup |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Do not dispatch for acceptance | Retained workflow; hosted execution cannot satisfy the local Docker safety guard. The accepted check is the manual local Docker hook under DW-028 Option A. |
 | `build-phase10-images.yml` | Release producer | Yes, separately approval-gated | Builds six service images and the Functions package from one exact SHA; publishes a manifest with image digests |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
@@ -53,7 +53,7 @@ Use the numbered workflows in this order:
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Verify a selected release and hosted evidence, then dry-run/deploy it or select cleanup for the Azure Phase 10 environment |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
-| `04` | `04 Phase 10 Azure Payment Matrix` | Prove all-tenant browser/payment E2E against the live Azure Container Apps URLs |
+| `04` | `04 Phase 10 Azure Payment Matrix` | Verify Azure-dev dependencies and provide supervised desktop instructions; hosted jobs do not run the browser or submit payments |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted parity excluded under DW-028 Option A; run the equivalent local Docker hook manually |
 | `ci.yml` | `CI — Build and Contract Validation (No Deployment)` | Hosted build and safe contract validation on branch push, manual dispatch, or PR; no Azure or Docker acceptance |
 
@@ -98,7 +98,7 @@ Before approving any workflow or infrastructure change, ask:
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
 | Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
-| Prove all-tenant Azure browser/payment E2E after runtime and transport are green | `04 Phase 10 Azure Payment Matrix` |
+| Verify Azure-dev payment dependencies and initiate supervised desktop acceptance | `04 Phase 10 Azure Payment Matrix` |
 | Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Clean historical GHCR versions and workflow artifacts; preview ACR inventory | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; manually opt in to a read-only ACR inventory preview. ACR deletion is disabled. |
@@ -113,7 +113,7 @@ Before approving any workflow or infrastructure change, ask:
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
-| `04 Phase 10 Azure Payment Matrix` | Post-transport payment E2E | No | No | No | No | Current validation |
+| `04 Phase 10 Azure Payment Matrix` | Dev service preflight / supervised desktop handoff | No | No | No | No | Current validation |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; equivalent local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |

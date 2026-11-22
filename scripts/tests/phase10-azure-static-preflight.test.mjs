@@ -40,12 +40,11 @@ test('Azure operator checkpoint and launch safety regressions execute in hosted 
 
 test('read-only Razorpay order lookup is sandbox-only and does not route to the payment matrix', async () => {
   const workflow = yaml.load(paymentWorkflowSource);
-  assert.equal(workflow.on.workflow_dispatch.inputs.razorpayOrderLookupOnly.default, false);
   const steps = workflow.jobs.azure_payment_matrix.steps;
-  const matrix = steps.find((step) => step.name === 'Run no-payment service preflight or assigned-provider matrix');
-  assert.equal(matrix.if, 'inputs.razorpayOrderLookupOnly != true');
+  const matrix = steps.find((step) => step.name === 'Run no-payment service preflight');
+  assert.equal(matrix.if, "inputs.runMode == 'service-preflight'");
   const lookup = steps.find((step) => step.name === 'Read existing Razorpay order and payments (no charge)');
-  assert.equal(lookup.if, 'inputs.razorpayOrderLookupOnly == true');
+  assert.equal(lookup.if, "inputs.runMode == 'razorpay-order-lookup'");
   assert.match(lookup.run, /lookup-phase10-azure-razorpay-order\.ps1/);
   assert.doesNotMatch(lookup.run, /ProcessPayment|capture|refund|--value/);
   const core = await readFile(new URL('../phase10-razorpay-order-lookup-core.ps1', import.meta.url), 'utf8');
@@ -242,9 +241,15 @@ test('Azure payment workflow runs service-access preflight before the browser pa
 test('hosted service-preflight-only mode is dev-only and cannot reach payment automation', () => {
   const preflightGuard = matrixRunnerSource.indexOf('if (options.servicePreflightOnly) {');
   const paymentExecution = matrixRunnerSource.indexOf('executePaymentAutomationRun({');
-  assert.match(paymentWorkflowSource, /servicePreflightOnly:[\s\S]*?default: false/);
+  const workflow = yaml.load(paymentWorkflowSource);
+  assert.equal(workflow.on.workflow_dispatch.inputs.runMode.default, 'service-preflight');
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.environment.options, ['dev']);
+  const steps = workflow.jobs.azure_payment_matrix.steps;
+  assert.match(steps.find(step => step.name === 'Run no-payment service preflight').run, /--service-preflight-only\s*\n/);
+  assert.doesNotMatch(paymentWorkflowSource, /playwright install|--skip-verification|--operator-assisted-entra/);
   assert.match(paymentWorkflowSource, /temporary SQL firewall lease/);
-  assert.ok(paymentWorkflowSource.includes('if [ "${{ inputs.servicePreflightOnly }}" = "true" ] && [ "${{ inputs.environment }}" != "dev" ]'));
+  assert.match(steps.find(step => step.name === 'Validate hosted Azure-dev run selection').run, /requires branch dev and environment dev/);
+  assert.equal(steps.find(step => step.name === 'Ensure payment verifier firewall leases are cleaned').if, "always() && steps.azure_login.outcome == 'success'");
   assert.ok(preflightGuard >= 0 && paymentExecution > preflightGuard, 'service-only mode must continue past the target without invoking browser payment automation');
   assert.match(matrixRunnerSource, /--service-preflight-only/);
   assert.match(matrixRunnerSource, /runId: process\.env\.GITHUB_RUN_ID \?\? matrixRunId/);
@@ -646,11 +651,43 @@ test('Azure replay SQL evidence is read-only, tenant/database-routed, bounded, a
   assert.doesNotMatch(replaySqlVerifierSource, /-NonQuery/);
 });
 
-test('Azure payment matrix uses a Playwright-supported hosted runner image', async () => {
-  const workflow = await readFile('.github/workflows/phase10-azure-payment-matrix.yml', 'utf8');
-  const parsed = yaml.load(workflow, { schema: yaml.JSON_SCHEMA, maxAliasCount: 0 });
-  assert.equal(parsed.jobs.azure_payment_matrix['runs-on'], 'ubuntu-24.04');
-  assert.match(workflow, /Playwright's pinned Chromium build does not yet support Ubuntu 26 runners\./);
+test('workflow 04 sends supervised modes only to an unprivileged desktop handoff', async () => {
+  const workflow = yaml.load(paymentWorkflowSource);
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.runMode.options,
+    ['service-preflight', 'supervised-browser-auth', 'supervised-sandbox-payments', 'razorpay-order-lookup']);
+  const hosted = workflow.jobs.azure_payment_matrix;
+  const handoff = workflow.jobs.supervised_browser_handoff;
+  assert.equal(hosted.if, "inputs.runMode != 'supervised-browser-auth' && inputs.runMode != 'supervised-sandbox-payments'");
+  assert.equal(handoff.if, "inputs.runMode == 'supervised-browser-auth' || inputs.runMode == 'supervised-sandbox-payments'");
+  assert.deepEqual(handoff.permissions, {});
+  assert.equal(handoff.environment, undefined);
+  assert.equal(handoff.steps.length, 1);
+  assert.equal(handoff.steps[0].uses, undefined);
+  assert.match(handoff.steps[0].run, /Awaiting supervised evidence — browser and payments NOT RUN/);
+  assert.match(handoff.steps[0].run, /'AuthPreflight' \} else \{ 'ProviderMatrix'/);
+  assert.match(handoff.steps[0].run, /Selecting this mode is not that approval/);
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'phase10-browser-handoff-'));
+  try {
+    const script = path.join(fixture, 'handoff.ps1');
+    const summary = path.join(fixture, 'summary.md');
+    await writeFile(script, handoff.steps[0].run, 'utf8');
+    const invoke = (overrides) => execFileSync('pwsh', ['-NoProfile', '-File', script], {
+      stdio: 'pipe', env: { ...process.env, GITHUB_REF: 'refs/heads/dev', GITHUB_SHA: 'candidate-sha',
+        GITHUB_STEP_SUMMARY: summary, TARGET_ENVIRONMENT: 'dev', RUN_MODE: 'supervised-browser-auth',
+        LOOKUP_TENANT: '', LOOKUP_ORDER: '', LOOKUP_AMOUNT: '0', ...overrides },
+    });
+    assert.throws(() => invoke({ GITHUB_REF: 'refs/heads/staging' }), /requires branch dev/);
+    assert.throws(() => invoke({ LOOKUP_AMOUNT: '1' }), /Lookup parameters are not allowed/);
+    assert.equal(existsSync(summary), false);
+    invoke({});
+    assert.match(await readFile(summary, 'utf8'), /-Mode AuthPreflight/);
+    invoke({ RUN_MODE: 'supervised-sandbox-payments' });
+    const evidence = await readFile(summary, 'utf8');
+    assert.match(evidence, /-Mode ProviderMatrix/);
+    assert.match(evidence, /workflow SHA candidate-sha/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });
 
 test('operator-assisted Azure Entra mode fails closed before mutations and is dev-only', async () => {

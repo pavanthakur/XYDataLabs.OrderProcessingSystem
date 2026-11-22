@@ -4,34 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: 'Target environment (workflow 04 is dev-only)'
         required: true
         default: 'dev'
         type: choice
         options:
           - dev
-          - staging
-          - prod
-      tenantTimeoutMs:
-        description: 'Per-tenant timeout in milliseconds'
+      runMode:
+        description: 'Dev-only. Default service preflight may use a temporary SQL firewall lease; supervised modes print desktop instructions only.'
         required: true
-        default: 180000
-        type: number
-      skipVerification:
-        description: 'Skip App Insights and Azure SQL verification after browser flow'
-        required: true
-        default: false
-        type: boolean
-      servicePreflightOnly:
-        description: 'No-payment dev dependency preflight; may create and remove a temporary SQL firewall lease; no browser/orders/payments'
-        required: true
-        default: false
-        type: boolean
-      razorpayOrderLookupOnly:
-        description: 'Dev-only read-only provider order/payments lookup; no browser, charge, capture or SQL mutation'
-        required: true
-        default: false
-        type: boolean
+        default: service-preflight
+        type: choice
+        options:
+          - service-preflight
+          - supervised-browser-auth
+          - supervised-sandbox-payments
+          - razorpay-order-lookup
       lookupTenantCode:
         description: 'Exact tenant for diagnostic-only provider secret alias'
         required: false
@@ -48,7 +36,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: phase10-azure-${{ inputs.environment }}
@@ -56,11 +43,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  azure_payment_matrix:
-    name: ${{ inputs.razorpayOrderLookupOnly && '04 Phase 10 Read-Only Provider Lookup' || inputs.servicePreflightOnly && '04 Phase 10 Azure Service Preflight' || '04 Phase 10 Azure Payment Matrix' }}
-    # Playwright's pinned Chromium build does not yet support Ubuntu 26 runners.
-    # Keep the browser-dependent acceptance job on the supported 24.04 image.
+  supervised_browser_handoff:
+    if: inputs.runMode == 'supervised-browser-auth' || inputs.runMode == 'supervised-sandbox-payments'
+    name: 'Desktop browser handoff (awaiting evidence)'
     runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Print supervised Azure-dev instructions (no browser or payments run here)
+        shell: pwsh
+        env:
+          RUN_MODE: ${{ inputs.runMode }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
+          LOOKUP_ORDER: ${{ inputs.lookupOrderId }}
+          LOOKUP_AMOUNT: ${{ inputs.lookupAmountMinor }}
+        run: |
+          if ($env:TARGET_ENVIRONMENT -ne 'dev' -or $env:GITHUB_REF -ne 'refs/heads/dev') { throw 'Browser handoff requires branch dev and environment dev.' }
+          if ($env:LOOKUP_TENANT -or $env:LOOKUP_ORDER -or [long]$env:LOOKUP_AMOUNT -ne 0) { throw 'Lookup parameters are not allowed in supervised modes.' }
+          $desktopMode = if ($env:RUN_MODE -eq 'supervised-browser-auth') { 'AuthPreflight' } else { 'ProviderMatrix' }
+          @(
+            '## Awaiting supervised evidence — browser and payments NOT RUN'
+            "Use a clean desktop checkout of workflow SHA $env:GITHUB_SHA (handoff run $env:GITHUB_RUN_ID)."
+            'First verify a passing service-preflight packet for the same candidate and deployment. Replace the subscription placeholder with the approved dev subscription ID.'
+            'ProviderMatrix requires separate approval to create sandbox transactions. Selecting this mode is not that approval.'
+            ''
+            '```powershell'
+            "pwsh -NoProfile -File scripts/run-phase10-azure-dev-operator-matrix.ps1 -Mode $desktopMode -ExpectedSubscriptionId '<approved-dev-subscription-id>'"
+            '```'
+            ''
+            'Complete normal Entra sign-in on your desktop. Record the sanitized result with this run ID, source SHA, and tested deployment identity. A successful handoff is not acceptance.'
+          ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+  azure_payment_matrix:
+    if: inputs.runMode != 'supervised-browser-auth' && inputs.runMode != 'supervised-sandbox-payments'
+    name: ${{ inputs.runMode == 'razorpay-order-lookup' && '04 Phase 10 Read-Only Provider Lookup' || '04 Phase 10 Azure Service Preflight' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
     environment: ${{ inputs.environment }}
     timeout-minutes: 60
     steps:
@@ -68,23 +88,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate read-only provider diagnostic selection
+      - name: Validate hosted Azure-dev run selection
         shell: pwsh
         env:
-          LOOKUP_ONLY: ${{ inputs.razorpayOrderLookupOnly }}
-          SERVICE_ONLY: ${{ inputs.servicePreflightOnly }}
+          RUN_MODE: ${{ inputs.runMode }}
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
           LOOKUP_ORDER: ${{ inputs.lookupOrderId }}
           LOOKUP_AMOUNT: ${{ inputs.lookupAmountMinor }}
         run: |
-          if ($env:LOOKUP_ONLY -eq 'true') {
-            if ($env:TARGET_ENVIRONMENT -ne 'dev' -or $env:GITHUB_REF -ne 'refs/heads/dev' -or $env:SERVICE_ONLY -eq 'true') { throw 'Order lookup is dev-branch/dev-environment only and cannot combine with service-preflight mode.' }
+          if ($env:TARGET_ENVIRONMENT -ne 'dev' -or $env:GITHUB_REF -ne 'refs/heads/dev') { throw 'Hosted workflow 04 requires branch dev and environment dev.' }
+          if ($env:RUN_MODE -notin @('service-preflight','razorpay-order-lookup')) { throw 'Unknown hosted run mode.' }
+          if ($env:RUN_MODE -eq 'razorpay-order-lookup') {
             if ($env:LOOKUP_TENANT -cnotmatch '^[A-Za-z0-9_-]{1,64}$' -or $env:LOOKUP_ORDER -cnotmatch '^order_[A-Za-z0-9]{1,80}$' -or [long]$env:LOOKUP_AMOUNT -le 0) { throw 'Invalid read-only lookup parameters.' }
           }
           elseif ($env:LOOKUP_TENANT -or $env:LOOKUP_ORDER -or [long]$env:LOOKUP_AMOUNT -ne 0) { throw 'Lookup parameters require explicit diagnostic-only selection.' }
 
       - name: Azure CLI Login (OIDC)
+        id: azure_login
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -108,10 +129,6 @@ jobs:
             TARGET_KEY="azure-dev"
           fi
 
-          if [ "${{ inputs.servicePreflightOnly }}" = "true" ] && [ "${{ inputs.environment }}" != "dev" ]; then
-            echo "Service-preflight-only mode is restricted to Azure dev." >&2
-            exit 1
-          fi
 
           TARGET_JSON="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc = require("./automation/config/runtime-targets.json"); const target = doc.targets.find((item) => item.key === process.env.TARGET_KEY); if (!target) { throw new Error(`Unknown runtime target ${process.env.TARGET_KEY}`); } process.stdout.write(JSON.stringify(target));')"
           read_target_field() {
@@ -276,13 +293,8 @@ jobs:
         working-directory: automation
         run: npm ci
 
-      - name: Install Playwright browser
-        working-directory: automation
-        if: inputs.servicePreflightOnly != true && inputs.razorpayOrderLookupOnly != true
-        run: npx playwright install chromium
-
-      - name: Run no-payment service preflight or assigned-provider matrix
-        if: inputs.razorpayOrderLookupOnly != true
+      - name: Run no-payment service preflight
+        if: inputs.runMode == 'service-preflight'
         shell: bash
         env:
           PHASE10_FIREWALL_RUN_ID: ${{ github.run_id }}
@@ -299,21 +311,13 @@ jobs:
           XYDATALABS_AZURE_RESOURCE_GROUP_NAME: ${{ steps.topology.outputs.resourceGroup }}
           EXPECTED_AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
         run: |
-          EXTRA_ARGS=()
-          if [ "${{ inputs.skipVerification }}" = "true" ]; then
-            EXTRA_ARGS+=("--skip-verification")
-          fi
-          if [ "${{ inputs.servicePreflightOnly }}" = "true" ]; then
-            EXTRA_ARGS+=("--service-preflight-only")
-          fi
-
           npm --prefix automation run run:azure:matrix -- \
             --target "${{ steps.topology.outputs.targetKey }}" \
-            --tenant-timeout-ms "${{ inputs.tenantTimeoutMs }}" \
-            "${EXTRA_ARGS[@]}"
+            --service-preflight-only
+          echo 'Browser and sandbox payments: NOT RUN (service preflight only).' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Read existing Razorpay order and payments (no charge)
-        if: inputs.razorpayOrderLookupOnly == true
+        if: inputs.runMode == 'razorpay-order-lookup'
         shell: pwsh
         env:
           LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
@@ -385,7 +389,7 @@ jobs:
           }
 
       - name: Ensure payment verifier firewall leases are cleaned
-        if: always()
+        if: always() && steps.azure_login.outcome == 'success'
         shell: pwsh
         run: |
           & pwsh -NoProfile -File scripts/cleanup-phase10-azure-firewall-lease.ps1 `
@@ -397,7 +401,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: phase10-azure-${{ inputs.razorpayOrderLookupOnly && 'provider-lookup' || inputs.servicePreflightOnly && 'service-preflight' || 'payment-matrix' }}-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: phase10-azure-${{ inputs.runMode == 'razorpay-order-lookup' && 'provider-lookup' || 'service-preflight' }}-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             TestResults/Playwright/azure-https/**
             ${{ runner.temp }}/phase10-sql-firewall-lease-payment-${{ github.run_id }}-*.json

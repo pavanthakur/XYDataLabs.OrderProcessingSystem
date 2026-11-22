@@ -145,7 +145,7 @@ After local pre-Azure validation reaches L6 on the target commit SHA, use this p
 | 3 | `01 Phase 10 Azure Deploy Orchestrator` | Required Azure deploy entrypoint for dry run, deploy, or intentional cleanup. |
 | 4 | `02 Phase 10 Azure Runtime Smoke` | Required immediately after a successful deploy. |
 | 5 | `03 Phase 10 Azure Transport Smoke` | Required after runtime smoke passes. |
-| 6 | `04 Phase 10 Azure Payment Matrix` | Final Azure business/browser/payment gate after runtime and transport pass. |
+| 6 | `04 Phase 10 Azure Payment Matrix` | Azure-dev hosted service preflight, followed by separate supervised desktop browser/payment evidence. |
 
 Promotion rules:
 
@@ -156,9 +156,16 @@ Promotion rules:
 
 #### Operator-assisted Entra payment run (Azure dev only)
 
-Hosted workflow `04` remains the assigned-provider acceptance path; it does not switch tenants to alternate providers. Its dev service-preflight mode now checks both Razorpay and OpenPay Key Vault aliases for every active tenant. The interactive all-tenant/both-provider run is a separate local, headed operator workflow because GitHub-hosted headless runners cannot complete delegated Entra MFA. It reuses one in-memory browser session for the entire run; no credentials or browser state are saved.
+Workflow `04` is manual and dev-only. Select branch `dev` and environment `dev`. Use the `runMode` dropdown:
 
-Before any order or payment, run hosted workflow `04` with `environment=dev` and `servicePreflightOnly=true` on the candidate commit. This validates cloud dependencies and both provider secret aliases using workflow OIDC. A successful service preflight is not payment acceptance. Then, from the repository root, run:
+- `service-preflight` (default): hosted OIDC dependency check, including both Razorpay and OpenPay Key Vault aliases for every active tenant. It may open a temporary SQL firewall lease and verifies cleanup. Browser and payments are **NOT RUN**.
+- `supervised-browser-auth`: prints the desktop `AuthPreflight` command for Entra sign-in, tenant switching and sign-out. No payment.
+- `supervised-sandbox-payments`: prints the desktop `ProviderMatrix` command. Obtain separate approval before creating sandbox transactions.
+- `razorpay-order-lookup`: read-only investigation of an existing sandbox order; see below.
+
+The supervised selections only write a GitHub job summary; they do not open a browser, use Azure credentials, or accept evidence automatically. Open the **Desktop browser handoff** job summary, use the recorded candidate SHA on a clean desktop checkout, and record the sanitized desktop result with the workflow run ID and tested deployment identity. A green handoff means **awaiting supervised evidence**, not browser or payment PASS. Ensure no conflicting deploy, transport, or payment operation is running; the Actions job does not hold a lock for the desktop run.
+
+Before any order or payment, confirm the hosted service preflight passed on the candidate and deployment being tested. With separate sandbox approval, run from the repository root:
 
 ```powershell
 $expectedSubscriptionId = '<the explicitly approved Azure-dev subscription GUID>'
@@ -190,15 +197,14 @@ For a standalone no-charge browser authorization diagnosis, use `-Mode AuthPrefl
 
 ##### Read-only Razorpay order investigation (workflow 04, dev only)
 
-An interrupted checkout can have a Razorpay `order_*` reference without a `pay_*` payment ID. The application status adapter accepts payment IDs only; do not feed it an order ID, fabricate a callback/signature or retry the charge to get a payment ID. Workflow `04` has an explicit `razorpayOrderLookupOnly` diagnostic selection, off by default. It is restricted to branch/environment `dev`, is mutually exclusive with service-preflight-only mode, and skips browser installation and the payment matrix. Existing topology/resource preflights and OIDC permissions remain intact; no new principal, role assignment or local-user Key Vault access is introduced.
+An interrupted checkout can have a Razorpay `order_*` reference without a `pay_*` payment ID. The application status adapter accepts payment IDs only; do not feed it an order ID, fabricate a callback/signature or retry the charge to get a payment ID. Select workflow `04` mode `razorpay-order-lookup` explicitly. It is dev-only and runs neither a browser nor the payment matrix. Existing topology/resource preflights and OIDC permissions remain intact; no new principal, role assignment or local-user Key Vault access is introduced.
 
 After the reviewed workflow changes are committed/pushed with authorization, select these inputs:
 
 | Input | Existing TenantB investigation |
 |---|---|
 | Branch / environment | `dev` / `dev` |
-| `razorpayOrderLookupOnly` | `true` |
-| `servicePreflightOnly` | `false` |
+| `runMode` | `razorpay-order-lookup` |
 | `lookupTenantCode` | `TenantB` |
 | `lookupOrderId` | `order_U044q4vHIUIQhZ` |
 | `lookupAmountMinor` | `20000` (INR 200 in paise) |
@@ -259,7 +265,7 @@ These are the numbered Phase 10 workflows and their responsibilities:
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Azure deploy, dry run, or cleanup |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Runtime proof for gateway, API routing, and UI after deploy |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Transport proof for Service Bus publish, consume, DLQ, and replay |
-| `04` | `04 Phase 10 Azure Payment Matrix` | All-tenant browser/payment E2E proof against the live Azure Container Apps URLs |
+| `04` | `04 Phase 10 Azure Payment Matrix` | Azure-dev service preflight and supervised desktop handoff |
 
 ### Latest Dev Evidence Snapshot
 
@@ -285,7 +291,7 @@ Rule of thumb:
 - Run `01` when you want to deploy Azure resources. Use the same workflow in cleanup mode only when intentionally removing or resetting an environment.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
-- Run `04` after `03` passes when you want the Azure equivalent of the local all-tenant Docker payment matrix.
+- Run `04` after `03` passes for the Azure-dev service gate; collect browser/payment evidence separately from the supervised desktop run.
 - Workflow `99` is not an accepted hosted check under DW-028 Option A because its safety guard requires local Docker Desktop. Run the local hook on the Docker Desktop host; do not weaken the guard to make a hosted run pass.
 
 Runtime smoke backend-route guardrail:
@@ -320,8 +326,8 @@ Use the same gate order in all environments; the local Docker acceptance is a pr
 4. `01 Phase 10 Azure Deploy Orchestrator` real deploy
 5. `02 Phase 10 Azure Runtime Smoke`
 6. `03 Phase 10 Azure Transport Smoke`
-7. For Azure dev, run workflow `04` once with `servicePreflightOnly = true`; this validates the hosted OIDC identity, Key Vault secret reads, App Insights Logs access, SQL read access/topology and firewall-lease cleanup without launching browser automation or creating orders/payments.
-8. Run workflow `04` with `servicePreflightOnly = false` only after the no-charge preflight packet passes. This is the payment-mutating browser matrix and requires separate approval.
+7. For Azure dev, run workflow `04` with `runMode=service-preflight`. It validates hosted OIDC access, Key Vault, App Insights, SQL/topology and firewall-lease cleanup without running a browser or creating orders/payments.
+8. Select the appropriate supervised desktop handoff if browser evidence is required. Obtain separate approval for the payment matrix; the handoff does not run it.
 
 Resource-name note:
 
@@ -386,18 +392,10 @@ Run this after local pre-Azure L6 is green on the target commit SHA.
      - notifications consume pass
      - DLQ forward pass
      - replay pass
-7. Run `04 Phase 10 Azure Payment Matrix` with `servicePreflightOnly = true`.
+7. Run `04 Phase 10 Azure Payment Matrix` with `runMode=service-preflight` (default).
    - Use this dev-only run to verify GitHub OIDC Key Vault access and read-only App Insights/SQL/topology access before browser automation. It must end with `preflight-passed`, write JSON/Markdown evidence, and show no target payment journeys.
    - If it fails, stop. Do not grant the signed-in operator broad Key Vault access as a workaround; correct the GitHub environment identity's least-privilege access and rerun this no-charge preflight.
-8. After the no-charge preflight passes and a separate payment-test approval is in place, run `04 Phase 10 Azure Payment Matrix` with `servicePreflightOnly = false`.
-   - Inputs:
-     - `environment = dev`
-     - `tenantTimeoutMs = 180000`
-     - `skipVerification = false`
-   - Expected:
-     - all discovered tenants covered
-     - provider flows covered per current config
-     - SQL and verification checks included
+8. After the no-charge preflight passes, use `supervised-browser-auth` for standalone identity checks or `supervised-sandbox-payments` for the desktop matrix. With separate payment approval, verify every active tenant and both providers, SQL/provider correlation, and restoration in the desktop packet.
 
 #### Staging Checklist
 
@@ -434,11 +432,7 @@ Use this after `dev` is green and you want the same release candidate validated 
 6. Run `03 Phase 10 Azure Transport Smoke`.
    - Input:
      - `environment = staging`
-7. Run `04 Phase 10 Azure Payment Matrix`.
-   - Inputs:
-     - `environment = staging`
-     - `tenantTimeoutMs = 180000`
-     - `skipVerification = false`
+7. Workflow `04` is dev-only. Staging payment acceptance is **NOT RUN** until an environment-specific procedure is reviewed and approved; do not substitute a dev result.
 
 #### Prod Checklist
 
@@ -471,11 +465,7 @@ Use this only after `staging` is green and the production change is approved.
 6. Run `03 Phase 10 Azure Transport Smoke`.
    - Input:
      - `environment = prod`
-7. Run `04 Phase 10 Azure Payment Matrix`.
-   - Inputs:
-     - `environment = prod`
-     - `tenantTimeoutMs = 180000`
-     - `skipVerification = false`
+7. Workflow `04` is dev-only. Production payment acceptance is **NOT RUN** until an environment-specific procedure is reviewed and approved; do not substitute a dev result.
    - Run this only during approved production validation.
 
 Stop rules for all environments:
@@ -514,7 +504,7 @@ Historical 2026-07 dev runs above used the then-configured custom-domain policy.
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
-| `04 Phase 10 Azure Payment Matrix` | Post-transport payment E2E | No | No | No | No | Current validation |
+| `04 Phase 10 Azure Payment Matrix` | Dev service preflight / supervised desktop handoff | No | No | No | No | Current validation |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
