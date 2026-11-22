@@ -23,6 +23,7 @@ if (-not $ConfirmFirewallLease) {
 if ($TenantCode -notmatch '^[A-Za-z0-9_-]{1,64}$' -or $CorrelationId.Length -gt 128 -or [string]::IsNullOrWhiteSpace($CorrelationId)) {
     throw 'Tenant or correlation identifier is invalid.'
 }
+$requestedTenantCode = $TenantCode
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixtureLibrary = Join-Path $PSScriptRoot 'phase10-azure-payment-test-state.ps1'
@@ -31,7 +32,9 @@ $script:LeaseOpenedForReplayVerification = $false
 $script:FirewallLeaseRestored = $false
 $script:FirewallCleanupFailureType = $null
 $script:VerificationFailure = $null
+$script:VerificationFailureStage = $null
 $script:VerificationSnapshot = $null
+$script:VerificationStage = 'preflight'
 
 function Get-ReplayOperationsSnapshot {
     param(
@@ -39,6 +42,7 @@ function Get-ReplayOperationsSnapshot {
         [Parameter(Mandatory)][int]$TenantId
     )
 
+    $script:VerificationStage = 'query-quarantine-sql'
     $rows = @(Invoke-AzureFixtureSql -Database $Database -Query @'
 SELECT
     q.Id AS QuarantineId,
@@ -59,20 +63,27 @@ LEFT JOIN operations.DlqReplayRequests AS r ON r.QuarantineId = q.Id
 WHERE q.Id = @quarantineId;
 '@ -Parameters @{ quarantineId = $QuarantineId.ToString('D') })
 
-    if ($rows.Count -eq 0) { return $null }
+    if ($rows.Count -eq 0) { $script:VerificationStage = 'quarantine-row-not-visible'; return $null }
+    $script:VerificationStage = 'validate-quarantine-tenant'
     if ($rows.Count -ne 1) { throw 'Replay query returned a non-unique quarantine record.' }
     $row = $rows[0]
     if ([int]$row.TenantId -ne $TenantId) { throw 'Quarantine tenant does not match the active registry tenant.' }
+    $script:VerificationStage = 'validate-quarantine-source'
     if ([string]$row.SourceMessageId -ne $SourceMessageId.ToString('D')) { throw 'Quarantine source message does not match the requested test envelope.' }
+    $script:VerificationStage = 'validate-quarantine-correlation'
     if ([string]$row.CorrelationId -ne $CorrelationId) { throw 'Quarantine correlation ID does not match the requested test envelope.' }
+    $script:VerificationStage = 'validate-quarantine-replay-request'
     if ($null -ne $row.ReplayRequestId -and [string]$row.ReplayRequestId -ne $ReplayRequestId.ToString('D')) { throw 'Quarantine is linked to a different replay request.' }
-    if ($null -ne $row.ApprovedUtc -and [Math]::Abs(([DateTime]$row.ApprovedUtc).ToUniversalTime().Subtract($ApprovedUtc.UtcDateTime).TotalMilliseconds) -gt 1000) { throw 'Persisted approval time does not match the protected API response.' }
+    $script:VerificationStage = 'validate-quarantine-approval-time'
+    $persistedApprovedUtc = if ($null -eq $row.ApprovedUtc -or $row.ApprovedUtc -is [DBNull]) { $null } else { Convert-SqlUtcDateTime -Value $row.ApprovedUtc }
+    if ($null -ne $persistedApprovedUtc -and [Math]::Abs($persistedApprovedUtc.Subtract($ApprovedUtc.UtcDateTime).TotalMilliseconds) -gt 1000) { throw 'Persisted approval time does not match the protected API response.' }
     return $row
 }
 
 function Get-ReplayBusinessEffects {
     param([Parameter(Mandatory)][string]$Database, [Parameter(Mandatory)][int]$TenantId)
 
+    $script:VerificationStage = 'query-replay-effects-sql'
     $rows = @(Invoke-AzureFixtureSql -Database $Database -Query @'
 SELECT
     COALESCE((SELECT COUNT_BIG(*) FROM operations.ConsumerInboxMessages WHERE CorrelationId = @correlationId AND TenantId = @tenantId AND ConsumerName = N'Inventory'), 0) AS InventoryInboxCount,
@@ -87,7 +98,7 @@ SELECT
       + COALESCE((SELECT COUNT_BIG(*) FROM inventory.InventoryReservations WHERE CorrelationId = @correlationId AND TenantId <> @tenantId), 0)
       + COALESCE((SELECT COUNT_BIG(*) FROM notifications.NotificationDeliveries WHERE CorrelationId = @correlationId AND TenantId <> @tenantId), 0) AS OtherTenantEffectCount;
 '@ -Parameters @{ correlationId = $CorrelationId; tenantId = [string]$TenantId })
-    if ($rows.Count -ne 1) { throw 'Business-effect query did not return exactly one aggregate row.' }
+    if ($rows.Count -ne 1) { $script:VerificationStage = 'replay-effects-row-count'; throw 'Business-effect query did not return exactly one aggregate row.' }
     return $rows[0]
 }
 
@@ -123,32 +134,46 @@ SELECT Id AS TenantId, Code AS TenantCode FROM dbo.Tenants WHERE Code = @code;
 function Convert-ReplayTimestamp {
     param($Value)
     if ($null -eq $Value -or $Value -is [DBNull]) { return $null }
-    return ([DateTime]$Value).ToUniversalTime().ToString('o')
+    return (Convert-SqlUtcDateTime -Value $Value).ToString('o')
+}
+
+function Convert-SqlUtcDateTime {
+    param([Parameter(Mandatory)]$Value)
+    $timestamp = [DateTime]$Value
+    if ($timestamp.Kind -eq [DateTimeKind]::Unspecified) {
+        return [DateTime]::SpecifyKind($timestamp, [DateTimeKind]::Utc)
+    }
+    return $timestamp.ToUniversalTime()
 }
 
 try {
     if ($Environment -ne 'dev') { throw 'Only Azure dev is supported.' }
+    $script:VerificationStage = 'initialize-sql-and-topology'
     Initialize-AzureFixtureSql
     Initialize-AzureFixtureTopology
     $target = Get-AzureFixtureTarget
+    $script:VerificationStage = 'open-firewall-lease'
     Open-AzureFixtureFirewall
     $script:LeaseOpenedForReplayVerification = $true
 
-    $tenant = Resolve-ReplayTenantDatabase -Code $TenantCode
+    $script:VerificationStage = 'resolve-tenant-database'
+    $tenant = Resolve-ReplayTenantDatabase -Code $requestedTenantCode
     $tenantId = [int]$tenant.tenantId
     $operationsDatabase = [string]$target.azureOperationsDatabaseName
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
     $lastSnapshot = $null
 
     while ([DateTimeOffset]::UtcNow -lt $deadline) {
+        $script:VerificationStage = 'read-quarantine-and-replay-request'
         $operation = Get-ReplayOperationsSnapshot -Database $operationsDatabase -TenantId $tenantId
         if ($null -ne $operation) {
             if ([string]$operation.ReplayRequestId -and [string]$operation.ReplayRequestId -ne $ReplayRequestId.ToString('D')) {
                 throw 'The quarantine is associated with another replay request; refusing to infer a matching replay.'
             }
+            $script:VerificationStage = 'read-downstream-effects'
             $effects = Get-ReplayBusinessEffects -Database ([string]$tenant.businessDatabase) -TenantId $tenantId
             $lastSnapshot = [ordered]@{
-                tenantCode = $TenantCode
+                tenantCode = $requestedTenantCode
                 correlationId = $CorrelationId
                 quarantine = [ordered]@{
                     id = [string]$operation.QuarantineId
@@ -186,6 +211,7 @@ try {
                 -and $lastSnapshot.effects.notificationDeliveryCount -ge 1
             if ($processingRecorded) { break }
         }
+        $script:VerificationStage = 'wait-for-replay-effects'
         Start-Sleep -Seconds ([Math]::Min($PollIntervalSeconds, [Math]::Max(1, ($deadline - [DateTimeOffset]::UtcNow).TotalSeconds)))
     }
 
@@ -195,8 +221,10 @@ catch {
     # Do not serialize provider/SQL/Azure exception text, which may include sensitive values.
     $failureType = $_.Exception.GetType().Name
     $script:VerificationFailure = $failureType
+    $script:VerificationFailureStage = $script:VerificationStage
 }
 finally {
+    $script:VerificationStage = 'restore-firewall-lease'
     if ($script:LeaseOpenedForReplayVerification) {
         try { Close-AzureFixtureFirewall; $script:FirewallLeaseRestored = $true }
         catch { $script:FirewallLeaseRestored = $false; $script:FirewallCleanupFailureType = $_.Exception.GetType().Name }
@@ -208,7 +236,7 @@ $result = [ordered]@{
     environment = 'dev'
     status = if ($null -ne $script:VerificationSnapshot -and $null -eq $script:VerificationFailure -and $script:FirewallLeaseRestored) { 'SNAPSHOT_READY_FOR_VALIDATION' } else { 'INCOMPLETE' }
     expected = [ordered]@{
-        tenantCode = $TenantCode
+        tenantCode = $requestedTenantCode
         quarantineId = $QuarantineId.ToString('D')
         replayRequestId = $ReplayRequestId.ToString('D')
         sourceMessageId = $SourceMessageId.ToString('D')
@@ -217,6 +245,7 @@ $result = [ordered]@{
     }
     snapshot = $script:VerificationSnapshot
     failureType = $script:VerificationFailure
+    failureStage = $script:VerificationFailureStage
     firewallLeaseRestored = $script:FirewallLeaseRestored
     firewallCleanupFailureType = $script:FirewallCleanupFailureType
     completedUtc = [DateTime]::UtcNow.ToString('o')

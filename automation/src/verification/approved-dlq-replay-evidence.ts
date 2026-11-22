@@ -95,7 +95,7 @@ export function validateApprovedReplayEvidence(
     snapshot.effects.notificationAcceptedUtc
   ].map(validTimestamp);
   if (effectTimes.some(value => value === undefined)) findings.push("One or more downstream durable effects lack valid timestamps.");
-  if (processedMs !== undefined && effectTimes.some(value => value !== undefined && value < processedMs)) findings.push("A downstream effect predates Functions replay processing.");
+  if (publishedMs !== undefined && effectTimes.some(value => value !== undefined && value < publishedMs)) findings.push("A downstream effect predates replay publication.");
   if (approvalResponseMs !== undefined && effectTimes.every((value): value is number => value !== undefined)
       && Math.max(...effectTimes) - approvalResponseMs > 60_000) findings.push("Replay downstream effects exceeded the 60-second visibility target.");
 

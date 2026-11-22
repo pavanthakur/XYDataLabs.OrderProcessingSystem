@@ -51,6 +51,22 @@ test("accepts only a matching approved replay with one tenant-scoped durable eff
   assert.deepEqual(validateApprovedReplayEvidence(request, passing), []);
 });
 
+test("accepts downstream effects completed after publication but before the Functions request completion marker", () => {
+  const snapshot = structuredClone(passing);
+  snapshot.effects.inventoryInboxProcessedUtc = "2026-11-16T10:00:10.000Z";
+  snapshot.effects.notificationsInboxProcessedUtc = "2026-11-16T10:00:11.000Z";
+  snapshot.effects.inventoryReservedUtc = "2026-11-16T10:00:10.000Z";
+  snapshot.effects.notificationAcceptedUtc = "2026-11-16T10:00:11.000Z";
+  assert.deepEqual(validateApprovedReplayEvidence(request, snapshot), []);
+});
+
+test("rejects a downstream effect recorded before replay publication", () => {
+  const snapshot = structuredClone(passing);
+  snapshot.effects.inventoryInboxProcessedUtc = "2026-11-16T10:00:04.000Z";
+  const findings = validateApprovedReplayEvidence(request, snapshot);
+  assert.ok(findings.some(item => item.includes("predates replay publication")));
+});
+
 test("polls read-only processing evidence to completion without resubmitting approval", async () => {
   let now = Date.parse("2026-11-16T10:00:06.000Z");
   let reads = 0;

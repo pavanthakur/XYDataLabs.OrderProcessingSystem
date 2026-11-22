@@ -748,6 +748,14 @@ The next useful Phase 10 change sets should produce:
 - updated evidence pointers and exception manifest entries where applicable
 - no new undocumented temporary dependency or fallback path
 
+### Azure-dev completion follow-up — 23 November 2026
+
+- Candidate application source remains `e5c40fbe6bbe91bd5a3a7b763e8fc218a23e3fd0`. Hosted checks and immutable release build passed (`45066710757`, `45066710721`, `45067365380`); deploy orchestrator `45067679429`, runtime smoke `45068970780`, transport smoke `45069084216`, and workflow 04 service preflight `45072102164` passed on this candidate. Workflow 04 service preflight was no-charge only; it is not browser/payment acceptance.
+- Transport verification included service-bus fan-out, Inventory and Notifications effects, and Azure Functions DLQ intake. A one-time TenantA replay was approved with the signed-in `phase10-operator` principal. Read-only SQL evidence is captured under ignored `TestResults/Phase10/azure-dlq-replay-20261123/`; the validator result is `PASS`: quarantine state Replayed, exactly one replay attempt, one Inventory and one Notifications inbox/effect, zero cross-tenant effects, and approval/publication/processing timestamps consistent. The effect-time rule is anchored to replay publication because consumers may persist effects before the Functions request completion marker. The temporary SQL firewall lease was restored.
+- Replay verification fixes prevent the shared fixture's dot-sourced parameter from replacing the requested tenant and interpret SQL `datetime2` UTC values as UTC rather than local time. Added regression coverage accepts valid consumer-before-marker timing and still rejects effects before publication.
+- The supervised Azure browser payment matrix is **BLOCKED before payment** on this attempt: no browser session was exposed to the runner, and the earlier Entra preflight timed out before test setup. The failed matrix summary records zero cases, zero orders and zero payments. No MFA bypass or payment retry occurred. Required Azure payment acceptance is therefore still open, even though the hosted service preflight passed.
+- Do not infer full Phase 10 closure from the passing deployment/runtime/transport/replay gates. Complete the six-case serial sandbox matrix on the deployed candidate when a supervised Entra browser is available, then reconcile the final Azure evidence. OpenPay challenge/S2S capability limits and DW-023/DW-024 remain uncertified/deferred as documented above.
+
 ### Supplemental non-Azure reconciliation — 18 November 2026
 
 - Reconciler: `TestResults/Phase10/local-followup-20261118-022000/local-followup.json` (`INCOMPLETE`); offline summary: `TestResults/Phase10/local-followup-20261118-022000/index.html`. It binds base commit `9fa6160c18616003ad6d6aaa14753183d20c4c71` to a dirty-worktree content hash; it does not claim a clean candidate.

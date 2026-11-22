@@ -672,9 +672,14 @@ test('Azure replay SQL evidence is read-only, tenant/database-routed, bounded, a
   assert.match(replaySqlVerifierSource, /ValidateSet\('dev'\)/);
   assert.match(replaySqlVerifierSource, /ExpectedSubscriptionId/);
   assert.match(replaySqlVerifierSource, /ConfirmFirewallLease/);
+  assert.ok(replaySqlVerifierSource.indexOf('$requestedTenantCode = $TenantCode') < replaySqlVerifierSource.indexOf('. $fixtureLibrary'), 'capture the requested tenant before dot-sourcing the shared fixture, which has a same-named parameter');
+  assert.match(replaySqlVerifierSource, /Resolve-ReplayTenantDatabase -Code \$requestedTenantCode/);
+  assert.match(replaySqlVerifierSource, /tenantCode = \$requestedTenantCode/);
   assert.match(replaySqlVerifierSource, /TimeoutSeconds = 120/);
   assert.match(replaySqlVerifierSource, /Initialize-AzureFixtureTopology/);
   assert.match(replaySqlVerifierSource, /Resolve-ReplayTenantDatabase/);
+  assert.match(replaySqlVerifierSource, /SpecifyKind\(\$timestamp, \[DateTimeKind\]::Utc\)/, 'SQL datetime2 values written as UTC must not be reinterpreted in the local timezone');
+  assert.match(replaySqlVerifierSource, /Convert-SqlUtcDateTime -Value \$row\.ApprovedUtc/);
   assert.match(replaySqlVerifierSource, /PublishedUtc/);
   assert.match(replaySqlVerifierSource, /ProcessedUtc/);
   assert.match(replaySqlVerifierSource, /InventoryReservations/);
