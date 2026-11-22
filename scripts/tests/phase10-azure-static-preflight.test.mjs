@@ -750,6 +750,18 @@ test('Key Vault updates preserve existing policies and add application policies 
   }
 });
 
+test('SQL admin Key Vault secret is controlled by the explicit SQL deployment switch', async () => {
+  const [mainTemplate, keyVaultTemplate] = await Promise.all([
+    readFile('infra/main.phase10.bicep', 'utf8'),
+    readFile('infra/modules/keyvault.phase10.bicep', 'utf8'),
+  ]);
+  assert.match(mainTemplate, /module keyVault[\s\S]*?deploySql:\s*deploySql/,
+    'top-level deploySql selection must reach the Key Vault module');
+  assert.match(keyVaultTemplate, /param\s+deploySql\s+bool\s*=\s*false/);
+  assert.match(keyVaultTemplate, /resource sqlAdminPasswordSecret[\s\S]*?= if \(deploySql\)/,
+    'routine deployments with deploySql=false must not include the SQL password secret resource');
+});
+
 test('Service Bus IaC explicitly preserves the deployed entity defaults', async () => {
   const template = await readFile('infra/modules/servicebus.bicep', 'utf8');
   const resourceBlock = (name) => {

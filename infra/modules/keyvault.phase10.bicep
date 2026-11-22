@@ -33,6 +33,9 @@ param functionsPrincipalId string = ''
 @description('Deployment workflow service principal object ID allowed to read and synchronize deployment-owned secrets')
 param deploymentPrincipalObjectId string = ''
 
+@description('Whether the SQL baseline is being provisioned or intentionally updated in this deployment')
+param deploySql bool = false
+
 @description('SQL Server admin password to persist in Key Vault for later SQL and managed-identity workflows')
 @secure()
 param sqlAdminPassword string = ''
@@ -162,7 +165,7 @@ resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = 
   }
 }
 
-resource sqlAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(sqlAdminPassword)) {
+resource sqlAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (deploySql) {
   parent: keyVault
   name: 'sql-admin-password'
   properties: {

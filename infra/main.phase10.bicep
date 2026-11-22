@@ -341,6 +341,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     notificationsPrincipalId: containerApps.outputs.notificationsPrincipalId
     functionsPrincipalId: functions.outputs.functionPrincipalId
     deploymentPrincipalObjectId: deploymentPrincipalObjectId
+    deploySql: deploySql
     sqlAdminPassword: sqlAdminPassword
     dedicatedTenantCodes: baselineDedicatedTenantCodes
     dedicatedTenantConnectionStrings: baselineDedicatedTenantConnectionStrings
