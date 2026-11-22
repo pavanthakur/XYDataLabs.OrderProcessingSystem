@@ -725,3 +725,19 @@ test('Phase 10 what-if can expand dedicated Key Vault secrets and preserves ACA 
   assert.match(acaTemplate, /peerTrafficConfiguration:\s*\{\s*encryption:\s*\{\s*enabled:\s*false/s);
   assert.match(acaTemplate, /workloadProfiles:\s*\[\s*\{\s*name:\s*'Consumption'\s*workloadProfileType:\s*'Consumption'/s);
 });
+
+test('Key Vault updates preserve existing policies and add application policies explicitly', async () => {
+  const [phase10Template, legacyTemplate] = await Promise.all([
+    readFile('infra/modules/keyvault.phase10.bicep', 'utf8'),
+    readFile('infra/modules/keyvault.bicep', 'utf8'),
+  ]);
+
+  for (const [name, template] of [['Phase 10', phase10Template], ['legacy', legacyTemplate]]) {
+    const vaultResource = template.match(/resource keyVault[\s\S]*?\r?\n}\r?\n/);
+    assert.ok(vaultResource, `${name} Key Vault resource must be present`);
+    assert.doesNotMatch(vaultResource[0], /accessPolicies:\s*\[\s*\]/,
+      `${name} vault update must not clear existing access policies`);
+    assert.match(template, /resource accessPolicies 'Microsoft\.KeyVault\/vaults\/accessPolicies@[^']+' = if[\s\S]*?name:\s*'add'/,
+      `${name} app access policies must be managed through the additive child resource`);
+  }
+});

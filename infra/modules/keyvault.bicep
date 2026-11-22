@@ -39,7 +39,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
-    accessPolicies: []
+    // Access policies are updated through the child `accessPolicies/add` resource below.
+    // Omitting this property on the vault update preserves existing operators and app principals.
   }
   tags: {
     environment: environment
