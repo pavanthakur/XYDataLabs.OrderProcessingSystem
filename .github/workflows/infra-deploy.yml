@@ -291,6 +291,7 @@ jobs:
           CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
           DEPLOY_SQL: ${{ inputs.deploySql }}
           DEPLOY_REDIS: ${{ inputs.deployRedis }}
+          ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }}
           SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
           SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
         run: node scripts/verify-phase10-release-inputs.mjs
@@ -673,6 +674,7 @@ jobs:
           CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
           DEPLOY_SQL: ${{ inputs.deploySql }}
           DEPLOY_REDIS: ${{ inputs.deployRedis }}
+          ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }}
           SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
           SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
         run: node scripts/verify-phase10-release-inputs.mjs

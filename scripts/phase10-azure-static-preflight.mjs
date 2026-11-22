@@ -176,6 +176,9 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
     }
   }
   if (!/verify-phase10-release-inputs\.mjs/.test(infraDeployWorkflow) || !/releaseRunAttempt/.test(infraDeployWorkflow) || !/approvedParameterIdentity/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify the named immutable release and parameter identity before cloud authentication.');
+  if ((String(infraDeployWorkflow).match(/ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS:\s*\$\{\{\s*inputs\.activateExistingFunctionsTriggers\s*\}\}/g) ?? []).length < 2) {
+    failures.push('Reusable release verification must bind the explicit Functions-trigger activation selection into the reviewed deployment identity.');
+  }
   if (!/az functionapp deployment source config-zip/.test(infraDeployWorkflow) || !/FUNCTIONS_PACKAGE_SHA256/.test(infraDeployWorkflow)) failures.push('Reusable deployment must consume the exact hashed Functions package.');
   if (!/verify-phase10-function-package-runtime\.mjs/.test(infraDeployWorkflow) || !/WEBSITE_RUN_FROM_PACKAGE/.test(functionsBicep)) failures.push('Reusable deployment must compare the mounted Functions ZIP bytes with the approved package hash.');
   if (!/account['\"]?,\s*['\"]get-access-token/.test(functionsPackageVerifier ?? '')

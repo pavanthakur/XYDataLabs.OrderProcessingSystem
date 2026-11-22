@@ -17,6 +17,7 @@ const verifierSource = await readFile(new URL('../verify-payment-run-azure.ps1',
 const paymentWorkflowSource = await readFile(new URL('../../.github/workflows/phase10-azure-payment-matrix.yml', import.meta.url), 'utf8');
 const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-azure-matrix.ts', import.meta.url), 'utf8');
 const replaySqlVerifierSource = await readFile(new URL('../verify-phase10-azure-dlq-replay.ps1', import.meta.url), 'utf8');
+const releaseInputVerifierSource = await readFile(new URL('../verify-phase10-release-inputs.mjs', import.meta.url), 'utf8');
 
 test('Azure operator checkpoint and launch safety regressions execute in hosted contract CI', () => {
   const environment = { ...process.env };
@@ -82,7 +83,7 @@ const valid = {
   serviceBusBicep: "resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' output replayRequestQueueName string = replayRequestQueue.name",
   functionsPackageVerifier: "execFile('az', ['account', 'get-access-token']); authorization: `Bearer \${accessToken}`",
   mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName param replayRequestQueueName string replayRequestQueueName: serviceBus.outputs.replayRequestQueueName output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName",
-  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after database and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
+  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after database and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
   deploymentWorkflows: [{ path: '.github/workflows/phase10-azure-transport-smoke.yml', content: 'az functionapp config show --query alwaysOn refusing to publish transport test messages intake_disabled=az functionapp config appsettings list AzureWebJobs.DlqIntakeFunction.Disabled [[ "$intake_disabled" == "false" ]] || { echo "DlqIntakeFunction is disabled or its state is unknown; refusing to publish transport/DLQ smoke messages."; exit 1; }' }],
   orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs activateExistingFunctionsTriggers: ${{ inputs.activateExistingFunctionsTriggers }} ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} --activateExistingFunctionsTriggers "$ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS" dryRun: default: true',
   azurePreflightScript: 'phase10-azure-preflight.mjs Microsoft.Authorization/roleAssignments/write',
@@ -706,6 +707,15 @@ test('deployment parameter identity is recorded before the approval comparison f
   assert.ok(identityComparison > identityOutput, 'the calculated identity must be recorded before mismatch can fail the job');
   assert.match(workflow, /echo "Calculated deployment parameter identity: \$calculated"/);
   assert.match(workflow, /Calculated deployment parameter identity:.*\$calculated.*GITHUB_STEP_SUMMARY/);
+});
+
+test('reusable release verification carries explicit Functions activation into the approved identity', () => {
+  assert.match(releaseInputVerifierSource, /activateExistingFunctionsTriggers:\s*process\.env\.ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS === 'true'/);
+  const missingActivationForwarding = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replaceAll('ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }}', ''),
+  });
+  assert.match(missingActivationForwarding.failures.join('\n'), /release verification must bind the explicit Functions-trigger activation selection/);
 });
 
 test('deploy and Azure acceptance workflows share a per-environment non-cancelling lease', async () => {

@@ -41,6 +41,10 @@ ${hash(await import('node:fs/promises').then(({ readFile }) => readFile(path.joi
   assert.equal((await verifyReleaseInputs(options)).manifest.sourceSha, sourceSha);
   await assert.rejects(verifyReleaseInputs({ ...options, actualWorkflowSha: 'd'.repeat(40) }), /does not match the workflow revision/);
   assert.equal((await verifyReleaseInputs({ ...options, actualWorkflowSha: options.deploymentWorkflowSha })).manifest.sourceSha, sourceSha);
+  const activatedDeployment = { ...options.deployment, activateExistingFunctionsTriggers: true };
+  const activatedIdentity = await calculateDeploymentIdentity(activatedDeployment);
+  assert.equal((await verifyReleaseInputs({ ...options, deployment: activatedDeployment, approvedParameterIdentity: activatedIdentity.identitySha256 })).manifest.sourceSha, sourceSha);
+  await assert.rejects(verifyReleaseInputs({ ...options, deployment: options.deployment, approvedParameterIdentity: activatedIdentity.identitySha256 }), /parameter identity changed/);
   await assert.rejects(verifyReleaseInputs({ ...options, images: { ...images, ui: `${images.ui}-tampered` } }), /ui image input/);
   await assert.rejects(verifyReleaseInputs({ ...options, approvedParameterIdentity: 'b'.repeat(64) }), /parameter identity changed/);
   await writeFile(path.join(releaseDirectory, 'functions.zip'), 'tampered');

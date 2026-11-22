@@ -72,6 +72,7 @@ async function main() {
       cleanupInfra: process.env.CLEANUP_INFRA === 'true',
       deploySql: process.env.DEPLOY_SQL === 'true',
       deployRedis: process.env.DEPLOY_REDIS === 'true',
+      activateExistingFunctionsTriggers: process.env.ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS === 'true',
       sqlEntraAdminObjectId: process.env.SQL_ENTRA_ADMIN_OBJECT_ID ?? '',
       sqlEntraAdminLogin: process.env.SQL_ENTRA_ADMIN_LOGIN ?? '',
     },
