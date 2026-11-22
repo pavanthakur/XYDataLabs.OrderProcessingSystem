@@ -20,6 +20,36 @@ const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-
 const replaySqlVerifierSource = await readFile(new URL('../verify-phase10-azure-dlq-replay.ps1', import.meta.url), 'utf8');
 const releaseInputVerifierSource = await readFile(new URL('../verify-phase10-release-inputs.mjs', import.meta.url), 'utf8');
 
+test('desktop Playwright tasks are separate and confirmation precedes any Azure call', async () => {
+  const ts = requireAutomation('typescript');
+  const taskSource = await readFile(new URL('../../.vscode/tasks.json', import.meta.url), 'utf8');
+  const parsed = ts.parseConfigFileTextToJson('tasks.json', taskSource);
+  assert.equal(parsed.error, undefined);
+  const { tasks, inputs } = parsed.config;
+  const expectedEntry = '${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1';
+  const preflight = tasks.filter(task => task.label === 'Azure Dev: Playwright Auth Preflight (No Payments)');
+  const matrix = tasks.filter(task => task.label === 'Azure Dev: Playwright Provider Matrix (Submits Sandbox Payments)');
+  assert.equal(preflight.length, 1);
+  assert.equal(matrix.length, 1);
+  for (const [task, mode] of [[preflight[0], 'AuthPreflight'], [matrix[0], 'ProviderMatrix']]) {
+    assert.equal(task.type, 'process');
+    assert.equal(task.command, 'pwsh');
+    assert.deepEqual(task.args, ['-NoProfile', '-File', expectedEntry, '-Mode', mode,
+      '-ExpectedSubscriptionId', '${input:phase10AzureDevSubscriptionId}',
+      ...(mode === 'ProviderMatrix' ? ['-RequireSandboxConfirmation'] : [])]);
+    assert.equal(task.dependsOn, undefined);
+    assert.equal(task.runOptions?.runOn, undefined);
+  }
+  assert.equal(inputs.find(input => input.id === 'phase10AzureDevSubscriptionId')?.type, 'promptString');
+  assert.equal(inputs.find(input => input.id === 'phase10AzureDevSubscriptionId')?.default, undefined);
+  assert.ok(tasks.every(task => !task.dependsOn?.includes?.(matrix[0].label)));
+  const runner = await readFile(new URL('../run-phase10-azure-dev-operator-matrix.ps1', import.meta.url), 'utf8');
+  const guard = runner.indexOf('if ($RequireSandboxConfirmation)');
+  const firstAzureCall = runner.indexOf('& az account show');
+  assert.ok(guard >= 0 && firstAzureCall > guard);
+  assert.match(runner.slice(guard, firstAzureCall), /\$confirmation -cne 'RUN SANDBOX'.*throw/);
+});
+
 test('Azure operator checkpoint and launch safety regressions execute in hosted contract CI', () => {
   const environment = { ...process.env };
   delete environment.NODE_TEST_CONTEXT;

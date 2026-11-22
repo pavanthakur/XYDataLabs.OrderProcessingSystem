@@ -3015,6 +3015,41 @@
             "problemMatcher": []
         },
         {
+            "label": "Azure Dev: Playwright Auth Preflight (No Payments)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
+                "-Mode",
+                "AuthPreflight",
+                "-ExpectedSubscriptionId",
+                "${input:phase10AzureDevSubscriptionId}"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Azure Dev: Playwright Provider Matrix (Submits Sandbox Payments)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
+                "-Mode",
+                "ProviderMatrix",
+                "-ExpectedSubscriptionId",
+                "${input:phase10AzureDevSubscriptionId}",
+                "-RequireSandboxConfirmation"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
             "label": "Validate: AI governance bundle",
             "dependsOrder": "sequence",
             "dependsOn": [
@@ -3023,6 +3058,13 @@
             ],
             "group": "test",
             "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "phase10AzureDevSubscriptionId",
+            "type": "promptString",
+            "description": "Enter the approved Azure-dev subscription ID. The runner checks it against the active Azure CLI subscription."
         }
     ]
 }

@@ -165,6 +165,10 @@ Workflow `04` is manual and dev-only. Select branch `dev` and environment `dev`.
 
 The supervised selections only write a GitHub job summary; they do not open a browser, use Azure credentials, or accept evidence automatically. Open the **Desktop browser handoff** job summary, use the recorded candidate SHA on a clean desktop checkout, and record the sanitized desktop result with the workflow run ID and tested deployment identity. A green handoff means **awaiting supervised evidence**, not browser or payment PASS. Ensure no conflicting deploy, transport, or payment operation is running; the Actions job does not hold a lock for the desktop run.
 
+For a local runhook, open **Tasks: Run Task** in desktop VS Code. Choose **Azure Dev: Playwright Auth Preflight (No Payments)** for a no-charge check or **Azure Dev: Playwright Provider Matrix (Submits Sandbox Payments)** for approved sandbox acceptance. Enter the approved Azure-dev subscription ID. The matrix task also requires typing `RUN SANDBOX` in the terminal before the runner contacts Azure. The tasks are not chained: `ProviderMatrix` already includes its own preflight in the same login session. A GitHub handoff is optional for launching locally; retain it when needed to track evidence. Do not run both tasks concurrently or rerun verified charges for a report refresh.
+
+Recorded Azure-dev sandbox acceptance: run `payment-automation-azure-matrix-2026-11-22T17-38-57-237Z` passed all six tenant/provider cases, verification, fixture reset and original-tab Entra sign-out in one run. The ignored report is under `TestResults/Playwright/azure-https/` in the run-ID folder. This is supervised sandbox evidence only, not hosted browser or full Phase 10 acceptance.
+
 Before any order or payment, confirm the hosted service preflight passed on the candidate and deployment being tested. With separate sandbox approval, run from the repository root:
 
 ```powershell

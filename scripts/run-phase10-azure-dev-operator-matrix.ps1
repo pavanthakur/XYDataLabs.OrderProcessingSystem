@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix','Reconcile')][string]$Mode,
     [Parameter(Mandatory)][guid]$ExpectedSubscriptionId,
     [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN,
-    [string]$ResumeCheckpoint
+    [string]$ResumeCheckpoint,
+    [switch]$RequireSandboxConfirmation
 )
 
 Set-StrictMode -Version Latest
@@ -13,6 +14,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 if ($Mode -ne 'Reconcile' -and (-not [Environment]::UserInteractive -or $env:CI -eq 'true')) { throw 'Run this headed operator command in your signed-in desktop terminal, not a hosted/non-interactive job.' }
 if ($ResumeCheckpoint -and $Mode -eq 'AuthPreflight') { throw 'ResumeCheckpoint is available only for ProviderMatrix or Reconcile.' }
 if ($Mode -eq 'Reconcile' -and -not $ResumeCheckpoint) { throw 'Reconcile requires an existing ResumeCheckpoint; it never creates orders/payments or opens a browser.' }
+if ($RequireSandboxConfirmation) {
+    if ($Mode -ne 'ProviderMatrix') { throw 'Sandbox confirmation applies only to ProviderMatrix.' }
+    $confirmation = Read-Host 'This task creates fresh Azure-dev orders and submits sandbox payments. Type RUN SANDBOX to continue'
+    if ($confirmation -cne 'RUN SANDBOX') { throw 'Sandbox matrix cancelled before any Azure or payment action.' }
+}
 $targetCatalogPath = Join-Path $repoRoot 'automation/config/runtime-targets.json'
 $targetCatalog = Get-Content -LiteralPath $targetCatalogPath -Raw | ConvertFrom-Json
 $targets = @($targetCatalog.targets | Where-Object key -eq 'azure-dev')
