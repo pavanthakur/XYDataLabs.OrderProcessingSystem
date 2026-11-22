@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { auditAzureDeployContract, validateAzureRuntimeTargets } from '../phase10-azure-static-preflight.mjs';
+import { verifyFunctionsSqlEndpoint } from '../verify-phase10-functions-sql-endpoint.mjs';
 import { validateLocalDlqApprovalResponse, validateLocalOperatorClaims } from '../../frontend/apps/web/scripts/phase10-local-dlq-approval-contract.mjs';
 import { normalizeKeyVaultAccessPolicies } from '../normalize-phase10-keyvault-access-policies.mjs';
 
@@ -83,7 +84,7 @@ const valid = {
   serviceBusBicep: "resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' output replayRequestQueueName string = replayRequestQueue.name",
   functionsPackageVerifier: "execFile('az', ['account', 'get-access-token']); authorization: `Bearer \${accessToken}`",
   mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName param replayRequestQueueName string replayRequestQueueName: serviceBus.outputs.replayRequestQueueName output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName",
-  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after database and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
+  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Get Deployment Outputs name: Verify Functions SQL endpoint matches Azure SQL host az sql server show --query fullyQualifiedDomainName ConnectionStrings__OrderProcessingSystemDbConnection scripts/verify-phase10-functions-sql-endpoint.mjs name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after database and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
   deploymentWorkflows: [{ path: '.github/workflows/phase10-azure-transport-smoke.yml', content: 'az functionapp config show --query alwaysOn refusing to publish transport test messages intake_disabled=az functionapp config appsettings list AzureWebJobs.DlqIntakeFunction.Disabled [[ "$intake_disabled" == "false" ]] || { echo "DlqIntakeFunction is disabled or its state is unknown; refusing to publish transport/DLQ smoke messages."; exit 1; }' }],
   orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs activateExistingFunctionsTriggers: ${{ inputs.activateExistingFunctionsTriggers }} ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }} --activateExistingFunctionsTriggers "$ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS" dryRun: default: true',
   azurePreflightScript: 'phase10-azure-preflight.mjs Microsoft.Authorization/roleAssignments/write',
@@ -130,12 +131,51 @@ valid.infraDeployWorkflow += [
 valid.infraDeployWorkflow = valid.infraDeployWorkflow.replace('az sql server ad-admin show', 'az sql server ad-admin list');
 
 valid.functionsBicep = `@minLength(1) param sqlServerFqdn string @minLength(1) param sqlDatabaseName string ${valid.functionsBicep} name: 'AzureWebJobs.DlqIntakeFunction.Disabled' value: 'true' name: 'AzureWebJobs.DlqReplayFunction.Disabled' value: 'true'`;
-valid.mainBicep += " param existingFunctionsSqlServerName string param existingFunctionsSqlDatabaseName string sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}' sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName";
+valid.mainBicep += " param existingFunctionsSqlServerName string param existingFunctionsSqlDatabaseName string var existingFunctionsSqlServerFqdn = replace('${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}', '..', '.') sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : existingFunctionsSqlServerFqdn output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : existingFunctionsSqlServerFqdn sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName";
 valid.mainBicep += " var sqlConnectionString = deploySql ? 'Server=tcp:sql.database.windows.net;Authentication=Active Directory Managed Identity;' : ''";
 
 test('static Azure deployment contract accepts explicit host, transport, immutable release and package settings', () => {
   const result = auditAzureDeployContract(valid);
   assert.equal(result.status, 'PASS', JSON.stringify(result));
+});
+
+test('Functions SQL endpoint verifier normalizes Azure suffix dots and rejects mismatches without exposing secrets', () => {
+  const matching = verifyFunctionsSqlEndpoint({
+    deploymentSqlFqdn: 'orderprocessing-sql-dev.database.windows.net',
+    sqlResourceFqdn: 'orderprocessing-sql-dev.database.windows.net.',
+    functionsSqlConnection: 'Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=orders;Password=do-not-print',
+  });
+  assert.equal(matching.ok, true);
+  assert.equal(matching.message, 'Functions SQL endpoint matches the deployed Azure SQL server (credential values not emitted).');
+  const cliOutput = execFileSync(process.execPath, [fileURLToPath(new URL('../verify-phase10-functions-sql-endpoint.mjs', import.meta.url))], {
+    input: 'orderprocessing-sql-dev.database.windows.net\norderprocessing-sql-dev.database.windows.net\nServer=tcp:orderprocessing-sql-dev.database.windows.net,1433;Password=do-not-print',
+    encoding: 'utf8',
+  });
+  assert.match(cliOutput, /credential values not emitted/);
+  assert.doesNotMatch(cliOutput, /do-not-print|Password/i);
+
+  const mismatch = verifyFunctionsSqlEndpoint({
+    deploymentSqlFqdn: 'orderprocessing-sql-dev.database.windows.net',
+    sqlResourceFqdn: 'orderprocessing-sql-dev.database.windows.net',
+    functionsSqlConnection: 'Server=tcp:other.database.windows.net,1433;Password=do-not-print',
+  });
+  assert.equal(mismatch.ok, false);
+  assert.doesNotMatch(mismatch.message, /do-not-print|Password/i);
+  assert.throws(() => execFileSync(process.execPath, [fileURLToPath(new URL('../verify-phase10-functions-sql-endpoint.mjs', import.meta.url))], {
+    input: 'orderprocessing-sql-dev.database.windows.net\norderprocessing-sql-dev.database.windows.net\nServer=tcp:other.database.windows.net,1433;Password=do-not-print',
+    encoding: 'utf8',
+  }), (error) => {
+    assert.match(String(error.stderr), /Functions SQL endpoint does not match/);
+    assert.doesNotMatch(String(error.stderr), /do-not-print|Password/i);
+    return true;
+  });
+
+  const malformed = verifyFunctionsSqlEndpoint({
+    deploymentSqlFqdn: 'orderprocessing-sql-dev..database.windows.net',
+    sqlResourceFqdn: 'orderprocessing-sql-dev.database.windows.net',
+    functionsSqlConnection: 'Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Password=do-not-print',
+  });
+  assert.equal(malformed.ok, false);
 });
 
 const resolverBash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
@@ -160,6 +200,11 @@ test('Azure deploy contract requires the runtime deployment job to forward and v
     infraDeployWorkflow: valid.infraDeployWorkflow.replace('name: Verify SQL Entra administrator before migrations', ''),
   });
   assert.match(missingDeployedAdminVerification.failures.join('\n'), /SQL Entra administrator must be verified before migrations/);
+  const missingSqlEndpointVerification = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replace('name: Verify Functions SQL endpoint matches Azure SQL host', ''),
+  });
+  assert.match(missingSqlEndpointVerification.failures.join('\n'), /compare the Function SQL connection host, ARM output, and Azure SQL resource FQDN/);
   const missingVaultProbe = auditAzureDeployContract({
     ...valid,
     infraDeployWorkflow: valid.infraDeployWorkflow.replace('name: Verify deployed SQL bootstrap login and Key Vault read-back', ''),

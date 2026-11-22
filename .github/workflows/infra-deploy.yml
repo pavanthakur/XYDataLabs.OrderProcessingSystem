@@ -1242,6 +1242,41 @@ jobs:
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
 
+      - name: Verify Functions SQL endpoint matches Azure SQL host
+        shell: bash
+        env:
+          RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
+          FUNCTION_APP: ${{ steps.outputs.outputs.function }}
+          SQL_SERVER_NAME: ${{ steps.outputs.outputs.sqlServer }}
+          DEPLOYMENT_SQL_FQDN: ${{ steps.outputs.outputs.sqlServerFqdn }}
+        run: |
+          set -euo pipefail
+          [[ -n "$RESOURCE_GROUP" && -n "$FUNCTION_APP" && -n "$SQL_SERVER_NAME" && -n "$DEPLOYMENT_SQL_FQDN" ]] || {
+            echo "Deployment outputs are missing the Function App or SQL endpoint; refusing to continue." >&2
+            exit 1
+          }
+
+          SQL_RESOURCE_FQDN="$(az sql server show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$SQL_SERVER_NAME" \
+            --query fullyQualifiedDomainName -o tsv)"
+          FUNCTIONS_SQL_CONNECTION="$(az functionapp config appsettings list \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$FUNCTION_APP" \
+            --query "[?name=='ConnectionStrings__OrderProcessingSystemDbConnection'].value | [0]" -o tsv)"
+
+          [[ -n "$SQL_RESOURCE_FQDN" && -n "$FUNCTIONS_SQL_CONNECTION" ]] || {
+            echo "Azure SQL or the Functions SQL connection setting is missing; refusing to continue." >&2
+            exit 1
+          }
+
+          {
+            printf '%s\n' "$DEPLOYMENT_SQL_FQDN"
+            printf '%s\n' "$SQL_RESOURCE_FQDN"
+            printf '%s' "$FUNCTIONS_SQL_CONNECTION"
+          } | node scripts/verify-phase10-functions-sql-endpoint.mjs
+          unset FUNCTIONS_SQL_CONNECTION
+
       - name: Refresh Azure CLI Login (OIDC) Before SQL Migrations
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         uses: azure/login@v3

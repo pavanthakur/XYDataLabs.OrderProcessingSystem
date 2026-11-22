@@ -137,6 +137,9 @@ param deploymentPrincipalObjectId string = ''
 param existingKeyVaultAccessPolicies array
 
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+// Azure environment suffix metadata may already begin with a dot; normalize
+// the join so SQL hostnames never contain a double dot.
+var existingFunctionsSqlServerFqdn = replace('${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}', '..', '.')
 var rgName = 'rg-${baseName}-${effectiveResourceSuffix}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${effectiveResourceSuffix}'
 var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
@@ -321,7 +324,7 @@ module functions 'modules/functions.bicep' = {
     deadLetterSubscriptionName: serviceBus.outputs.deadLetterSubscription
     replayRequestQueueName: serviceBus.outputs.replayRequestQueueName
     #disable-next-line BCP318
-    sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}'
+    sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : existingFunctionsSqlServerFqdn
     #disable-next-line BCP318
     sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName
     maxDeliveryCount: maxDeliveryCount
@@ -378,7 +381,7 @@ output oidcClientId string = identity.outputs.clientId
 #disable-next-line BCP318
 output sqlServerName string = deploySql ? sql.outputs.sqlServerName : existingFunctionsSqlServerName
 #disable-next-line BCP318
-output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : '${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}'
+output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : existingFunctionsSqlServerFqdn
 #disable-next-line BCP318
 output sqlDatabaseName string = deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName
 #disable-next-line BCP318

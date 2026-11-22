@@ -96,7 +96,9 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
   }
   if (!/param\s+existingFunctionsSqlServerName\s+string/.test(mainBicep)
     || !/param\s+existingFunctionsSqlDatabaseName\s+string/.test(mainBicep)
-    || !/sqlServerFqdn:\s*deploySql\s*\?\s*sql\.outputs\.sqlServerFqdn\s*:\s*'\$\{existingFunctionsSqlServerName\}\.\$\{az\.environment\(\)\.suffixes\.sqlServerHostname\}'/.test(mainBicep)
+    || !/var\s+existingFunctionsSqlServerFqdn\s*=\s*replace\('\$\{existingFunctionsSqlServerName\}\.\$\{az\.environment\(\)\.suffixes\.sqlServerHostname\}',\s*'\.\.',\s*'\.'\)/.test(mainBicep)
+    || !/sqlServerFqdn:\s*deploySql\s*\?\s*sql\.outputs\.sqlServerFqdn\s*:\s*existingFunctionsSqlServerFqdn/.test(mainBicep)
+    || !/output\s+sqlServerFqdn\s+string\s*=\s*deploySql\s*\?\s*sql\.outputs\.sqlServerFqdn\s*:\s*existingFunctionsSqlServerFqdn/.test(mainBicep)
     || !/sqlDatabaseName:\s*deploySql\s*\?\s*sql\.outputs\.databaseName\s*:\s*existingFunctionsSqlDatabaseName/.test(mainBicep)
     || !/@minLength\(1\)[\s\S]*?param\s+sqlServerFqdn\s+string/.test(functionsBicep)
     || !/@minLength\(1\)[\s\S]*?param\s+sqlDatabaseName\s+string/.test(functionsBicep)) {
@@ -216,6 +218,8 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
     failures.push('The deployment job must forward its explicit SQL/Redis selections, pass and validate the configured SQL Entra administrator, and resolve the bootstrap credential separately.');
   }
   const sqlMigrationStep = infraDeployWorkflow.indexOf('name: Run Azure SQL Migrations');
+  const deploymentOutputsStep = infraDeployWorkflow.indexOf('name: Get Deployment Outputs');
+  const sqlEndpointVerificationStep = infraDeployWorkflow.indexOf('name: Verify Functions SQL endpoint matches Azure SQL host');
   const sqlAdminVerificationStep = infraDeployWorkflow.indexOf('name: Verify SQL Entra administrator before migrations');
   const credentialResolutionStep = deployJob.indexOf('name: Resolve SQL bootstrap credential');
   const existingSqlProbe = deployJob.indexOf('name: Verify existing SQL bootstrap login before updating SQL');
@@ -237,7 +241,16 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
   const triggerRestoreStep = triggerRestoreStart < 0
     ? ''
     : infraDeployWorkflow.slice(triggerRestoreStart, nextDeployStep < 0 ? undefined : nextDeployStep);
-  if (sqlMigrationStep < 0 || sqlAdminVerificationStep < 0 || sqlAdminVerificationStep >= sqlMigrationStep
+  if (deploymentOutputsStep < 0 || sqlEndpointVerificationStep <= deploymentOutputsStep
+    || sqlEndpointVerificationStep >= sqlMigrationStep
+    || !/az sql server show[\s\S]*?--query fullyQualifiedDomainName/.test(infraDeployWorkflow)
+    || !/ConnectionStrings__OrderProcessingSystemDbConnection/.test(infraDeployWorkflow)
+    || !/scripts\/verify-phase10-functions-sql-endpoint\.mjs/.test(infraDeployWorkflow)) {
+    failures.push('The deploy workflow must compare the Function SQL connection host, ARM output, and Azure SQL resource FQDN after outputs are collected and before migrations.');
+  }
+  if (sqlMigrationStep < 0 || deploymentOutputsStep < 0 || sqlEndpointVerificationStep <= deploymentOutputsStep
+    || sqlEndpointVerificationStep >= sqlMigrationStep
+    || sqlAdminVerificationStep < 0 || sqlAdminVerificationStep >= sqlMigrationStep
     || !/az sql server ad-admin list/.test(infraDeployWorkflow)
     || !/actual_sid[\s\S]*?EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID[\s\S]*?actual_login[\s\S]*?EXPECTED_SQL_ENTRA_ADMIN_LOGIN/.test(infraDeployWorkflow)
     || sqlIdentityGrantStep <= sqlMigrationStep || functionPackageStep <= sqlIdentityGrantStep || triggerActivationStep <= functionPackageStep
