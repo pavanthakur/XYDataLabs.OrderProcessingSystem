@@ -27,10 +27,12 @@ test('deployment identity is deterministic and binds environment parameters and 
     sqlEntraAdminLogin: 'sql-admin@example.test',
   });
   const redisSelected = await calculateDeploymentIdentity({ repositoryRoot: repo, environment: 'dev', location: 'centralindia', deployRedis: true });
+  const functionTriggersSelected = await calculateDeploymentIdentity({ repositoryRoot: repo, environment: 'dev', location: 'centralindia', activateExistingFunctionsTriggers: true });
   assert.equal(first.identitySha256, repeated.identitySha256);
   assert.notEqual(first.identitySha256, changedOrigin.identitySha256);
   assert.notEqual(sqlAdmin.identitySha256, changedSqlAdmin.identitySha256);
   assert.notEqual(first.identitySha256, redisSelected.identitySha256);
+  assert.notEqual(first.identitySha256, functionTriggersSelected.identitySha256);
   assert.equal(JSON.stringify(sqlAdmin).includes('pavan.thakur@example.test'), false);
   assert.equal(first.parameterFile, 'infra/parameters/phase10-dev.json');
   assert.deepEqual(

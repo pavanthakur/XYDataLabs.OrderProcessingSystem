@@ -220,6 +220,7 @@ jobs:
           CLEANUP_INFRA: ${{ inputs.cleanupInfra }}
           DEPLOY_SQL: ${{ inputs.deploySql }}
           DEPLOY_REDIS: ${{ inputs.deployRedis }}
+          ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS: ${{ inputs.activateExistingFunctionsTriggers }}
           SQL_ENTRA_ADMIN_OBJECT_ID: ${{ vars.SQL_ENTRA_ADMIN_OBJECT_ID }}
           SQL_ENTRA_ADMIN_LOGIN: ${{ vars.SQL_ENTRA_ADMIN_LOGIN }}
           APPROVED_PARAMETER_IDENTITY: ${{ inputs.approvedParameterIdentity }}
@@ -244,7 +245,8 @@ jobs:
             --aliasMode "$ALIAS_MODE" \
             --cleanupInfra "$CLEANUP_INFRA" \
             --deploySql "$DEPLOY_SQL" \
-            --deployRedis "$DEPLOY_REDIS")"
+            --deployRedis "$DEPLOY_REDIS" \
+            --activateExistingFunctionsTriggers "$ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS")"
           calculated="$(node -e 'const v=JSON.parse(process.argv[1]); process.stdout.write(v.identitySha256)' "$identity")"
           echo "Calculated deployment parameter identity: $calculated"
           echo "Calculated deployment parameter identity: \`$calculated\`" >> "$GITHUB_STEP_SUMMARY"

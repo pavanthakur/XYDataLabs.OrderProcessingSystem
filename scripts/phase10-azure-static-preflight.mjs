@@ -253,6 +253,10 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
     failures.push('SQL Entra administrator must be verified before migrations; routine redeploys must restore captured Functions trigger state, and explicit existing-trigger activation must be Azure-dev-only with SQL deployment, cleanup, and dry-run off.');
   }
   if (!/activateExistingFunctionsTriggers:\s*\$\{\{\s*inputs\.activateExistingFunctionsTriggers\s*\}\}/.test(orchestratorWorkflow)) failures.push('Deployment orchestrator must forward the explicit existing-Functions-trigger activation selection.');
+  if (!/ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS:\s*\$\{\{\s*inputs\.activateExistingFunctionsTriggers\s*\}\}/.test(orchestratorWorkflow)
+    || !/--activateExistingFunctionsTriggers\s+"\$ACTIVATE_EXISTING_FUNCTIONS_TRIGGERS"/.test(orchestratorWorkflow)) {
+    failures.push('Deployment parameter identity must bind the explicit existing-Functions-trigger activation selection.');
+  }
   if (/:phase10\b|:latest\b/.test(infraDeployWorkflow) || !/@sha256:\[0-9a-f\]\{64\}/.test(infraDeployWorkflow)) failures.push('Reusable deployment must reject mutable image tags and require digest-qualified references.');
   if (!/candidateSha/.test(orchestratorWorkflow) || !/releaseRunId/.test(orchestratorWorkflow) || !/approvedParameterIdentity/.test(orchestratorWorkflow)) failures.push('Orchestrator must require exact candidate, producer run, and reviewed parameter identity.');
   if (!/deploymentWorkflowSha/.test(orchestratorWorkflow) || !/git merge-base --is-ancestor/.test(orchestratorWorkflow) || !/DEPLOYMENT_WORKFLOW_SHA/.test(infraDeployWorkflow)) {

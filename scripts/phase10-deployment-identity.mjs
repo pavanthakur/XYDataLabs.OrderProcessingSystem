@@ -7,7 +7,7 @@ const hash = (content) => createHash('sha256')
   .update(Buffer.isBuffer(content) ? content.toString('utf8').replace(/\r\n?/g, '\n') : content)
   .digest('hex');
 
-export async function calculateDeploymentIdentity({ repositoryRoot, environment, location, publicDomain = '', bindAliases = false, aliasMode = 'direct', cleanupInfra = false, deploySql = false, deployRedis = false, sqlEntraAdminObjectId = '', sqlEntraAdminLogin = '' }) {
+export async function calculateDeploymentIdentity({ repositoryRoot, environment, location, publicDomain = '', bindAliases = false, aliasMode = 'direct', cleanupInfra = false, deploySql = false, deployRedis = false, activateExistingFunctionsTriggers = false, sqlEntraAdminObjectId = '', sqlEntraAdminLogin = '' }) {
   if (!['dev', 'staging', 'prod'].includes(environment)) throw new Error('Unsupported deployment environment.');
   if (!/^[a-z0-9]+$/.test(location)) throw new Error('Azure region is invalid.');
   if (!['direct', 'frontdoor'].includes(aliasMode)) throw new Error('Alias mode is invalid.');
@@ -50,6 +50,7 @@ export async function calculateDeploymentIdentity({ repositoryRoot, environment,
     cleanupInfra: Boolean(cleanupInfra),
     deploySql: Boolean(deploySql),
     deployRedis: Boolean(deployRedis),
+    activateExistingFunctionsTriggers: Boolean(activateExistingFunctionsTriggers),
     sqlEntraAdminConfigurationSha256,
     parameterFile: `infra/parameters/phase10-${environment}.json`,
     parameterFileSha256,
@@ -72,6 +73,7 @@ async function main() {
     cleanupInfra: read('cleanupInfra') === 'true',
     deploySql: read('deploySql') === 'true',
     deployRedis: read('deployRedis') === 'true',
+    activateExistingFunctionsTriggers: read('activateExistingFunctionsTriggers') === 'true',
     sqlEntraAdminObjectId: read('sqlEntraAdminObjectId') ?? process.env.SQL_ENTRA_ADMIN_OBJECT_ID ?? '',
     sqlEntraAdminLogin: read('sqlEntraAdminLogin') ?? process.env.SQL_ENTRA_ADMIN_LOGIN ?? '',
   });
