@@ -133,6 +133,11 @@ jobs:
         working-directory: automation
         run: npm run test:callbacks
 
+      - name: Test Entra no-charge sign-out aggregation
+        id: operator-signout-tests
+        working-directory: automation
+        run: npm run test:operator-signout-contract
+
       - name: Validate frontend type safety
         id: frontend-typecheck
         working-directory: frontend
