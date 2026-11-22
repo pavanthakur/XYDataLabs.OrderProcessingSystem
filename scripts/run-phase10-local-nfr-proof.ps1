@@ -811,7 +811,7 @@ if ($SkipDynamicPaymentMatrix -and (Test-Phase10NfrCategorySelected -Name 'payme
     $summary.paymentSettingsEvidence += [ordered]@{ file = 'payment-settings-before.json'; sha256 = (Get-FileHash -LiteralPath $beforePath -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 $testProject = 'tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
-$functionalFilter = 'FullyQualifiedName~Outbox|FullyQualifiedName~Inbox|FullyQualifiedName~Dlq|FullyQualifiedName~Replay'
+$functionalFilter = 'FullyQualifiedName~Outbox|FullyQualifiedName~Inbox|FullyQualifiedName~Dlq|FullyQualifiedName~Replay&FullyQualifiedName!~AzureReplayDrillAcceptanceTests'
 $tenantFilter = 'FullyQualifiedName~DedicatedTenant|FullyQualifiedName~TenantMiddleware|FullyQualifiedName~TenantRegistryService|FullyQualifiedName~TenantIsolation'
 $paymentFilter = 'FullyQualifiedName~PaymentProviderSeed|FullyQualifiedName~PaymentReconciliation'
 

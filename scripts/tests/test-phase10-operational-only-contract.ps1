@@ -60,6 +60,13 @@ if ($null -eq $categoriesParameter -or $source -notmatch "Test-Phase10NfrCategor
     $source -notmatch 'dynamicMatrixStatus = ''not-run''') {
     throw 'Targeted NFR mode must independently select the no-charge categories and separate payment integration from the browser matrix.'
 }
+$functionalFilterAssignment = [regex]::Match($source, "(?m)^\s*\`$functionalFilter\s*=\s*'([^']*)'")
+if (-not $functionalFilterAssignment.Success) { throw 'The local NFR functional test filter is missing or is not a static literal.' }
+$functionalFilterValue = $functionalFilterAssignment.Groups[1].Value
+$replayFilters = @($functionalFilterValue -split '\|' | Where-Object { $_ -match 'FullyQualifiedName~Replay' })
+if ($replayFilters.Count -ne 1 -or $replayFilters[0] -notmatch 'FullyQualifiedName!~AzureReplayDrillAcceptanceTests') {
+    throw 'The local functional NFR filter must exclude the opt-in Azure replay drill while retaining the global skipped-test policy.'
+}
 if ($source -notmatch '(?s)if\s*\(\s*\$operationalPassed\s+-and\s+\$OperationalOnly\s*\).*?--message-count 100') {
     throw 'Operational-only lane must run an explicit 100-message durable burst.'
 }

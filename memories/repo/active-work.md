@@ -2,22 +2,20 @@
 
 Navigation only, not proof. Verify current Git, runtime and referenced evidence before relying on it.
 
-## Phase 10 checkpoint — 21 November 2026
+## Phase 10 checkpoint — 22 November 2026
 
-- Review revision: `6fbc5454d56f4f9159ff027f620bc2135c9fd600`
-- Worktree state: DIRTY
-- Evidence status: `BLOCKED`
-- Evidence revision: `9a433be5`
+- Review revision: `28de1e896a8aab2ac6b6221fd4e1779078b27736`
+- Worktree state: `DIRTY`
+- Evidence status: `FAIL`
+- Evidence revision: `28de1e8`
 - Evidence environment: `LOCAL_DOCKER_DESKTOP_G`
-- Evidence scope: `Selected Docker E2E, payment, restart, migration and NFR checks; strict clean-source/same-candidate L5-R reconciliation remains incomplete; Azure excluded from this evidence`
-- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261120-232300248/acceptance-packet.json`
-- Reviewed automation candidate: `dev` / `1afc4edd`; build/contract CI, AI customization, docs links and drift scan passed on that SHA. The Azure workflows below used `6fbc5454`; the immutable app release source was `47970357`.
-- Local Docker Phase 10 remains **INCOMPLETE/BLOCKED**. The 20 Nov baseline, payment, persistence and NFR evidence is linked across runs but does not satisfy strict clean-source/same-candidate L5-R reconciliation. Do not rerun successful charges just to refresh evidence.
-- Local evidence index: `TestResults/Phase10/local-followup-20261120-b9-current-payments-v12/index.html`; authoritative limitations and run-specific reports remain under ignored `TestResults/`. The deterministic payment runner's customer-growth drift check failed despite restored provider settings; the original seal remains unchanged.
-- Baseline payment evidence: six deterministic and six real sandbox positives for TenantA/B/C × Razorpay/OpenPay passed with provider confirmation and SQL correlation. Razorpay decline/dismissal evidence is from an earlier candidate. Do not overclaim that it is current-candidate acceptance.
-- Operational/recovery, performance, Functions, persistence, migration and rollback passed selected profiles, not one complete L5-R packet. Suite identity reconciliation and strict source/image binding remain open.
-- Explicit gaps: Razorpay S2S unavailable; OpenPay visible 3DS challenge/negative behavior unverified; order continuation, installments, fulfillment and unresolved-payment recovery are DW-023/DW-024 Phase 11 deferrals. These are not certified.
-- Docker storage was last verified on G: with 438.4 GiB free; local SQL guardrail is loopback port `14330`. Never redirect tests to native Windows SQL. The F: retained Docker copy was deleted and is not a recovery option.
+- Evidence scope: `Docker E2E passed; L5-R reconciliation failed on NFR binding/reporting. Azure excluded.`
+- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261122-111249752/phase10-acceptance-reconciliation.json`
+- Docker E2E on the clean candidate passed its selected hook: 6 deterministic + 6 sandbox positives across A/B/C × Razorpay/OpenPay, 6 Razorpay decline/dismissal cases, integration 75/75, tenant/identity/order checks, messaging, settings restoration and restart persistence. Provider and SQL proof exists; no live-money payments.
+- Reconciliation is **FAIL**, not Phase 10 closure. The NFR lower-level run has no Docker-wrapper seal; its local filter also includes one intentionally skipped Azure-only replay test (28 passed/1 skipped). Other observed NFR checks passed: 100/100 messages, P95 2.413s, replay 3.032s, outage recovery 28.209s with zero loss/duplicates, rollback/restore and security.
+- Next: narrowly exclude the Azure-only test from local NFR selection while keeping global skip handling fail-closed; rerun with `run-phase10-docker-nfr-proof.ps1` and reconcile. A changed candidate requires an explicit decision before repeating sandbox payments.
+- Docker has 13 project containers running; G: had about 437.6 GiB free. Azure was not touched. Native SQL remains isolated at loopback `14330`; the F: retained copy was deleted.
+- DW-023/DW-024 remain Phase 11 deferrals. Razorpay S2S and OpenPay visible-challenge capabilities remain uncertified.
 
 ## Azure dev
 
