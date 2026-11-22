@@ -749,3 +749,32 @@ test('Key Vault updates preserve existing policies and add application policies 
       `${name} app access policies must be managed through the additive child resource`);
   }
 });
+
+test('Service Bus IaC explicitly preserves the deployed entity defaults', async () => {
+  const template = await readFile('infra/modules/servicebus.bicep', 'utf8');
+  const resourceBlock = (name) => {
+    const block = template.match(new RegExp(`resource ${name} [\\s\\S]*?\\r?\\n}\\r?\\n`));
+    assert.ok(block, `Service Bus resource ${name} must be present`);
+    return block[0];
+  };
+
+  for (const name of [
+    'orderTopic', 'inventorySubscription', 'ordersPaymentStateSubscription',
+    'notificationsSubscription', 'dlqTopic', 'dlqReplaySubscription',
+    'replayRequestQueue', 'replayDrillRequestQueue',
+  ]) {
+    assert.match(resourceBlock(name), /autoDeleteOnIdle:\s*entityAutoDeleteOnIdle/,
+      `${name} must retain Azure's non-expiring entity default`);
+  }
+  for (const name of ['replayRequestQueue', 'replayDrillRequestQueue']) {
+    const block = resourceBlock(name);
+    for (const property of [
+      /duplicateDetectionHistoryTimeWindow:\s*'PT10M'/,
+      /enablePartitioning:\s*false/,
+      /lockDuration:\s*'PT1M'/,
+      /maxMessageSizeInKilobytes:\s*256/,
+      /maxSizeInMegabytes:\s*1024/,
+      /requiresDuplicateDetection:\s*false/,
+    ]) assert.match(block, property, `${name} must explicitly preserve queue defaults`);
+  }
+});

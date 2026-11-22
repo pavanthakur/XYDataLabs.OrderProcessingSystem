@@ -54,6 +54,7 @@ var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuff
 var sbNamespaceName = 'sb-${baseName}-${effectiveResourceSuffix}'
 var dlqTopicName = 'order-events-dlq'
 var transportAuthRuleName = 'phase10-transport'
+var entityAutoDeleteOnIdle = 'P10675199DT2H48M5.4775807S'
 
 resource sbNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
   name: sbNamespaceName
@@ -79,8 +80,12 @@ resource orderTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' 
   parent: sbNamespace
   name: orderEventsTopicName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     defaultMessageTimeToLive: messageTtl
+    enableExpress: false
+    enablePartitioning: false
     maxMessageSizeInKilobytes: 256
+    maxSizeInMegabytes: 1024
     duplicateDetectionHistoryTimeWindow: 'PT10M'
     enableBatchedOperations: true
     supportOrdering: true
@@ -91,10 +96,14 @@ resource inventorySubscription 'Microsoft.ServiceBus/namespaces/topics/subscript
   parent: orderTopic
   name: inventorySubscriptionName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     maxDeliveryCount: maxDeliveryCount
     defaultMessageTimeToLive: messageTtl
     deadLetteringOnMessageExpiration: true
     forwardDeadLetteredMessagesTo: dlqTopicName
+    lockDuration: 'PT1M'
+    enableBatchedOperations: true
+    isClientAffine: false
   }
 }
 
@@ -102,10 +111,14 @@ resource ordersPaymentStateSubscription 'Microsoft.ServiceBus/namespaces/topics/
   parent: orderTopic
   name: ordersPaymentStateSubscriptionName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     maxDeliveryCount: maxDeliveryCount
     defaultMessageTimeToLive: messageTtl
     deadLetteringOnMessageExpiration: true
     forwardDeadLetteredMessagesTo: dlqTopicName
+    lockDuration: 'PT1M'
+    enableBatchedOperations: true
+    isClientAffine: false
   }
 }
 
@@ -113,10 +126,14 @@ resource notificationsSubscription 'Microsoft.ServiceBus/namespaces/topics/subsc
   parent: orderTopic
   name: notificationsSubscriptionName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     maxDeliveryCount: maxDeliveryCount
     defaultMessageTimeToLive: messageTtl
     deadLetteringOnMessageExpiration: true
     forwardDeadLetteredMessagesTo: dlqTopicName
+    lockDuration: 'PT1M'
+    enableBatchedOperations: true
+    isClientAffine: false
   }
 }
 
@@ -124,8 +141,14 @@ resource dlqTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01-preview' = 
   parent: sbNamespace
   name: dlqTopicName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     defaultMessageTimeToLive: messageTtl
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
     enableBatchedOperations: true
+    enableExpress: false
+    enablePartitioning: false
+    maxMessageSizeInKilobytes: 256
+    maxSizeInMegabytes: 1024
     supportOrdering: false
   }
 }
@@ -134,9 +157,13 @@ resource dlqReplaySubscription 'Microsoft.ServiceBus/namespaces/topics/subscript
   parent: dlqTopic
   name: deadLetterSubscriptionName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     maxDeliveryCount: maxDeliveryCount
     defaultMessageTimeToLive: messageTtl
     deadLetteringOnMessageExpiration: true
+    lockDuration: 'PT1M'
+    enableBatchedOperations: true
+    isClientAffine: false
   }
 }
 
@@ -144,9 +171,16 @@ resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-p
   parent: sbNamespace
   name: replayRequestQueueName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     defaultMessageTimeToLive: messageTtl
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
+    enablePartitioning: false
+    lockDuration: 'PT1M'
+    maxMessageSizeInKilobytes: 256
+    maxSizeInMegabytes: 1024
     maxDeliveryCount: maxDeliveryCount
     deadLetteringOnMessageExpiration: true
+    requiresDuplicateDetection: false
   }
 }
 
@@ -154,9 +188,16 @@ resource replayDrillRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10
   parent: sbNamespace
   name: replayDrillRequestQueueName
   properties: {
+    autoDeleteOnIdle: entityAutoDeleteOnIdle
     defaultMessageTimeToLive: messageTtl
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
+    enablePartitioning: false
+    lockDuration: 'PT1M'
+    maxMessageSizeInKilobytes: 256
+    maxSizeInMegabytes: 1024
     maxDeliveryCount: maxDeliveryCount
     deadLetteringOnMessageExpiration: true
+    requiresDuplicateDetection: false
   }
 }
 
