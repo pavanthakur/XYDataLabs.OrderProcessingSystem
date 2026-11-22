@@ -4,19 +4,29 @@ Navigation only, not proof. Verify Git, Azure state and referenced evidence befo
 
 ## Phase 10 Azure-dev checkpoint — 23 November 2026
 
-- Review revision: `11154ad1157f25df31e444822c4c8409c0e0b6ad`
-- Worktree state: `DIRTY`
+- Review revision: `d6eb68713e3d48a9eb047684c142c2b93d0d64e1`
+- Worktree state: `CLEAN`
 - Evidence status: `HISTORICAL`
-- Evidence revision: `11154ad1157f25df31e444822c4c8409c0e0b6ad`
+- Evidence revision: `e5c40fbe6bbe91bd5a3a7b763e8fc218a23e3fd0`
 - Evidence environment: `AZURE_DEV`
-- Evidence scope: `Deployment, runtime, transport, service preflight and one approved TenantA replay passed; no-charge Entra preflight passed infrastructure checks but timed out at attended sign-in before order/payment.`
-- Evidence reference: `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-22T21-57-00-328Z/summary.json`
-- Deployed application/image candidate: `e5c40fbe6bbe91bd5a3a7b763e8fc218a23e3fd0`. Verifier/test fixes are committed as `de3a5497c6c1179418508e1c20f3f0f73cfc435e`; they do not change deployed application images.
-- Latest hosted results on the candidate: CI/Contract and Drift Scanner `45066710757` / `45066710721`; immutable release build `45067365380`; deploy orchestrator `45067679429`; runtime smoke `45068970780`; transport smoke `45069084216`; workflow 04 service-only preflight `45072102164`. Verify each run before treating it as current evidence.
-- Deploy, runtime, transport and service-access preflight passed. Workflow 04 service-preflight is no-charge and does not prove browser or payment journeys.
-- TenantA approved DLQ replay was executed once using the authenticated operator identity. SQL evidence and the acceptance projection are under ignored `TestResults/Phase10/azure-dlq-replay-20261123/`. Validation passed: one replay, one tenant-scoped Inventory and Notifications effect each, no cross-tenant effects, and temporary SQL firewall lease restored. Regression fixes cover tenant variable shadowing, SQL UTC interpretation, and valid downstream effects that occur after publication but before the Functions completion marker.
-- Exact-commit CI on `de3a5497c6c1179418508e1c20f3f0f73cfc435e`: CI/Contract `45073184649`, AI Customization `45073184685`, Documentation Links `45073184689`, AI Prompts `45073184727`, and Drift Scanner `45073184724` passed; ADR Markdown `45073184735` was skipped by path scope.
-- **Still open:** the Azure browser payment matrix. A fresh no-charge `AuthPreflight` passed tenant/provider, SQL and App Insights checks and removed its temporary SQL firewall lease, but the operator did not complete sign-in within the window. Chrome was opened; the runner stopped before fixtures/orders/payments (0 cases, 0 orders, 0 payments). Do not bypass MFA. Resume the supervised six-case matrix once the attended sign-in can be completed, then reconcile Azure and final Phase 10 evidence.
-- This is not full Phase 10 closure. OpenPay visible-challenge behavior, Razorpay S2S, and DW-023/DW-024 order recovery/fulfillment scope remain uncertified or deferred. Staging and production are out of scope.
+- Evidence scope: `Deployment/runtime/transport and six prior sandbox journeys are recorded; current replay preflight is ready, but payment digest binding, regular-user isolation, duplicate replay/restoration and rollback are open.`
+- Evidence reference: `TestResults/Phase10/azure-dev-evidence-review-20261123.md`
+- Current candidate: `dev` at `d6eb68713e3d48a9eb047684c142c2b93d0d64e1`, clean and aligned with `origin/dev`.
+- Latest exact-SHA hosted checks passed: CI/Contract `45075550986`, AI Customization `45075550866`, Documentation Links `45075550932`, Drift Scanner `45075550837`.
+- Current deployed application release: source `e5c40fbe6bbe91bd5a3a7b763e8fc218a23e3fd0`; deployment `45067679429`, runtime smoke `45068970780`, transport smoke `45069084216`, workflow-04 service preflight `45072102164` passed. Transport proves consumer effects and Functions quarantine intake, not approved deployed replay.
+- Read-only replay preflight `TestResults/Phase10/azure-replay-preflight-20261123-current.json`: **24/24 PASS**, no mutation, runner `99fce3f5-b801-4aa1-b2df-122900204d65`. It verifies the isolated/normal queues, expected single-publisher baseline, Functions normal queue, App Insights query access and scoped runner roles. This is readiness only; no duplicate-delivery or exact restoration proof.
+- A one-time protected TenantA replay has prior verified SQL evidence under ignored `TestResults/Phase10/azure-dlq-replay-20261123/`. It is not the isolated duplicate-redelivery drill and does not prove all-tenant deployed replay.
+- Payment matrix `payment-automation-azure-matrix-2026-11-22T17-38-57-237Z` passed six sandbox cases and fixture cleanup on its run. It has no deployed image digest binding. Its associated prior release source was `64adfb6443b0badd3f07b2f657af2e10b6a1cde1`; current release `e5c40fbe...` differs in all six Container App image digests and the Functions package hash. Treat the six results as historical—not current-release payment acceptance. No payment was repeated in this audit.
+- Entra API app has `platform-admin` and `phase10-operator`; both roles are assigned to the same runner/admin user. The `extn.applicationTenantCode` access-token claim is configured and its user extension property exists. No regular-user claim values or Azure isolation tests were verified. Named TenantA/B/C Entra test users are still needed.
+- Detailed read-only findings: `TestResults/Phase10/azure-dev-evidence-review-20261123.md` (ignored local evidence; preserve raw reports).
 
-See [Phase 10 checklist](../../docs/internal/phase10-implementation-checklist.md), [Azure smoke runbook](../../docs/runbooks/phase10-azure-smoke.md), and [Service Bus DLQ replay runbook](../../docs/runbooks/servicebus-dlq-replay.md).
+## Remaining before Phase 10 closure
+
+1. Run a fresh current-release Azure sandbox matrix only under a separately scoped payment approval; bind each case to deployed image digests and settings.
+2. Provide/approve named regular-user Entra accounts and verify API-token tenant claims, own-tenant allow, cross-tenant denial, invalid/expired token rejection and logout.
+3. After separate replay approval, execute the isolated replay and duplicate-delivery/fault-injection cases; verify exact publisher-settings restoration and durable effects. Fresh preflight is mandatory immediately before mutation.
+4. Execute/verify Azure recovery and rollback, then reconcile one candidate-bound acceptance packet. An available prior image is not rollback proof.
+
+No payment, replay mutation, deployment, directory write or RBAC change was made in the 23 November read-only audit. Keep Phase 10 open; staging/production and approved Phase 11/provider-capability deferrals remain outside this acceptance.
+
+See [Phase 10 checklist](../../docs/internal/phase10-implementation-checklist.md) and [Azure smoke runbook](../../docs/runbooks/phase10-azure-smoke.md).
