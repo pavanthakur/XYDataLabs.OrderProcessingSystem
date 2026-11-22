@@ -4,9 +4,9 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Phase 10 checkpoint — 22 November 2026
 
-- Review revision: `d7ced7cc7373c89534f0c74ea72217c20b8bdd27`
+- Review revision: `64adfb6443b0badd3f07b2f657af2e10b6a1cde1`
 - Worktree state: `DIRTY`
-- Current uncommitted change: Key Vault snapshot normalization; see Azure deployment retry checkpoint below.
+- Current uncommitted change: Azure Functions trigger-state recovery after workflow 03 found disabled DLQ triggers; see Azure dev follow-up below.
 - Evidence status: `HISTORICAL`
 - Evidence revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
 - Evidence environment: `LOCAL_DOCKER_DESKTOP_G`
@@ -28,12 +28,12 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 - Azure-dev positive payment matrix: **PASS 6/6, resumed**, `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-21T17-21-05-312Z/summary.json`. Four prior cases were carried forward; TenantC/Razorpay was checked read-only and only TenantC/OpenPay ran fresh. Entra preflight, sign-out and restoration passed. Not uninterrupted/hosted acceptance. OpenPay 3DS was temporarily off; inspected baseline on, then restored.
 - Workflow results are bounded to their recorded scopes; Azure cleanup was not verified.
 
-### Azure deployment retry checkpoint — 22 November 2026
+### Azure dev follow-up — 22 November 2026
 
-- Workflow 01 [45009489149](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45009489149) failed: the Key Vault API requires `properties.accessPolicies`. Other modules, including Container Apps, Functions, monitoring, Service Bus, identity and the RG, succeeded first. Dev is partially updated; SQL/Redis were disabled. A later read saw seven policies (no before/after proof).
-- Fix `244fc6f6` snapshots policies for what-if/deploy and fails closed on read errors. After shortening this handoff, clean candidate `d7ced7cc` passed CI/Contract `45011590723`, AI customization `45011590737`, and Drift `45011590722`. Immutable release `45012244450` passed. What-if `45012479244` passed (10 modify, 18 unchanged, 1 unsupported additive policy, 7 ignored); Key Vault parent was no-change and SQL resources were ignored.
-- Actual redeploy `45012798453` failed at Key Vault with `accessPolicies[0].Permissions.certificates` invalid; other modules again succeeded first. Azure CLI’s live policy snapshot has seven entries; absent certificate/key/storage permissions and `applicationId` are serialized as null. The current uncommitted fix normalizes only these optional nulls, preserves all non-null grants, and fails closed on malformed data. Local regression suite passed 94/94; both Bicep builds and live-snapshot normalization passed (7 policies, 15 granted permission entries). Dev remains partially deployed; SQL/Redis stayed disabled.
-- Next: review and commit/push the normalizer, wait for exact-SHA hosted CI, rebuild immutable images/package, run what-if and verify Key Vault parent is unchanged, then redeploy with cleanup/SQL/Redis off. Run runtime smoke only after a successful deploy; do not yet claim Azure acceptance.
+- Key Vault serialization fix is on `64adfb6443b0badd3f07b2f657af2e10b6a1cde1`; hosted checks and immutable release passed. Deploy workflow 01 [45014912748](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45014912748) passed with cleanup/SQL/Redis off. Runtime workflow 02 [45015798243](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45015798243) passed health, generated URLs, tenant topology, gateway and UI/API route checks.
+- Transport workflow 03 [45015979409](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45015979409) is **FAIL/PARTIAL**: ordinary consumers/fan-out effects passed; Functions quarantine did not. App Insights confirmed `DlqIntakeFunction` and `DlqReplayFunction` were disabled. DLQ intake is now checked before publishing to prevent another misleading partial run.
+- Current uncommitted fix adds an explicit Azure-dev-only `activateExistingFunctionsTriggers` deployment selection, snapshots trigger settings, preserves them on routine redeploy, and documents the safe recovery path. It does not redeploy SQL/Redis or rotate SQL credentials. Static preflight and its regression suite pass locally; hosted CI and redeploy/retest are still pending.
+- Existing DLQ subscription has messages from the failed run. Do not replay or consume them as a recovery action without a separately reviewed, explicitly selected replay procedure.
 
 ### Azure-dev replay preflight — 22 November 2026
 
@@ -44,7 +44,7 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Next actions
 
-1. Review and approve the Azure-dev deployment/replay prerequisites, then run only the approved Azure-dev workflow sequence and record each gate independently. The local Docker PASS above does not substitute for Azure evidence.
+1. Complete local validation and hosted CI for the trigger-state fix; then run Azure-dev deploy with `activateExistingFunctionsTriggers=true`, `deploySql=false`, `deployRedis=false`, `cleanupInfra=false`, and `dryRun=false`. Re-run runtime and transport checks before moving to payments.
 2. Keep staging/prod untouched until dev gates, restoration and cost/cleanup decisions are reviewed.
 3. Do not repeat successful local sandbox payments solely to refresh evidence. Preserve Phase 11 and provider-capability deferrals as uncertified.
 

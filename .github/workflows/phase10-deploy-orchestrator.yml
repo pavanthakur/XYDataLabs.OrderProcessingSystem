@@ -55,6 +55,11 @@ on:
         required: true
         default: false
         type: boolean
+      activateExistingFunctionsTriggers:
+        description: 'Azure dev only: enable the already-provisioned Functions triggers after a routine redeploy (requires the existing SQL managed-identity grants to remain valid)'
+        required: true
+        default: false
+        type: boolean
       candidateSha:
         description: 'Full source SHA already validated by hosted CI and immutable release build'
         required: false
@@ -477,6 +482,7 @@ jobs:
       cleanupInfra: ${{ inputs.cleanupInfra }}
       deploySql: ${{ inputs.deploySql }}
       deployRedis: ${{ inputs.deployRedis }}
+      activateExistingFunctionsTriggers: ${{ inputs.activateExistingFunctionsTriggers }}
       candidateSha: ${{ inputs.candidateSha }}
       deploymentWorkflowSha: ${{ github.sha }}
       releaseRunId: ${{ inputs.releaseRunId }}

@@ -163,6 +163,8 @@ jobs:
 
           always_on="$(az functionapp config show --resource-group "$RG_NAME" --name "$FUNCTION_APP" --query alwaysOn --output tsv)"
           [[ "$always_on" == "true" ]] || { echo "Function App ${FUNCTION_APP} is not always-on; refusing to publish transport test messages because Service Bus trigger processing is not guaranteed." >&2; exit 1; }
+          intake_disabled="$(az functionapp config appsettings list --resource-group "$RG_NAME" --name "$FUNCTION_APP" --query "[?name=='AzureWebJobs.DlqIntakeFunction.Disabled'].value | [0]" --output tsv)"
+          [[ "$intake_disabled" == "false" ]] || { echo "DlqIntakeFunction is disabled or its state is unknown; refusing to publish transport/DLQ smoke messages." >&2; exit 1; }
 
           echo "✅ Service Bus topology exists." >> "$GITHUB_STEP_SUMMARY"
 

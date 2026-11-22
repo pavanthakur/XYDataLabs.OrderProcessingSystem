@@ -191,6 +191,7 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
   failures.push(...validateAppServiceDeploymentWorkflows(deploymentWorkflows));
   const transportWorkflow = deploymentWorkflows.find((workflow) => /phase10-azure-transport-smoke\.yml$/i.test(workflow.path))?.content ?? '';
   if (!/az functionapp config show[\s\S]*?--query alwaysOn[\s\S]*?refusing to publish transport test messages/.test(transportWorkflow)) failures.push('Azure transport smoke must fail before publishing messages when the Functions host is not always-on.');
+  if (!/intake_disabled=.*AzureWebJobs\.DlqIntakeFunction\.Disabled[\s\S]*?\[\[ "\$intake_disabled" == "false" \]\] \|\| \{ echo "DlqIntakeFunction is disabled or its state is unknown; refusing to publish transport\/DLQ smoke messages\./.test(transportWorkflow)) failures.push('Azure transport smoke must fail before publishing messages when Functions quarantine intake is disabled or unknown.');
   if (!/az functionapp function list/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify Functions host indexing after package deployment.');
   if (!/az functionapp config show[\s\S]*?--query alwaysOn[\s\S]*?alwaysOn must be true/.test(infraDeployWorkflow)) failures.push('Reusable deployment must verify the Function App always-on setting before accepting the deployed package.');
   if (!/azureOperationsDatabaseName/.test(infraDeployWorkflow)
@@ -226,16 +227,32 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
   }
   const sqlIdentityGrantStep = infraDeployWorkflow.indexOf('name: Grant Phase 10 Runtime SQL Managed Identity Access');
   const functionPackageStep = infraDeployWorkflow.indexOf('name: Deploy exact Functions package and verify host indexing');
-  const triggerActivationStep = infraDeployWorkflow.indexOf('name: Enable Functions triggers after identity, SQL, and package gates');
+  const triggerActivationStep = infraDeployWorkflow.indexOf('name: Enable Functions triggers after database and package gates');
+  const triggerRestoreLabel = 'name: Restore existing Functions trigger state after routine redeploy';
+  const triggerRestoreStart = infraDeployWorkflow.indexOf(triggerRestoreLabel);
+  const nextDeployStep = triggerRestoreStart < 0 ? -1 : infraDeployWorkflow.indexOf('\n      - name:', triggerRestoreStart + triggerRestoreLabel.length);
+  const triggerRestoreStep = triggerRestoreStart < 0
+    ? ''
+    : infraDeployWorkflow.slice(triggerRestoreStart, nextDeployStep < 0 ? undefined : nextDeployStep);
   if (sqlMigrationStep < 0 || sqlAdminVerificationStep < 0 || sqlAdminVerificationStep >= sqlMigrationStep
     || !/az sql server ad-admin list/.test(infraDeployWorkflow)
     || !/actual_sid[\s\S]*?EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID[\s\S]*?actual_login[\s\S]*?EXPECTED_SQL_ENTRA_ADMIN_LOGIN/.test(infraDeployWorkflow)
     || sqlIdentityGrantStep <= sqlMigrationStep || functionPackageStep <= sqlIdentityGrantStep || triggerActivationStep <= functionPackageStep
+    || !/Snapshot existing Functions trigger state before ARM deployment/.test(infraDeployWorkflow)
+    || !triggerRestoreStep
+    || !/steps\.params\.outputs\.deploySql != 'true' && steps\.params\.outputs\.activateExistingFunctionsTriggers != 'true'/.test(triggerRestoreStep)
+    || !/AzureWebJobs\.DlqIntakeFunction\.Disabled=\$INTAKE_DISABLED/.test(triggerRestoreStep)
+    || !/AzureWebJobs\.DlqReplayFunction\.Disabled=\$REPLAY_DISABLED/.test(triggerRestoreStep)
+    || !/Could not restore existing Functions setting/.test(triggerRestoreStep)
+    || !/activateExistingFunctionsTriggers/.test(infraDeployWorkflow)
+    || !/environment[^\n]*dev[\s\S]*?deploySql[^\n]*false[\s\S]*?cleanupInfra[^\n]*false[\s\S]*?dryRun[^\n]*false/.test(infraDeployWorkflow)
+    || !/steps\.params\.outputs\.deploySql == 'true' \|\| steps\.params\.outputs\.activateExistingFunctionsTriggers == 'true'/.test(infraDeployWorkflow)
     || !infraDeployWorkflow.includes('AzureWebJobs.DlqIntakeFunction.Disabled=false')
     || !infraDeployWorkflow.includes('AzureWebJobs.DlqReplayFunction.Disabled=false')
     || !infraDeployWorkflow.includes('az functionapp config appsettings list')) {
-    failures.push('SQL Entra administrator must be verified before migrations; Functions DLQ/replay triggers must remain paused until SQL migrations, runtime identity grants, and exact package/index checks pass, then be enabled and verified.');
+    failures.push('SQL Entra administrator must be verified before migrations; routine redeploys must restore captured Functions trigger state, and explicit existing-trigger activation must be Azure-dev-only with SQL deployment, cleanup, and dry-run off.');
   }
+  if (!/activateExistingFunctionsTriggers:\s*\$\{\{\s*inputs\.activateExistingFunctionsTriggers\s*\}\}/.test(orchestratorWorkflow)) failures.push('Deployment orchestrator must forward the explicit existing-Functions-trigger activation selection.');
   if (/:phase10\b|:latest\b/.test(infraDeployWorkflow) || !/@sha256:\[0-9a-f\]\{64\}/.test(infraDeployWorkflow)) failures.push('Reusable deployment must reject mutable image tags and require digest-qualified references.');
   if (!/candidateSha/.test(orchestratorWorkflow) || !/releaseRunId/.test(orchestratorWorkflow) || !/approvedParameterIdentity/.test(orchestratorWorkflow)) failures.push('Orchestrator must require exact candidate, producer run, and reviewed parameter identity.');
   if (!/deploymentWorkflowSha/.test(orchestratorWorkflow) || !/git merge-base --is-ancestor/.test(orchestratorWorkflow) || !/DEPLOYMENT_WORKFLOW_SHA/.test(infraDeployWorkflow)) {

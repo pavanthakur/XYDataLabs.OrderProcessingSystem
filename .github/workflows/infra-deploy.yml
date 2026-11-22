@@ -61,6 +61,11 @@ on:
         required: false
         default: false
         type: boolean
+      activateExistingFunctionsTriggers:
+        description: 'Azure dev only: enable already-provisioned Functions triggers after a routine redeploy; existing SQL managed-identity grants must be valid'
+        required: false
+        default: false
+        type: boolean
       acrLoginServer:
         description: 'Optional ACR login server for Phase 10 runtime images'
         required: false
@@ -732,7 +737,14 @@ jobs:
           echo "phase10=true" >> $GITHUB_OUTPUT
           echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT
           echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT
+          echo "activateExistingFunctionsTriggers=${{ inputs.activateExistingFunctionsTriggers }}" >> $GITHUB_OUTPUT
           echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.activateExistingFunctionsTriggers }}" = "true" ]; then
+            [[ "${{ inputs.environment }}" == "dev" && "${{ inputs.deploySql }}" == "false" && "${{ inputs.cleanupInfra }}" == "false" && "${{ inputs.dryRun }}" == "false" ]] || {
+              echo 'Existing Functions trigger activation is allowed only for an actual Azure-dev redeploy with SQL deployment and cleanup disabled.' >&2
+              exit 1
+            }
+          fi
           if [ "${{ inputs.deploySql }}" = "true" ]; then
             [[ "$SQL_ENTRA_ADMIN_OBJECT_ID" =~ ^[0-9a-fA-F-]{36}$ && -n "$SQL_ENTRA_ADMIN_LOGIN" && "$SQL_ENTRA_ADMIN_LOGIN" != *$'\n'* && "$SQL_ENTRA_ADMIN_LOGIN" != *$'\r'* ]] || { echo "SQL_ENTRA_ADMIN_OBJECT_ID and SQL_ENTRA_ADMIN_LOGIN must be configured as environment variables before deploying SQL." >&2; exit 1; }
             echo "aadAdminObjectId=${SQL_ENTRA_ADMIN_OBJECT_ID}" >> $GITHUB_OUTPUT
@@ -787,6 +799,42 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Snapshot existing Functions trigger state before ARM deployment
+        id: function-trigger-state
+        if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false }}
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          TARGET_KEY="azure-${TARGET_ENVIRONMENT}"
+          [[ "$TARGET_ENVIRONMENT" != "staging" ]] || TARGET_KEY="azure-stg"
+          TARGET="$(TARGET_KEY="$TARGET_KEY" node -e 'const x=require("./automation/config/runtime-targets.json").targets.find((v)=>v.key===process.env.TARGET_KEY); if(!x) process.exit(2); process.stdout.write(JSON.stringify(x))')"
+          RESOURCE_GROUP="$(TARGET="$TARGET" node -e 'process.stdout.write(JSON.parse(process.env.TARGET).azureResourceGroupName || "")')"
+          FUNCTION_APP="$(TARGET="$TARGET" node -e 'process.stdout.write(JSON.parse(process.env.TARGET).azureFunctionAppName || "")')"
+          [[ -n "$RESOURCE_GROUP" && -n "$FUNCTION_APP" ]] || { echo 'Runtime target lacks Function App or resource group metadata; refusing deployment.' >&2; exit 1; }
+          if az functionapp show --resource-group "$RESOURCE_GROUP" --name "$FUNCTION_APP" --query id --output tsv 1>/dev/null 2>"$RUNNER_TEMP/function-app-snapshot.err"; then
+            settings="$(az functionapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$FUNCTION_APP" --output json --only-show-errors)"
+            echo 'existed=true' >> "$GITHUB_OUTPUT"
+            for pair in 'intake:AzureWebJobs.DlqIntakeFunction.Disabled' 'replay:AzureWebJobs.DlqReplayFunction.Disabled'; do
+              key="${pair%%:*}"; name="${pair#*:}"
+              value="$(jq -r --arg n "$name" '[.[] | select(.name==$n) | .value] | if length == 0 then "missing" else .[0] end' <<< "$settings")"
+              [[ "$value" == 'true' || "$value" == 'false' || "$value" == 'missing' ]] || { echo "Unexpected trigger state for $name; refusing to deploy." >&2; exit 1; }
+              echo "$key=$value" >> "$GITHUB_OUTPUT"
+            done
+            echo 'Captured existing Function trigger state without reading unrelated app-setting values.'
+          else
+            if grep -Eqi 'ResourceNotFound|NotFound|was not found' "$RUNNER_TEMP/function-app-snapshot.err"; then
+              echo 'existed=false' >> "$GITHUB_OUTPUT"
+              echo 'intake=missing' >> "$GITHUB_OUTPUT"
+              echo 'replay=missing' >> "$GITHUB_OUTPUT"
+              echo 'Function App does not exist yet; deployment will retain the fail-closed disabled defaults.'
+            else
+              echo 'Could not determine existing Function trigger state; refusing to deploy.' >&2
+              exit 1
+            fi
+          fi
 
       - name: Resolve SQL bootstrap credential
         id: sql-bootstrap
@@ -1422,8 +1470,8 @@ jobs:
             echo "| Invocation evidence | pending Phase 10 transport workflow 03 |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Enable Functions triggers after identity, SQL, and package gates
-        if: ${{ steps.params.outputs.deploySql == 'true' }}
+      - name: Enable Functions triggers after database and package gates
+        if: ${{ steps.params.outputs.deploySql == 'true' || steps.params.outputs.activateExistingFunctionsTriggers == 'true' }}
         shell: bash
         env:
           RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
@@ -1462,7 +1510,41 @@ jobs:
             sleep 15
           done
           [[ "$indexed_count" == "$expected_count" ]] || { echo "Expected ${expected_count} indexed Functions after activation; found ${indexed_count}." >&2; exit 1; }
-          echo "✅ Deployed Functions triggers are enabled only after SQL identity grants and package verification; ${indexed_count}/${expected_count} Functions are indexed." >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Functions triggers were enabled after package verification; ${indexed_count}/${expected_count} Functions are indexed." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ steps.params.outputs.deploySql }}" == "true" ]]; then
+            echo 'Trigger activation followed this run’s SQL migrations and managed-identity grants.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Trigger activation was explicitly selected for dev using the previously provisioned SQL baseline and its existing managed-identity grants; no SQL deployment or password rotation occurred.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Restore existing Functions trigger state after routine redeploy
+        if: ${{ steps.params.outputs.deploySql != 'true' && steps.params.outputs.activateExistingFunctionsTriggers != 'true' && steps.function-trigger-state.outputs.existed == 'true' }}
+        shell: bash
+        env:
+          RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
+          FUNCTION_APP: ${{ steps.outputs.outputs.function }}
+          INTAKE_DISABLED: ${{ steps.function-trigger-state.outputs.intake }}
+          REPLAY_DISABLED: ${{ steps.function-trigger-state.outputs.replay }}
+        run: |
+          set -euo pipefail
+          [[ -n "$FUNCTION_APP" ]] || { echo 'Function App output is empty; refusing to restore trigger state.' >&2; exit 1; }
+          # Missing values have no known enabled state; preserve the fail-closed Bicep default.
+          [[ "$INTAKE_DISABLED" != 'missing' ]] || INTAKE_DISABLED=true
+          [[ "$REPLAY_DISABLED" != 'missing' ]] || REPLAY_DISABLED=true
+          az functionapp config appsettings set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$FUNCTION_APP" \
+            --settings \
+              "AzureWebJobs.DlqIntakeFunction.Disabled=$INTAKE_DISABLED" \
+              "AzureWebJobs.DlqReplayFunction.Disabled=$REPLAY_DISABLED" \
+            --only-show-errors 1>/dev/null
+          az functionapp restart --resource-group "$RESOURCE_GROUP" --name "$FUNCTION_APP" --only-show-errors 1>/dev/null
+          for pair in "AzureWebJobs.DlqIntakeFunction.Disabled:$INTAKE_DISABLED" "AzureWebJobs.DlqReplayFunction.Disabled:$REPLAY_DISABLED"; do
+            setting="${pair%%:*}"; expected="${pair#*:}"
+            actual="$(az functionapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$FUNCTION_APP" --query "[?name=='${setting}'].value | [0]" --output tsv)"
+            [[ "$actual" == "$expected" ]] || { echo "Could not restore existing Functions setting '$setting'; expected '$expected'." >&2; exit 1; }
+          done
+          echo '✅ Routine redeploy restored the exact pre-deployment Functions trigger enabled/disabled state. Missing settings remain disabled (fail-closed).' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Refresh Runtime Hosts After SQL Setup
         if: ${{ steps.params.outputs.deploySql == 'true' }}

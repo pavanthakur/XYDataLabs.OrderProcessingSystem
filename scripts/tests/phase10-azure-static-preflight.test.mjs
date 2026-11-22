@@ -82,9 +82,9 @@ const valid = {
   serviceBusBicep: "resource replayRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' output replayRequestQueueName string = replayRequestQueue.name",
   functionsPackageVerifier: "execFile('az', ['account', 'get-access-token']); authorization: `Bearer \${accessToken}`",
   mainBicep: "param functionsHostStorageSkuName string = 'Standard_LRS' hostStorageSkuName: functionsHostStorageSkuName param replayRequestQueueName string replayRequestQueueName: serviceBus.outputs.replayRequestQueueName output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName",
-  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after identity, SQL, and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
-  deploymentWorkflows: [{ path: '.github/workflows/phase10-azure-transport-smoke.yml', content: 'az functionapp config show --query alwaysOn refusing to publish transport test messages' }],
-  orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs dryRun: default: true',
+  infraDeployWorkflow: 'id-token: write uses: azure/login@v3 Azure CLI 2.48.1 or later is required verify-phase10-release-inputs.mjs releaseRunAttempt approvedParameterIdentity DEPLOYMENT_WORKFLOW_SHA az functionapp deployment source config-zip FUNCTIONS_PACKAGE_SHA256 verify-phase10-function-package-runtime.mjs az functionapp function list az functionapp config show --query alwaysOn alwaysOn must be true azureSqlServerName azureOperationsDatabaseName --parameters existingFunctionsSqlServerName= --parameters existingFunctionsSqlDatabaseName= name: Verify SQL Entra administrator before migrations az sql server ad-admin show actual_sid EXPECTED_SQL_ENTRA_ADMIN_OBJECT_ID actual_login EXPECTED_SQL_ENTRA_ADMIN_LOGIN name: Run Azure SQL Migrations name: Grant Phase 10 Runtime SQL Managed Identity Access name: Deploy exact Functions package and verify host indexing name: Enable Functions triggers after database and package gates AzureWebJobs.DlqIntakeFunction.Disabled=false AzureWebJobs.DlqReplayFunction.Disabled=false az functionapp config appsettings list image@sha256:[0-9a-f]{64}',
+  deploymentWorkflows: [{ path: '.github/workflows/phase10-azure-transport-smoke.yml', content: 'az functionapp config show --query alwaysOn refusing to publish transport test messages intake_disabled=az functionapp config appsettings list AzureWebJobs.DlqIntakeFunction.Disabled [[ "$intake_disabled" == "false" ]] || { echo "DlqIntakeFunction is disabled or its state is unknown; refusing to publish transport/DLQ smoke messages."; exit 1; }' }],
+  orchestratorWorkflow: 'candidateSha deploymentWorkflowSha git merge-base --is-ancestor ref: ${{ github.sha }} source_hosted_ci_artifact_name deploymentWorkflowSha: ${{ github.sha }} releaseRunId approvedParameterIdentity phase10-azure-preflight.mjs activateExistingFunctionsTriggers: ${{ inputs.activateExistingFunctionsTriggers }} dryRun: default: true',
   azurePreflightScript: 'phase10-azure-preflight.mjs Microsoft.Authorization/roleAssignments/write',
   parameterFiles: {
     dev: { parameters: { functionsHostStorageSkuName: { value: 'Standard_LRS' }, replayRequestQueueName: { value: 'dlq-replay-requests-dev' } } },
@@ -105,6 +105,9 @@ valid.infraDeployWorkflow += [
   '        run: |',
   '          echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT',
   '          echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT',
+  '          echo "activateExistingFunctionsTriggers=${{ inputs.activateExistingFunctionsTriggers }}" >> $GITHUB_OUTPUT',
+  '          [[ "${{ inputs.environment }}" == "dev" && "${{ inputs.deploySql }}" == "false" && "${{ inputs.cleanupInfra }}" == "false" && "${{ inputs.dryRun }}" == "false" ]] || activationGuard',
+  '        if: ${{ steps.params.outputs.deploySql == \'true\' || steps.params.outputs.activateExistingFunctionsTriggers == \'true\' }}',
   '          if [ "${{ inputs.deploySql }}" = "true" ]; then',
   '            [[ "$SQL_ENTRA_ADMIN_OBJECT_ID" =~ ^[0-9a-fA-F-]{36}$ && -n "$SQL_ENTRA_ADMIN_LOGIN" ]] || { echo "SQL_ENTRA_ADMIN_OBJECT_ID and SQL_ENTRA_ADMIN_LOGIN must be configured as environment variables before deploying SQL." >&2; exit 1; }',
   '            echo "aadAdminObjectId=${SQL_ENTRA_ADMIN_OBJECT_ID}" >> $GITHUB_OUTPUT',
@@ -118,6 +121,10 @@ valid.infraDeployWorkflow += [
   '      - name: Verify deployed SQL bootstrap login and Key Vault read-back',
   '        run: ./Resources/Azure-Deployment/Test-Phase10SqlBootstrapLogin.ps1 -VerifyVault',
   '      - name: Run Azure SQL Migrations',
+  '      - name: Snapshot existing Functions trigger state before ARM deployment',
+  '      - name: Restore existing Functions trigger state after routine redeploy',
+  "        if: ${{ steps.params.outputs.deploySql != 'true' && steps.params.outputs.activateExistingFunctionsTriggers != 'true' }}",
+  '        run: AzureWebJobs.DlqIntakeFunction.Disabled=$INTAKE_DISABLED AzureWebJobs.DlqReplayFunction.Disabled=$REPLAY_DISABLED Could not restore existing Functions setting',
 ].join('\n');
 valid.infraDeployWorkflow = valid.infraDeployWorkflow.replace('az sql server ad-admin show', 'az sql server ad-admin list');
 
@@ -218,6 +225,36 @@ test('Azure Functions keep-alive is required in IaC, deployment verification, an
     }],
   });
   assert.match(missingTransportCheck.failures.join('\n'), /fail before publishing messages when the Functions host is not always-on/);
+
+  const originalTransportWorkflow = valid.deploymentWorkflows[0];
+  valid.deploymentWorkflows[0] = {
+    ...originalTransportWorkflow,
+    content: originalTransportWorkflow.content.split('refusing to publish transport/DLQ smoke messages').join('refusing to publish messages'),
+  };
+  const missingIntakePreflight = auditAzureDeployContract({
+    ...valid,
+    deploymentWorkflows: [{
+      path: '.github/workflows/phase10-azure-transport-smoke.yml',
+      content: valid.deploymentWorkflows.find((workflow) => /phase10-azure-transport-smoke\.yml$/i.test(workflow.path)).content
+        .replace(/intake_disabled=.*\n\s*\[\[ \"\$intake_disabled\" == \"false\" \]\].*\n/, ''),
+    }],
+  });
+  assert.match(missingIntakePreflight.failures.join('\n'), /fail before publishing messages when Functions quarantine intake is disabled or unknown/);
+  valid.deploymentWorkflows[0] = originalTransportWorkflow;
+});
+
+test('routine Azure redeploys preserve Functions trigger state and explicit activation is dev-only', () => {
+  const missingRestore = auditAzureDeployContract({
+    ...valid,
+    infraDeployWorkflow: valid.infraDeployWorkflow.replace('name: Restore existing Functions trigger state after routine redeploy', ''),
+  });
+  assert.match(missingRestore.failures.join('\n'), /routine redeploys must restore captured Functions trigger state/);
+
+  const missingOrchestratorForward = auditAzureDeployContract({
+    ...valid,
+    orchestratorWorkflow: valid.orchestratorWorkflow.replace('activateExistingFunctionsTriggers: ${{ inputs.activateExistingFunctionsTriggers }}', ''),
+  });
+  assert.match(missingOrchestratorForward.failures.join('\n'), /must forward the explicit existing-Functions-trigger activation selection/);
 });
 
 test('Azure deploy contract rejects missing SQL fallback workflow wiring and SQL-admin runtime credentials', () => {
