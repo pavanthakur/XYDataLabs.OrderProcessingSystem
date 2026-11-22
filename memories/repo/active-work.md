@@ -4,18 +4,19 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Phase 10 checkpoint — 22 November 2026
 
-- Review revision: `28de1e896a8aab2ac6b6221fd4e1779078b27736`
+- Review revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
 - Worktree state: `DIRTY`
-- Evidence status: `FAIL`
-- Evidence revision: `28de1e8`
+- Evidence status: `HISTORICAL`
+- Evidence revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
 - Evidence environment: `LOCAL_DOCKER_DESKTOP_G`
-- Evidence scope: `Docker E2E passed; L5-R reconciliation failed on NFR binding/reporting. Azure excluded.`
-- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261122-111249752/phase10-acceptance-reconciliation.json`
-- Docker E2E on the clean candidate passed its selected hook: 6 deterministic + 6 sandbox positives across A/B/C × Razorpay/OpenPay, 6 Razorpay decline/dismissal cases, integration 75/75, tenant/identity/order checks, messaging, settings restoration and restart persistence. Provider and SQL proof exists; no live-money payments.
-- Reconciliation is **FAIL**, not Phase 10 closure. The NFR lower-level run has no Docker-wrapper seal; its local filter also includes one intentionally skipped Azure-only replay test (28 passed/1 skipped). Other observed NFR checks passed: 100/100 messages, P95 2.413s, replay 3.032s, outage recovery 28.209s with zero loss/duplicates, rollback/restore and security.
-- Next: narrowly exclude the Azure-only test from local NFR selection while keeping global skip handling fail-closed; rerun with `run-phase10-docker-nfr-proof.ps1` and reconcile. A changed candidate requires an explicit decision before repeating sandbox payments.
-- Docker has 13 project containers running; G: had about 437.6 GiB free. Azure was not touched. Native SQL remains isolated at loopback `14330`; the F: retained copy was deleted.
-- DW-023/DW-024 remain Phase 11 deferrals. Razorpay S2S and OpenPay visible-challenge capabilities remain uncertified.
+- Evidence scope: `PASS for non-Azure local acceptance only; not Azure or full Phase 10 certification.`
+- Evidence reference: `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261122-123240561/phase10-acceptance-reconciliation.json`
+- Acceptance began and ended on clean revision `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`; this handoff edit makes the current worktree dirty. No application or image inputs changed after the runs. NFR evidence is under `TestResults/Phase10/docker-preazure/phase10-docker-nfr-20261122-131843713/`.
+- The sealed Docker E2E passed: 6 deterministic and 6 sandbox positive journeys across TenantA/B/C × Razorpay/OpenPay; 6 Razorpay negative/cancellation cases; 75 integration tests; tenant/identity/order checks; messaging and Functions effects; restoration; and Docker restart persistence. All 13 image identities matched.
+- The Docker NFR wrapper seal and local replay selection passed. Performance was 100/100 messages/effects with P95 2.7232s; replay visibility 4.037s; outage recovery 28.793s with zero loss/duplicates; retained Inventory image rollback/restoration and security checks passed. Its dynamic payment category was intentionally skipped; the linked sealed E2E payment matrix covers the required local baseline. Reconciliation returned `PASS (scope: non-azure-local)`.
+- Hosted CI on this candidate: CI/Contract, AI Customization, and Drift Scanner passed; ADR Markdown was skipped by path scope. Workflow 99 remains manual local-only under DW-028 Option A. No Azure operation occurred in these runs; this local PASS is not Azure or full Phase 10 certification.
+- Remaining: perform separately approved Azure gates and reconcile their evidence before full Phase 10 closure. DW-023/DW-024 remain approved Phase 11 deferrals; Razorpay S2S and OpenPay visible-challenge/negative capabilities are uncertified. Order-payment success does not certify fulfillment or unresolved-payment recovery.
+- Docker was left running; prior pre-run storage observation was about 437.6 GiB free on G: (not remeasured after the runs). Native SQL remains isolated at loopback `14330`; the F: retained copy was deleted.
 
 ## Azure dev
 
@@ -38,8 +39,8 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Next actions
 
-1. Replay/inbox 11/11 with run-owned DB cleanup and unchanged provider metadata; harness 9 pass/1 live opt-in skip. Entrypoint, preflight and config tests passed; env contract 245/245, docs 197/197. Legacy workflow-config failures and ownership runner-DB guard remain. Review the fixes before committing; no live replay proved.
-2. Next replay action: clear the live preflight blockers only after separately approved IaC deployment and scoped runner identity. Then run the protected API approval, one-request pause/route, each opt-in failure case, exact restoration and effect verification. Normal deployed Function replay, Entra regular-user isolation/expiry, payment negatives, Azure NFR/rollback remain open. Do not repeat successful payment cases just to refresh evidence.
-3. Do not run staging/prod or modify deployment, directory, provider or database settings without specific approval.
+1. Review and approve the Azure-dev deployment/replay prerequisites, then run only the approved Azure-dev workflow sequence and record each gate independently. The local Docker PASS above does not substitute for Azure evidence.
+2. Keep staging/prod untouched until dev gates, restoration and cost/cleanup decisions are reviewed.
+3. Do not repeat successful local sandbox payments solely to refresh evidence. Preserve Phase 11 and provider-capability deferrals as uncertified.
 
 See [Phase 10 Azure smoke runbook](../../docs/runbooks/phase10-azure-smoke.md) and [Phase 10 implementation checklist](../../docs/internal/phase10-implementation-checklist.md). Preserve ignored raw reports and failed/partial evidence; do not commit or push automatically.
