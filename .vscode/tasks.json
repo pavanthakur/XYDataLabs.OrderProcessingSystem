@@ -3015,7 +3015,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Azure Dev: Playwright Auth Preflight (No Payments)",
+            "label": "5 Run: Azure Dev 01 Playwright Auth Preflight (No Payments)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3024,15 +3024,15 @@
                 "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
                 "-Mode",
                 "AuthPreflight",
-                "-ExpectedSubscriptionId",
-                "${input:phase10AzureDevSubscriptionId}"
+                "-PromptForExpectedSubscriptionId"
             ],
+            "detail": "Shows the active Azure CLI subscription and asks you to confirm the approved GUID in this task's terminal. No payments.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []
         },
         {
-            "label": "Azure Dev: Playwright Provider Matrix (Submits Sandbox Payments)",
+            "label": "5 Run: Azure Dev 02 Playwright Provider Matrix (Submits Sandbox Payments)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3041,10 +3041,10 @@
                 "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
                 "-Mode",
                 "ProviderMatrix",
-                "-ExpectedSubscriptionId",
-                "${input:phase10AzureDevSubscriptionId}",
+                "-PromptForExpectedSubscriptionId",
                 "-RequireSandboxConfirmation"
             ],
+            "detail": "Shows the active Azure CLI subscription, asks for the approved GUID, then requires RUN SANDBOX in this task's terminal.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []
@@ -3058,13 +3058,6 @@
             ],
             "group": "test",
             "problemMatcher": []
-        }
-    ],
-    "inputs": [
-        {
-            "id": "phase10AzureDevSubscriptionId",
-            "type": "promptString",
-            "description": "Enter the approved Azure-dev subscription ID. The runner checks it against the active Azure CLI subscription."
         }
     ]
 }

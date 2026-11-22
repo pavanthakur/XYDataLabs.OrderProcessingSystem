@@ -1,8 +1,9 @@
 #Requires -Version 7.0
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'ExplicitSubscription')]
 param(
     [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix','Reconcile')][string]$Mode,
-    [Parameter(Mandatory)][guid]$ExpectedSubscriptionId,
+    [Parameter(Mandatory, ParameterSetName = 'ExplicitSubscription')][guid]$ExpectedSubscriptionId,
+    [Parameter(Mandatory, ParameterSetName = 'PromptSubscription')][switch]$PromptForExpectedSubscriptionId,
     [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN,
     [string]$ResumeCheckpoint,
     [switch]$RequireSandboxConfirmation
@@ -14,11 +15,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 if ($Mode -ne 'Reconcile' -and (-not [Environment]::UserInteractive -or $env:CI -eq 'true')) { throw 'Run this headed operator command in your signed-in desktop terminal, not a hosted/non-interactive job.' }
 if ($ResumeCheckpoint -and $Mode -eq 'AuthPreflight') { throw 'ResumeCheckpoint is available only for ProviderMatrix or Reconcile.' }
 if ($Mode -eq 'Reconcile' -and -not $ResumeCheckpoint) { throw 'Reconcile requires an existing ResumeCheckpoint; it never creates orders/payments or opens a browser.' }
-if ($RequireSandboxConfirmation) {
-    if ($Mode -ne 'ProviderMatrix') { throw 'Sandbox confirmation applies only to ProviderMatrix.' }
-    $confirmation = Read-Host 'This task creates fresh Azure-dev orders and submits sandbox payments. Type RUN SANDBOX to continue'
-    if ($confirmation -cne 'RUN SANDBOX') { throw 'Sandbox matrix cancelled before any Azure or payment action.' }
-}
+if ($RequireSandboxConfirmation -and $Mode -ne 'ProviderMatrix') { throw 'Sandbox confirmation applies only to ProviderMatrix.' }
+if ($PromptForExpectedSubscriptionId -and $Mode -eq 'Reconcile') { throw 'Reconcile requires an explicit expected subscription ID.' }
 $targetCatalogPath = Join-Path $repoRoot 'automation/config/runtime-targets.json'
 $targetCatalog = Get-Content -LiteralPath $targetCatalogPath -Raw | ConvertFrom-Json
 $targets = @($targetCatalog.targets | Where-Object key -eq 'azure-dev')
@@ -27,11 +25,35 @@ $target = $targets[0]
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) { throw 'Azure CLI is required; no browser or payment action was started.' }
 if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Node.js and npm are required; no browser or payment action was started.' }
-$accountJson = & az account show --query '{id:id,state:state}' -o json 2>$null
-if ($LASTEXITCODE -ne 0) { throw 'Azure CLI is not logged in; run az login and select the approved subscription.' }
-$account = $accountJson | ConvertFrom-Json
+function Get-ActiveAzureSubscription {
+    $accountJson = & az account show --query '{id:id,state:state}' -o json 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Azure CLI is not logged in; run az login and select the approved subscription.' }
+    $account = $accountJson | ConvertFrom-Json
+    $activeId = [guid]::Empty
+    if ($account.state -ne 'Enabled' -or -not [guid]::TryParse([string]$account.id, [ref]$activeId) -or $activeId -eq [guid]::Empty) {
+        throw 'Azure CLI did not return an enabled active subscription with a valid GUID.'
+    }
+    return $activeId
+}
+
+$activeSubscription = Get-ActiveAzureSubscription
+if ($PromptForExpectedSubscriptionId) {
+    Write-Host "Active Azure CLI subscription ID: $activeSubscription"
+    $answer = Read-Host 'Verify the ID above against your approved Azure-dev subscription GUID, then paste the approved GUID here (blank cancels)'
+    if ([string]::IsNullOrWhiteSpace($answer)) { throw 'Cancelled before querying Azure resources or launching the browser.' }
+    $confirmedSubscriptionId = [guid]::Empty
+    if (-not [guid]::TryParse($answer.Trim(), [ref]$confirmedSubscriptionId)) { throw 'Enter the approved Azure subscription GUID, not an Entra object ID or subscription name.' }
+    $ExpectedSubscriptionId = $confirmedSubscriptionId
+}
 $expectedSubscription = $ExpectedSubscriptionId.ToString('D')
-if ($account.state -ne 'Enabled' -or $account.id -ne $expectedSubscription) { throw 'The active Azure subscription does not match the explicitly supplied expected subscription ID.' }
+if ($activeSubscription -ne $ExpectedSubscriptionId) { throw 'The active Azure subscription does not match the explicitly supplied expected subscription ID.' }
+if ($RequireSandboxConfirmation -or ($PromptForExpectedSubscriptionId -and $Mode -eq 'ProviderMatrix')) {
+    $confirmation = Read-Host 'This task creates fresh Azure-dev orders and submits sandbox payments. Type RUN SANDBOX to continue'
+    if ($confirmation -cne 'RUN SANDBOX') { throw 'Sandbox matrix cancelled before querying Azure resources or submitting payments.' }
+}
+if (($PromptForExpectedSubscriptionId -or $RequireSandboxConfirmation) -and (Get-ActiveAzureSubscription) -ne $ExpectedSubscriptionId) {
+    throw 'The active Azure subscription changed during confirmation; no Azure resources were queried and the browser was not launched.'
+}
 
 $resourceGroup = [string]$target.azureResourceGroupName
 $environmentName = [string]$target.azureManagedEnvironmentName
