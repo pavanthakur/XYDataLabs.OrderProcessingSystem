@@ -17,6 +17,10 @@ public sealed class GatewayTopologyTests
         config["ReverseProxy:Routes:orders-customer-api-route:Match:Path"].Should().Be("/api/v{version}/Customer/{**catch-all}");
         config["ReverseProxy:Routes:orders-audit-api-route:Match:Path"].Should().Be("/api/v{version}/Audit/{**catch-all}");
         config["ReverseProxy:Routes:orders-info-api-route:Match:Path"].Should().Be("/api/v{version}/Info/{**catch-all}");
+        config["ReverseProxy:Routes:orders-dlq-approval-api-route:ClusterId"].Should().Be("orders-cluster");
+        config["ReverseProxy:Routes:orders-dlq-approval-api-route:Match:Path"]
+            .Should().Be("/api/v{version}/admin/dlq/{quarantineId:guid}/approve");
+        config["ReverseProxy:Routes:orders-dlq-approval-api-route:Match:Methods:0"].Should().Be("POST");
         config["ReverseProxy:Routes:payments-api-route:Match:Path"].Should().Be("/api/v{version}/Payments/{**catch-all}");
         config["ReverseProxy:Routes:payments-api-route:Order"].Should().Be("10");
         config["ReverseProxy:Routes:inventory-api-route:Match:Path"].Should().Be("/api/v{version}/Inventory/{**catch-all}");

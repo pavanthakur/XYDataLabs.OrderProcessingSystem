@@ -192,6 +192,30 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DlqApprovalRoute_ProxiesOnlyPostGuidApprovalPathToOrdersCluster()
+    {
+        using var client = _factory.CreateClient();
+        var response = await SendWithRetryAsync(client, () => CreateDlqApprovalRequest(HttpMethod.Post, Guid.NewGuid().ToString("D")));
+
+        response.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+    }
+
+    [Theory]
+    [InlineData("GET", "11111111-1111-4111-8111-111111111111", HttpStatusCode.MethodNotAllowed)]
+    [InlineData("POST", "not-a-guid", HttpStatusCode.NotFound)]
+    public async Task DlqApprovalRoute_DoesNotProxyOtherMethodsOrInvalidIdentifiers(
+        string method,
+        string quarantineId,
+        HttpStatusCode expectedStatus)
+    {
+        using var client = _factory.CreateClient();
+        using var request = CreateDlqApprovalRequest(new HttpMethod(method), quarantineId);
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(expectedStatus);
+    }
+
+    [Fact]
     public async Task HostBasedRoute_ProxiesToNotificationsCluster()
     {
         using var client = _factory.CreateClient();
@@ -291,6 +315,19 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
 
         request.Headers.Host = "payments.localhost";
 
+        return request;
+    }
+
+    private static HttpRequestMessage CreateDlqApprovalRequest(HttpMethod method, string quarantineId)
+    {
+        var request = new HttpRequestMessage(
+            method,
+            $"/api/v1/admin/dlq/{quarantineId}/approve")
+        {
+            Version = HttpVersion.Version11
+        };
+
+        request.Headers.Host = "orders.localhost";
         return request;
     }
 
