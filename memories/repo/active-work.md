@@ -21,7 +21,7 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Azure dev
 
-- Workflow 04: `runMode=service-preflight` is the dev-only default. Supervised modes print desktop instructions and await evidence; hosted jobs do not run a browser or make payments. Read-only Razorpay lookup remains selectable. Local verification passed (48 contract tests, 245 environment checks); verify the hosted service-only result and firewall cleanup separately. See the [Azure smoke runbook](../../docs/runbooks/phase10-azure-smoke.md#operator-assisted-entra-payment-run-azure-dev-only).
+- Workflow 04 defaults to dev-only `service-preflight`. Supervised modes only print desktop instructions; hosted runs do not prove browser or payment acceptance. Verify hosted result and firewall cleanup separately.
 
 - Workflow 01 [44910591587](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/44910591587) passed on workflow SHA `6fbc5454`, deploying immutable app source `47970357` (producer `44878244285`). SQL/Key Vault, migrations, Functions, tenant topology and post-deploy smoke passed.
 - Workflow 02 [44912299578](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/44912299578) passed on `6fbc5454`: required hosts, generated dev URLs, gateway and same-origin UI/API checks passed. Details: `TestResults/Phase10/azure-runtime-smoke-44912299578/`.
