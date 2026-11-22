@@ -521,12 +521,12 @@ export async function executePaymentAutomationRun(
   }
 
   let operatorSignOut: PaymentAutomationRunOutput["operatorSignOut"];
-  if (options.operatorAssistedEntra && !options.authPreflightOnly && !options.dryRun && operatorAuthPreflight?.status !== "FAIL") {
+  if (options.operatorAssistedEntra && !options.dryRun && operatorAuthPreflight?.status !== "FAIL") {
     try {
       await paymentJourneyRunner.closeOperatorAssistedSession(log, true);
       operatorSignOut = { status: "PASS" };
-    } catch {
-      const message = "Entra sign-out could not be verified.";
+    } catch (error) {
+      const message = safePaymentDiagnostic(error instanceof Error ? error.message : "Entra sign-out verification failed.");
       operatorSignOut = { status: "FAIL", error: message };
       log(message);
     }
