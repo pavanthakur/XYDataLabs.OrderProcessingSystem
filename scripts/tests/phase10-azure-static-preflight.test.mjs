@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
 import { auditAzureDeployContract, validateAzureRuntimeTargets } from '../phase10-azure-static-preflight.mjs';
 import { validateLocalDlqApprovalResponse, validateLocalOperatorClaims } from '../../frontend/apps/web/scripts/phase10-local-dlq-approval-contract.mjs';
+import { normalizeKeyVaultAccessPolicies } from '../normalize-phase10-keyvault-access-policies.mjs';
 
 const requireAutomation = createRequire(new URL('../../automation/package.json', import.meta.url));
 const yaml = requireAutomation('js-yaml');
@@ -780,6 +783,56 @@ test('Phase 10 what-if and deployment pass a live Key Vault policy snapshot', as
     'permission or service errors must fail closed instead of treating an existing vault as empty');
   assert.equal((workflow.match(/existingKeyVaultAccessPolicies=@\$\{KEYVAULT_ACCESS_POLICIES_FILE\}/g) ?? []).length, 2,
     'both what-if and actual deployment must pass that policy snapshot');
+  assert.equal((workflow.match(/normalize-phase10-keyvault-access-policies\.mjs/g) ?? []).length, 2,
+    'both what-if and actual deployment must normalize nullable GET fields before ARM receives the snapshot');
+});
+
+test('Key Vault policy normalization removes only null optional fields and preserves all grants', () => {
+  const snapshot = [{
+    tenantId: 'tenant-id',
+    objectId: 'principal-id',
+    applicationId: null,
+    permissions: { certificates: null, keys: null, secrets: ['get', 'list'], storage: null },
+  }];
+  const normalized = normalizeKeyVaultAccessPolicies(snapshot);
+  assert.deepEqual(normalized, [{
+    tenantId: 'tenant-id',
+    objectId: 'principal-id',
+    permissions: { secrets: ['get', 'list'] },
+  }]);
+  assert.equal(snapshot[0].applicationId, null, 'normalization must not mutate the caller snapshot');
+  assert.equal(snapshot[0].permissions.secrets.length, 2, 'existing grants must be preserved');
+});
+
+test('Key Vault policy normalization rejects malformed snapshots instead of dropping grants', () => {
+  assert.throws(() => normalizeKeyVaultAccessPolicies({}), /must be an array/);
+  assert.throws(() => normalizeKeyVaultAccessPolicies([{ tenantId: 't', objectId: 'o', permissions: { secrets: 'get' } }]), /malformed permission list/);
+  assert.throws(() => normalizeKeyVaultAccessPolicies([{ tenantId: 't', objectId: 'o', permissions: { unknown: [] } }]), /unknown permission category/);
+});
+
+test('Key Vault policy normalizer CLI writes a valid snapshot and rejects malformed input', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'phase10-kv-policy-'));
+  const inputPath = path.join(directory, 'input.json');
+  const outputPath = path.join(directory, 'output.json');
+  const normalizerPath = fileURLToPath(new URL('../normalize-phase10-keyvault-access-policies.mjs', import.meta.url));
+  try {
+    await writeFile(inputPath, JSON.stringify([{
+      tenantId: 'tenant-id', objectId: 'principal-id', applicationId: null,
+      permissions: { certificates: null, keys: null, secrets: ['get'], storage: null },
+    }]));
+    execFileSync(process.execPath, [normalizerPath, inputPath, outputPath]);
+    assert.deepEqual(JSON.parse(await readFile(outputPath, 'utf8')), [{
+      tenantId: 'tenant-id', objectId: 'principal-id', permissions: { secrets: ['get'] },
+    }]);
+
+    await writeFile(inputPath, JSON.stringify([{ tenantId: 't', objectId: 'o', permissions: { secrets: 'get' } }]));
+    assert.throws(
+      () => execFileSync(process.execPath, [normalizerPath, inputPath, outputPath]),
+      (error) => error.status === 1 && /malformed permission list/.test(error.stderr.toString()),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('SQL admin Key Vault secret is controlled by the explicit SQL deployment switch', async () => {

@@ -4,8 +4,9 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Phase 10 checkpoint — 22 November 2026
 
-- Review revision: `244fc6f62fc2f47184572e89ea8bdc5034b2b6d0`
+- Review revision: `d7ced7cc7373c89534f0c74ea72217c20b8bdd27`
 - Worktree state: `DIRTY`
+- Current uncommitted change: Key Vault snapshot normalization; see Azure deployment retry checkpoint below.
 - Evidence status: `HISTORICAL`
 - Evidence revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
 - Evidence environment: `LOCAL_DOCKER_DESKTOP_G`
@@ -30,8 +31,9 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 ### Azure deployment retry checkpoint — 22 November 2026
 
 - Workflow 01 [45009489149](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45009489149) failed: the Key Vault API requires `properties.accessPolicies`. Other modules, including Container Apps, Functions, monitoring, Service Bus, identity and the RG, succeeded first. Dev is partially updated; SQL/Redis were disabled. A later read saw seven policies (no before/after proof).
-- Fix on pushed `244fc6f6` snapshots live policies for both templates in what-if/deploy, uses `[]` only on confirmed not-found and fails closed otherwise. Local 42 tests, both Bicep builds, static preflight and docs links passed. Hosted CI/Drift/docs passed; AI customization failed because this file exceeded 8 KiB after the checkpoint was added. No post-fix what-if or redeploy yet.
-- Next: shorten this handoff below 8 KiB, push the correction, require exact-SHA checks green, build the immutable release and rerun what-if. Review Key Vault/SQL deltas before redeploying with cleanup/SQL/Redis off; then smoke the partially updated dev environment.
+- Fix `244fc6f6` snapshots policies for what-if/deploy and fails closed on read errors. After shortening this handoff, clean candidate `d7ced7cc` passed CI/Contract `45011590723`, AI customization `45011590737`, and Drift `45011590722`. Immutable release `45012244450` passed. What-if `45012479244` passed (10 modify, 18 unchanged, 1 unsupported additive policy, 7 ignored); Key Vault parent was no-change and SQL resources were ignored.
+- Actual redeploy `45012798453` failed at Key Vault with `accessPolicies[0].Permissions.certificates` invalid; other modules again succeeded first. Azure CLI’s live policy snapshot has seven entries; absent certificate/key/storage permissions and `applicationId` are serialized as null. The current uncommitted fix normalizes only these optional nulls, preserves all non-null grants, and fails closed on malformed data. Local regression suite passed 94/94; both Bicep builds and live-snapshot normalization passed (7 policies, 15 granted permission entries). Dev remains partially deployed; SQL/Redis stayed disabled.
+- Next: review and commit/push the normalizer, wait for exact-SHA hosted CI, rebuild immutable images/package, run what-if and verify Key Vault parent is unchanged, then redeploy with cleanup/SQL/Redis off. Run runtime smoke only after a successful deploy; do not yet claim Azure acceptance.
 
 ### Azure-dev replay preflight — 22 November 2026
 

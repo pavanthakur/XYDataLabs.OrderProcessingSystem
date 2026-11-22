@@ -561,6 +561,8 @@ jobs:
                 exit 1
               fi
             fi
+            node scripts/normalize-phase10-keyvault-access-policies.mjs "$KEYVAULT_ACCESS_POLICIES_FILE" "$RUNNER_TEMP/keyvault-access-policies-normalized.json"
+            KEYVAULT_ACCESS_POLICIES_FILE="$RUNNER_TEMP/keyvault-access-policies-normalized.json"
             KEYVAULT_POLICY_ARGS=(--parameters "existingKeyVaultAccessPolicies=@${KEYVAULT_ACCESS_POLICIES_FILE}")
           fi
           az deployment sub what-if \
@@ -1067,6 +1069,8 @@ jobs:
                 exit 1
               fi
             fi
+            node scripts/normalize-phase10-keyvault-access-policies.mjs "$KEYVAULT_ACCESS_POLICIES_FILE" "$RUNNER_TEMP/keyvault-access-policies-normalized.json"
+            KEYVAULT_ACCESS_POLICIES_FILE="$RUNNER_TEMP/keyvault-access-policies-normalized.json"
             KEYVAULT_POLICY_ARGS=(--parameters "existingKeyVaultAccessPolicies=@${KEYVAULT_ACCESS_POLICIES_FILE}")
           fi
           az deployment sub create \
