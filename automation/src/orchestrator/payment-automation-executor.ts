@@ -17,6 +17,7 @@ import { buildCustomerOrderId, buildRunPrefix } from "../support/customer-order-
 import { PowerShellVerificationAdapter } from "../verification/powershell-verification-adapter.js";
 import {safePaymentDiagnostic} from "../support/payment-diagnostics.js";
 import { assertResumeSafe, candidateIdentity, matrixBinding, readCheckpoint, saveCheckpoint, type MatrixCheckpoint } from "../support/azure-matrix-checkpoint.js";
+import { isAuthPreflightSignOutVerified } from "../support/operator-sign-out.js";
 import {recordCaseProgress,saveCaseLedger,verificationOnlyRecoveryEligible,type PaymentCaseLedger} from "../support/payment-case-ledger.js";
 import type {VerificationRequest} from "../contracts/verification-adapter.js";
 
@@ -522,13 +523,23 @@ export async function executePaymentAutomationRun(
 
   let operatorSignOut: PaymentAutomationRunOutput["operatorSignOut"];
   if (options.operatorAssistedEntra && !options.dryRun && operatorAuthPreflight?.status !== "FAIL") {
-    try {
-      await paymentJourneyRunner.closeOperatorAssistedSession(log, true);
-      operatorSignOut = { status: "PASS" };
-    } catch (error) {
-      const message = safePaymentDiagnostic(error instanceof Error ? error.message : "Entra sign-out verification failed.");
-      operatorSignOut = { status: "FAIL", error: message };
-      log(message);
+    if (options.authPreflightOnly) {
+      if (isAuthPreflightSignOutVerified(rows)) {
+        operatorSignOut = { status: "PASS" };
+      } else {
+        const message = "No-charge Entra preflight did not verify application sign-out.";
+        operatorSignOut = { status: "FAIL", error: message };
+        log(message);
+      }
+    } else {
+      try {
+        await paymentJourneyRunner.closeOperatorAssistedSession(log, true);
+        operatorSignOut = { status: "PASS" };
+      } catch (error) {
+        const message = safePaymentDiagnostic(error instanceof Error ? error.message : "Entra sign-out verification failed.");
+        operatorSignOut = { status: "FAIL", error: message };
+        log(message);
+      }
     }
   }
 
