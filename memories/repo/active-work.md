@@ -4,7 +4,7 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Phase 10 checkpoint — 22 November 2026
 
-- Review base revision: `f09dd3a3d6048d1750f60875186b4515e81f6143`
+- Review revision: `244fc6f62fc2f47184572e89ea8bdc5034b2b6d0`
 - Worktree state: `DIRTY`
 - Evidence status: `HISTORICAL`
 - Evidence revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
@@ -29,21 +29,16 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ### Azure deployment retry checkpoint — 22 November 2026
 
-- Workflow 01 run [45009489149](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45009489149) failed in nested deployment `keyvault-phase10-dev`: Azure rejected the Key Vault parent PUT because `properties.accessPolicies` was omitted. This disproves the prior assumption that omission preserves policies through the provider API.
-- ARM operation inventory shows other independent modules succeeded before the Key Vault module failed, including Container Apps, Functions, ACA environment, App Insights, Service Bus, Log Analytics, identity and the resource group. Treat Azure dev as partially updated and not runtime-accepted until a successful redeploy and smoke. `deploySql=false`, `deployRedis=false`; no SQL password rotation was requested.
-- A read-only follow-up saw the existing Key Vault and seven access policies; this is a current count, not a before/after preservation proof.
-- Working-tree fix requires a live Key Vault access-policy snapshot, passes it to both legacy and Phase 10 templates in what-if and deploy, uses `[]` only for confirmed not-found, and fails closed on other read errors. Additive `accessPolicies/add` remains. Targeted 42-test suite, both Bicep builds, Azure static preflight, docs links and `git diff --check` passed locally. Fix is not yet committed, pushed, or deployed; no post-fix what-if exists.
-- Next: review/stage only the eight intended fix/checkpoint files, commit and push to `dev` under the existing authorization, wait for hosted checks and immutable image release, then rerun dry-run with the exact dev parameters. Inspect the new Key Vault and SQL deltas before another deployment; only then redeploy without cleanup, SQL or Redis, and rerun runtime/transport/payment gates as separately authorized.
+- Workflow 01 [45009489149](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45009489149) failed: the Key Vault API requires `properties.accessPolicies`. Other modules, including Container Apps, Functions, monitoring, Service Bus, identity and the RG, succeeded first. Dev is partially updated; SQL/Redis were disabled. A later read saw seven policies (no before/after proof).
+- Fix on pushed `244fc6f6` snapshots live policies for both templates in what-if/deploy, uses `[]` only on confirmed not-found and fails closed otherwise. Local 42 tests, both Bicep builds, static preflight and docs links passed. Hosted CI/Drift/docs passed; AI customization failed because this file exceeded 8 KiB after the checkpoint was added. No post-fix what-if or redeploy yet.
+- Next: shorten this handoff below 8 KiB, push the correction, require exact-SHA checks green, build the immutable release and rerun what-if. Review Key Vault/SQL deltas before redeploying with cleanup/SQL/Redis off; then smoke the partially updated dev environment.
 
 ### Azure-dev replay preflight — 22 November 2026
 
 - Sanitized live read-only inventory: `TestResults/Phase10/azure-dev-preflight-20261122-readonly.json`.
-- The recorded Azure read-only inventory confirms the enabled dev subscription, existing dev environment and normal replay queue, but no isolated drill queue.
-- The initial adapter used a fabricated run-specific namespace; corrected source now resolves FQDN, topic and dev-only queue fields from `runtime-targets.json`. IaC/parameter contracts create `dlq-replay-drill-requests-dev` only in dev and define optional queue Receiver + business-topic Sender roles for an explicitly supplied runner principal. Grants default absent; the live namespace inventory above predates this source change and no Azure resource/RBAC has been updated.
-- The recorded deployment has four replay publishers against the normal queue; undeployed IaC enables only Orders. Workflow 01 validates optional dev variable `PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID` in what-if/deploy and explicitly selects type `User`; absent means no drill RBAC. Pause all publishers and route one request; Function stays on its normal queue.
-- Recorded live preflight remains BLOCKED (5/21). Controller no longer silently exits; Route binds paused revisions/images and updates verify exact ready revisions. Mocked entrypoint lifecycle/recovery passed. Normal restore requires zero pending requests; safe restore keeps replay paused.
-- Replay harness calls actual Function core; validates CLI identity, dev preflight/manifest, and dedicated DB against its Key Vault reference in memory. Send-gap uses distinct broker ID/stable envelope ID; PASS requires duplicate traces and exactly-once SQL effects. Restore report checks guarded fields and zero pending requests. Evidence paths reject traversal/reparse points; preflight checks App Insights Logs. Local selection: 9 passed, 1 expected live opt-in skip; no Azure operation.
-- No deploy/RBAC/approval/broker/replay/effect ran. Live work still needs approved IaC deployment, scoped runner RBAC, `phase10-operator`, named A/B/C Entra users, and a retained rollback image.
+- Inventory confirms dev and the normal replay queue exist, but the isolated drill queue does not. Updated code uses runtime-target queue metadata; IaC creates the dev-only queue and optional scoped Sender/Receiver roles, but no Azure resource/RBAC change has run.
+- Current deployment has four publishers on the normal queue; only Orders is configured for the isolated drill. Workflow pauses/reroutes one publisher while Functions stays on normal intake.
+- Live replay preflight is BLOCKED (5/21). Local controller/harness checks passed 9 with one expected live-opt-in skip. No broker replay or downstream effect ran. Remaining: isolated queue and scoped runner grant, `phase10-operator`, named Entra test users, and a retained rollback image.
 
 ## Next actions
 
