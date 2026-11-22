@@ -5,6 +5,11 @@
       "id": "test-razorpay-contact-browser",
       "file": "src/browser/razorpay-contact-details.browser.test.ts",
       "tests": [
+        "missing operator session cannot be reported as verified sign-out",
+        "Razorpay direct callback bypasses the optional mock bank",
+        "Razorpay save-card prompt is dismissed once before completing the mock bank",
+        "Razorpay validation and timeout remain distinct without further clicks",
+        "Razorpay post-card observer detects validation in the card frame without reading field values",
         "Razorpay contact step validates sandbox phone and advances once before card entry",
         "Razorpay contact step fails closed if provider rejects the phone fixture",
         "Razorpay contact-shaped form without a recognized heading is not mistaken for card entry",
