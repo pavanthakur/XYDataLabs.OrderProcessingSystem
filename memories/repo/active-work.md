@@ -4,7 +4,7 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 
 ## Phase 10 checkpoint — 22 November 2026
 
-- Review revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
+- Review base revision: `f09dd3a3d6048d1750f60875186b4515e81f6143`
 - Worktree state: `DIRTY`
 - Evidence status: `HISTORICAL`
 - Evidence revision: `e73eb8c7dc3dba23b539e04c93821ff6818a8b94`
@@ -26,6 +26,14 @@ Navigation only, not proof. Verify current Git, runtime and referenced evidence 
 - Workflow 04 [44913439630](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/44913439630) passed service-only Key Vault, App Insights, SQL and tenant/provider preflight (`servicePreflightOnly=true`, no orders/payments). Details: `TestResults/Phase10/azure-payment-preflight-44913439630/`.
 - Azure-dev positive payment matrix: **PASS 6/6, resumed**, `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-21T17-21-05-312Z/summary.json`. Four prior cases were carried forward; TenantC/Razorpay was checked read-only and only TenantC/OpenPay ran fresh. Entra preflight, sign-out and restoration passed. Not uninterrupted/hosted acceptance. OpenPay 3DS was temporarily off; inspected baseline on, then restored.
 - Workflow results are bounded to their recorded scopes; Azure cleanup was not verified.
+
+### Azure deployment retry checkpoint — 22 November 2026
+
+- Workflow 01 run [45009489149](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/45009489149) failed in nested deployment `keyvault-phase10-dev`: Azure rejected the Key Vault parent PUT because `properties.accessPolicies` was omitted. This disproves the prior assumption that omission preserves policies through the provider API.
+- ARM operation inventory shows other independent modules succeeded before the Key Vault module failed, including Container Apps, Functions, ACA environment, App Insights, Service Bus, Log Analytics, identity and the resource group. Treat Azure dev as partially updated and not runtime-accepted until a successful redeploy and smoke. `deploySql=false`, `deployRedis=false`; no SQL password rotation was requested.
+- A read-only follow-up saw the existing Key Vault and seven access policies; this is a current count, not a before/after preservation proof.
+- Working-tree fix requires a live Key Vault access-policy snapshot, passes it to both legacy and Phase 10 templates in what-if and deploy, uses `[]` only for confirmed not-found, and fails closed on other read errors. Additive `accessPolicies/add` remains. Targeted 42-test suite, both Bicep builds, Azure static preflight, docs links and `git diff --check` passed locally. Fix is not yet committed, pushed, or deployed; no post-fix what-if exists.
+- Next: review/stage only the eight intended fix/checkpoint files, commit and push to `dev` under the existing authorization, wait for hosted checks and immutable image release, then rerun dry-run with the exact dev parameters. Inspect the new Key Vault and SQL deltas before another deployment; only then redeploy without cleanup, SQL or Redis, and rerun runtime/transport/payment gates as separately authorized.
 
 ### Azure-dev replay preflight — 22 November 2026
 

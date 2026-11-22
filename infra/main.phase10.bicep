@@ -133,6 +133,9 @@ param acrRegistryPassword string = ''
 @description('Deployment workflow service principal object ID allowed to read and synchronize deployment-owned Key Vault secrets')
 param deploymentPrincipalObjectId string = ''
 
+@description('Current Key Vault access-policy snapshot. Required because the Key Vault API requires this property on vault PUT operations.')
+param existingKeyVaultAccessPolicies array
+
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
 var rgName = 'rg-${baseName}-${effectiveResourceSuffix}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${effectiveResourceSuffix}'
@@ -342,6 +345,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     functionsPrincipalId: functions.outputs.functionPrincipalId
     deploymentPrincipalObjectId: deploymentPrincipalObjectId
     deploySql: deploySql
+    existingKeyVaultAccessPolicies: existingKeyVaultAccessPolicies
     sqlAdminPassword: sqlAdminPassword
     dedicatedTenantCodes: baselineDedicatedTenantCodes
     dedicatedTenantConnectionStrings: baselineDedicatedTenantConnectionStrings

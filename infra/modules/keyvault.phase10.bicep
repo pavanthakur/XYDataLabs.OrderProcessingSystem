@@ -36,6 +36,9 @@ param deploymentPrincipalObjectId string = ''
 @description('Whether the SQL baseline is being provisioned or intentionally updated in this deployment')
 param deploySql bool = false
 
+@description('Snapshot of the current Key Vault access policies, captured immediately before deployment so the required vault property is preserved.')
+param existingKeyVaultAccessPolicies array
+
 @description('SQL Server admin password to persist in Key Vault for later SQL and managed-identity workflows')
 @secure()
 param sqlAdminPassword string = ''
@@ -66,8 +69,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
-    // Access policies are updated through the child `accessPolicies/add` resource below.
-    // Omitting this property on the vault update preserves existing operators and app principals.
+    // The Key Vault API requires this property on vault PUT. The deployment workflow
+    // supplies a fresh snapshot so existing operator policies are preserved; app
+    // policies are still added independently through the child resource below.
+    accessPolicies: existingKeyVaultAccessPolicies
   }
 }
 

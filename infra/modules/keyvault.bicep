@@ -18,6 +18,9 @@ param uiAppPrincipalId string = ''
 @description('Tenant ID')
 param tenantId string = subscription().tenantId
 
+@description('Snapshot of the current Key Vault access policies, captured immediately before deployment so the required vault property is preserved.')
+param existingKeyVaultAccessPolicies array
+
 // Key Vault name (must be globally unique, max 24 chars)
 // Using shortened base name and environment to stay within limits
 var shortBaseName = take(baseName, 15) // Limit base name to 15 chars
@@ -39,8 +42,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
-    // Access policies are updated through the child `accessPolicies/add` resource below.
-    // Omitting this property on the vault update preserves existing operators and app principals.
+    // The Key Vault API requires this property on vault PUT. The deployment workflow
+    // supplies a fresh snapshot so existing operator policies are preserved; app
+    // policies are still added independently through the child resource below.
+    accessPolicies: existingKeyVaultAccessPolicies
   }
   tags: {
     environment: environment

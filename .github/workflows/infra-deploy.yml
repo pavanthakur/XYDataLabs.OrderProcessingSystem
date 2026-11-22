@@ -548,6 +548,21 @@ jobs:
           # creating or retrieving an ACR token. These placeholders are never deployed.
           WHAT_IF_ACR_USERNAME='phase10-what-if-only'
           WHAT_IF_ACR_PASSWORD='not-a-real-acr-credential-phase10-what-if'
+          KEYVAULT_ACCESS_POLICIES_FILE="$RUNNER_TEMP/keyvault-access-policies.json"
+          KEYVAULT_POLICY_ARGS=()
+          if [[ "$TEMPLATE_FILE" == "infra/main.phase10.bicep" || "$TEMPLATE_FILE" == "infra/main.bicep" ]]; then
+            KV_NAME="kv-orderprocessing-${ENV_SUFFIX}"
+            KV_POLICY_ERROR_FILE="$RUNNER_TEMP/keyvault-policy-read.err"
+            if ! az keyvault show --name "$KV_NAME" --query properties.accessPolicies -o json > "$KEYVAULT_ACCESS_POLICIES_FILE" 2> "$KV_POLICY_ERROR_FILE"; then
+              if grep -Eqi 'ResourceNotFound|NotFound' "$KV_POLICY_ERROR_FILE"; then
+                printf '[]\n' > "$KEYVAULT_ACCESS_POLICIES_FILE"
+              else
+                echo "Could not read Key Vault '$KV_NAME' policy state; refusing what-if." >&2
+                exit 1
+              fi
+            fi
+            KEYVAULT_POLICY_ARGS=(--parameters "existingKeyVaultAccessPolicies=@${KEYVAULT_ACCESS_POLICIES_FILE}")
+          fi
           az deployment sub what-if \
             "${IDENTITY_ARGS[@]}" \
             --location "$LOCATION" \
@@ -567,6 +582,7 @@ jobs:
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
             --parameters acrRegistryUsername="$WHAT_IF_ACR_USERNAME" \
             --parameters acrRegistryPassword="$WHAT_IF_ACR_PASSWORD" \
+            "${KEYVAULT_POLICY_ARGS[@]}" \
             --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
             --parameters replayDrillRunnerPrincipalType=User \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
@@ -1034,9 +1050,24 @@ jobs:
             [[ -n "$SQL_ADMIN_PASSWORD" && -n "$SQL_ENTRA_ADMIN_ID" && -n "$SQL_ENTRA_ADMIN_LOGIN" ]] || { echo 'SQL bootstrap inputs are incomplete; refusing ARM deployment.' >&2; exit 1; }
           fi
           IDENTITY_ARGS=()
-          if [ "${{ steps.params.outputs.template }}" = "infra/main.phase10.bicep" ]; then
+          if [[ "${{ steps.params.outputs.template }}" == "infra/main.phase10.bicep" || "${{ steps.params.outputs.template }}" == "infra/main.bicep" ]]; then
             node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
             IDENTITY_ARGS=(--parameters @"$RUNNER_TEMP/identity.parameters.json")
+          fi
+          KEYVAULT_ACCESS_POLICIES_FILE="$RUNNER_TEMP/keyvault-access-policies.json"
+          KEYVAULT_POLICY_ARGS=()
+          if [ "${{ steps.params.outputs.template }}" = "infra/main.phase10.bicep" ]; then
+            KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
+            KV_POLICY_ERROR_FILE="$RUNNER_TEMP/keyvault-policy-read.err"
+            if ! az keyvault show --name "$KV_NAME" --query properties.accessPolicies -o json > "$KEYVAULT_ACCESS_POLICIES_FILE" 2> "$KV_POLICY_ERROR_FILE"; then
+              if grep -Eqi 'ResourceNotFound|NotFound' "$KV_POLICY_ERROR_FILE"; then
+                printf '[]\n' > "$KEYVAULT_ACCESS_POLICIES_FILE"
+              else
+                echo "Could not read Key Vault '$KV_NAME' policy state; refusing deployment." >&2
+                exit 1
+              fi
+            fi
+            KEYVAULT_POLICY_ARGS=(--parameters "existingKeyVaultAccessPolicies=@${KEYVAULT_ACCESS_POLICIES_FILE}")
           fi
           az deployment sub create \
             "${IDENTITY_ARGS[@]}" \
@@ -1055,6 +1086,7 @@ jobs:
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            "${KEYVAULT_POLICY_ARGS[@]}" \
             --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
             --parameters replayDrillRunnerPrincipalType=User \
             --parameters deploymentPrincipalObjectId="${{ steps.deployment_principal.outputs.objectId }}" \

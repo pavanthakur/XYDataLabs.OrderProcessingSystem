@@ -926,17 +926,25 @@ Use this if you want the shortest possible runbook for the first Azure dev proof
 ```powershell
 $env:AZURE_CONFIG_DIR = "$PWD\.azure-cli"
 $deploymentName = "phase10-dev-$(Get-Date -Format yyyyMMddHHmmss)"
+$keyVaultName = "kv-orderprocessing-dev"
+$keyVaultPoliciesFile = Join-Path $env:TEMP "phase10-keyvault-policies.json"
+$keyVaultPolicies = az keyvault show --name $keyVaultName --query properties.accessPolicies -o json
+if ($LASTEXITCODE -ne 0) { throw "Could not read Key Vault policy state. Stop; do not substitute an empty policy list unless the vault is independently confirmed not to exist." }
+$keyVaultPolicies | Set-Content -LiteralPath $keyVaultPoliciesFile -Encoding utf8
+$keyVaultPolicyParameter = "existingKeyVaultAccessPolicies=@$keyVaultPoliciesFile"
 
 az deployment sub what-if `
   --location centralindia `
   --template-file infra/main.phase10.bicep `
-  --parameters @infra/parameters/phase10-dev.json
+  --parameters @infra/parameters/phase10-dev.json `
+  --parameters $keyVaultPolicyParameter
 
 az deployment sub create `
   --name $deploymentName `
   --location centralindia `
   --template-file infra/main.phase10.bicep `
-  --parameters @infra/parameters/phase10-dev.json
+  --parameters @infra/parameters/phase10-dev.json `
+  --parameters $keyVaultPolicyParameter
 
 $outputs = az deployment sub show --name $deploymentName --query "properties.outputs" -o json | ConvertFrom-Json
 $resourceGroupName = $outputs.resourceGroupName.value
@@ -994,7 +1002,7 @@ Expected:
 ### 1. Preview the deployment
 
 ```powershell
-az deployment sub what-if --location centralindia --template-file infra/main.phase10.bicep --parameters @infra/parameters/phase10-dev.json
+az deployment sub what-if --location centralindia --template-file infra/main.phase10.bicep --parameters @infra/parameters/phase10-dev.json --parameters $keyVaultPolicyParameter
 ```
 
 Expected:
@@ -1004,7 +1012,7 @@ Expected:
 ### 2. Deploy the environment
 
 ```powershell
-az deployment sub create --location centralindia --template-file infra/main.phase10.bicep --parameters @infra/parameters/phase10-dev.json --name phase10-dev-<timestamp>
+az deployment sub create --location centralindia --template-file infra/main.phase10.bicep --parameters @infra/parameters/phase10-dev.json --parameters $keyVaultPolicyParameter --name phase10-dev-<timestamp>
 ```
 
 Expected:

@@ -735,9 +735,11 @@ test('Phase 10 what-if can expand dedicated Key Vault secrets and preserves ACA 
 });
 
 test('Key Vault updates preserve existing policies and add application policies explicitly', async () => {
-  const [phase10Template, legacyTemplate] = await Promise.all([
+  const [phase10Template, legacyTemplate, phase10Root, legacyRoot] = await Promise.all([
     readFile('infra/modules/keyvault.phase10.bicep', 'utf8'),
     readFile('infra/modules/keyvault.bicep', 'utf8'),
+    readFile('infra/main.phase10.bicep', 'utf8'),
+    readFile('infra/main.bicep', 'utf8'),
   ]);
 
   for (const [name, template] of [['Phase 10', phase10Template], ['legacy', legacyTemplate]]) {
@@ -747,7 +749,37 @@ test('Key Vault updates preserve existing policies and add application policies 
       `${name} vault update must not clear existing access policies`);
     assert.match(template, /resource accessPolicies 'Microsoft\.KeyVault\/vaults\/accessPolicies@[^']+' = if[\s\S]*?name:\s*'add'/,
       `${name} app access policies must be managed through the additive child resource`);
+    assert.match(template, /param\s+existingKeyVaultAccessPolicies\s+array/,
+      `${name} must require a live access-policy snapshot`);
+    assert.match(vaultResource[0], /accessPolicies:\s*existingKeyVaultAccessPolicies/,
+      `${name} vault PUT must supply the preserved policy snapshot required by Azure`);
   }
+  assert.match(phase10Root, /module keyVault[\s\S]*?existingKeyVaultAccessPolicies:\s*existingKeyVaultAccessPolicies/);
+  assert.match(legacyRoot, /module keyVault[\s\S]*?existingKeyVaultAccessPolicies:\s*existingKeyVaultAccessPolicies/);
+});
+
+test('Phase 10 what-if and deployment pass a live Key Vault policy snapshot', async () => {
+  const [mainTemplate, keyVaultTemplate, legacyMainTemplate, legacyKeyVaultTemplate, workflow] = await Promise.all([
+    readFile('infra/main.phase10.bicep', 'utf8'),
+    readFile('infra/modules/keyvault.phase10.bicep', 'utf8'),
+    readFile('infra/main.bicep', 'utf8'),
+    readFile('infra/modules/keyvault.bicep', 'utf8'),
+    readFile('.github/workflows/infra-deploy.yml', 'utf8'),
+  ]);
+  assert.match(mainTemplate, /param\s+existingKeyVaultAccessPolicies\s+array\s*\n/);
+  assert.match(mainTemplate, /module keyVault[\s\S]*?existingKeyVaultAccessPolicies:\s*existingKeyVaultAccessPolicies/);
+  assert.match(keyVaultTemplate, /param\s+existingKeyVaultAccessPolicies\s+array\s*\n/);
+  assert.match(keyVaultTemplate, /accessPolicies:\s*existingKeyVaultAccessPolicies/);
+  assert.match(legacyMainTemplate, /param\s+existingKeyVaultAccessPolicies\s+array/);
+  assert.match(legacyKeyVaultTemplate, /accessPolicies:\s*existingKeyVaultAccessPolicies/);
+  assert.equal((workflow.match(/az keyvault show --name "\$KV_NAME" --query properties\.accessPolicies -o json/g) ?? []).length, 2,
+    'both what-if and actual deployment must capture the live policy list');
+  assert.equal((workflow.match(/grep -Eqi 'ResourceNotFound\|NotFound'/g) ?? []).length, 2,
+    'only a confirmed missing vault may use an empty policy list');
+  assert.equal((workflow.match(/Could not read Key Vault '\$KV_NAME' policy state; refusing/g) ?? []).length, 2,
+    'permission or service errors must fail closed instead of treating an existing vault as empty');
+  assert.equal((workflow.match(/existingKeyVaultAccessPolicies=@\$\{KEYVAULT_ACCESS_POLICIES_FILE\}/g) ?? []).length, 2,
+    'both what-if and actual deployment must pass that policy snapshot');
 });
 
 test('SQL admin Key Vault secret is controlled by the explicit SQL deployment switch', async () => {

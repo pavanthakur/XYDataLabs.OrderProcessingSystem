@@ -34,6 +34,9 @@ param aadAdminObjectId string = ''
 @description('Azure AD admin login name (optional). Get via: az ad signed-in-user show --query userPrincipalName -o tsv')
 param aadAdminLogin string = ''
 
+@description('Current Key Vault access-policy snapshot. Required because the Key Vault API requires this property on vault PUT operations.')
+param existingKeyVaultAccessPolicies array
+
 var rgName = 'rg-${baseName}-${environment}'
 
 // Resource Group (subscription scope deployment creates RG first)
@@ -89,6 +92,7 @@ module keyVault 'modules/keyvault.bicep' = {
     baseName: baseName
     apiAppPrincipalId: hosting.outputs.apiPrincipalId
     uiAppPrincipalId: hosting.outputs.uiPrincipalId
+    existingKeyVaultAccessPolicies: existingKeyVaultAccessPolicies
   }
 }
 
