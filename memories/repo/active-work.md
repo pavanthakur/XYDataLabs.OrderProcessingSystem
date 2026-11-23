@@ -4,15 +4,15 @@ Navigation only, not proof. Verify Git, Azure state and referenced evidence befo
 
 ## Phase 10 Azure-dev checkpoint — 23 November 2026 (updated after supervised matrix)
 
-- Review revision: `47212586daa06983e986ce1048a0690ee606bfa1`
-- Worktree state: `DIRTY`
+- Review revision: `e5d4450ca7a1db028b34f89b1b6888d04b951d33`
+- Worktree state: `CLEAN`
 - Evidence status: `HISTORICAL`
 - Evidence revision: `e5c40fbe6bbe91bd5a3a7b763e8fc218a23e3fd0`
 - Evidence environment: `AZURE_DEV`
 - Evidence scope: `Deployment/runtime/transport and replay evidence remain as recorded. The supervised six-case sandbox matrix passed all tenants/providers with Entra sign-in/sign-out; its durable checkpoint binds six verified/restored receipts to candidate/settings/deployment fingerprints, and live Azure matches the deployment fingerprint. No app-service code differs between deployed source e5c40fbe and reviewed 47212586. Payment gate is PASS for deployed dev; dirty-source overall sign-off remains open.`
 - Evidence reference: `TestResults/Phase10/azure-dev-evidence-review-20261123.md`
-- Base candidate: `dev` at `47212586daa06983e986ce1048a0690ee606bfa1`, aligned with `origin/dev` before this handoff update; the handoff diff is uncommitted.
-- Latest exact-SHA hosted checks passed: CI/Contract `45080894045` (successful retry after an intermittent Gateway fixture-disposal failure), AI Customization `45080894031`, Drift Scanner `45080894033`. The same-SHA retry and local full Gateway suite passed; the first CI failure remains noted as intermittent teardown evidence.
+- Base candidate: `dev` at `e5d4450ca7a1db028b34f89b1b6888d04b951d33`, aligned with `origin/dev`; worktree clean after the evidence update.
+- Exact-SHA hosted checks passed on `e5d4450ca7a1db028b34f89b1b6888d04b951d33`: CI/Contract `45108623366`, AI Customization `45108623933`, Documentation Links `45108623721`, Drift Scanner `45108623525`. This is documentation/governance publication only, not Azure or Phase 10 runtime acceptance.
 - Current deployed application release: source `e5c40fbe6bbe91bd5a3a7b763e8fc218a23e3fd0`; deployment `45067679429`, runtime smoke `45068970780`, transport smoke `45069084216`, workflow-04 service preflight `45072102164` passed. Transport proves consumer effects and Functions quarantine intake, not approved deployed replay.
 - Latest local Docker completion verifier passed for `TestResults/Playwright/phase10-docker-http/phase10-docker-http-20261122-123240561/`; the tool explicitly limits this to run finalization, not L5/L6 or revision acceptance.
 - Read-only replay preflight `TestResults/Phase10/azure-replay-preflight-20261123-current.json`: **24/24 PASS**, no mutation, runner `99fce3f5-b801-4aa1-b2df-122900204d65`. It verifies the isolated/normal queues, expected single-publisher baseline, Functions normal queue, App Insights query access and scoped runner roles. The supplied runner is also subscription Owner and has API `platform-admin` and `phase10-operator`; use a dedicated non-Owner identity for least-privilege live replay testing. This is readiness only; no duplicate-delivery or exact restoration proof.
