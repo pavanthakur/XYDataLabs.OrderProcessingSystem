@@ -27,7 +27,7 @@ Assert-Equal $normalized.users.Count 3 'manifest mappings retained'
 $extensionName = Get-Phase10EntraExtensionPropertyName -ApiClientId $api
 Assert-Equal $extensionName 'extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode' 'API-owned directory extension name'
 $apiApplication = [pscustomobject]@{
-    optionalClaims = [pscustomobject]@{ accessToken = @([pscustomobject]@{ name = 'extn.applicationTenantCode' }) }
+    optionalClaims = [pscustomobject]@{ accessToken = @([pscustomobject]@{ name = 'extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode' }) }
     api = [pscustomobject]@{ oauth2PermissionScopes = @([pscustomobject]@{ value='access_as_user'; isEnabled=$true }) }
 }
 $extensionRows = @([pscustomobject]@{ name=$extensionName; targetObjects=@('User') })

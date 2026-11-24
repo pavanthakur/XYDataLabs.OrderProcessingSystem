@@ -63,7 +63,7 @@ function Assert-Phase10EntraApiIdentityConfiguration {
     )
     $extensionName = Get-Phase10EntraExtensionPropertyName -ApiClientId $ApiClientId
     $accessTokenClaims = @($Application.optionalClaims.accessToken | ForEach-Object { [string]$_.name })
-    $hasTenantClaim = $accessTokenClaims -contains 'extn.applicationTenantCode' -or $accessTokenClaims -contains $extensionName
+    $hasTenantClaim = $accessTokenClaims -contains $extensionName
     $scopes = @($Application.api.oauth2PermissionScopes | Where-Object { $_.isEnabled -eq $true } | ForEach-Object { [string]$_.value })
     $registeredExtension = @($ExtensionProperties | Where-Object { $_.name -ceq $extensionName -and @($_.targetObjects) -contains 'User' })
     if (-not $hasTenantClaim -or 'access_as_user' -notin $scopes -or $registeredExtension.Count -ne 1) {

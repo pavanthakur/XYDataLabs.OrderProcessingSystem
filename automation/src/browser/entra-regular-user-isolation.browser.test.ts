@@ -7,6 +7,7 @@ import test from "node:test";
 import { chromium, request as playwrightRequest, type BrowserContext, type Page, type Request } from "playwright";
 import { isAppSignedOutUrl, isCustomerListUrl, resolveBrowserApiOrigin } from "./entra-isolation-observation.js";
 import { openSameSessionTab } from "./entra-isolation-tab.js";
+import { applicationTenantClaimType } from "../support/non-admin-sandbox.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 type UserMapping = { tenantCode: string; email?: string; userPrincipalName?: string; objectId: string };
@@ -152,7 +153,7 @@ test("Azure dev regular Entra users are isolated to exactly one assigned tenant 
       const audience = String(claims.aud ?? "").toLowerCase();
       assert.ok([manifest.apiClientId.toLowerCase(), `api://${manifest.apiClientId}`.toLowerCase()].includes(audience), "Token audience must be the Order Processing API.");
       assert.ok(String(claims.scp ?? "").split(/\s+/).includes("access_as_user"), "Delegated API scope must be present.");
-      assert.equal(String(claims["extn.applicationTenantCode"] ?? ""), mapping.tenantCode, "API access token tenant claim must match the provisioned assignment.");
+      assert.equal(String(claims[applicationTenantClaimType(manifest.apiClientId)] ?? ""), mapping.tenantCode, "API access token tenant claim must match the provisioned assignment.");
       const roles = Array.isArray(claims.roles) ? claims.roles.map(String) : [];
       assert.equal(roles.some(role => ["platform-admin", "phase10-operator"].includes(role)), false, "Regular test account must not carry a privileged app role.");
 

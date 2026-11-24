@@ -39,6 +39,7 @@
     "test:payments:deterministic": "tsx src/cli/run-payment-acceptance.ts --deterministic",
     "test:customer-directory:browser": "tsx --test src/browser/customer-directory.browser.test.ts",
     "test:azure:regular-user-isolation": "tsx src/browser/entra-regular-user-isolation.browser.test.ts",
+    "test:non-admin-sandbox-identities": "tsx --test src/support/non-admin-sandbox.test.ts",
     "test:callbacks": "tsx --test src/browser/callback-outcome.test.ts",
     "test:callbacks:browser": "tsx --test src/browser/callback-outcome.browser.test.ts",
     "placeholder": "tsx ./src/orchestrator/placeholder-orchestrator.ts",

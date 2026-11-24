@@ -124,9 +124,9 @@ export async function executePaymentAutomationRun(
       throw new Error("Non-admin checkout requires a full, verified Azure-dev assigned-provider run.");
     }
     assertAssignedSandboxRoutes(resolvedTenants);
-    if (resolvedTenants.some(tenant => !nonAdmin[tenant.tenantCode])) throw new Error("A verified guest mapping is missing.");
+    if (resolvedTenants.some(tenant => !nonAdmin[tenant.tenantCode])) throw new Error("A verified non-admin identity mapping is missing.");
     resolvedTenants.sort((a, b) => a.tenantCode.localeCompare(b.tenantCode));
-    log("Non-admin assigned-provider mode: three separate guest sessions, no provider fixtures.");
+    log(`Non-admin assigned-provider mode: three separate ${nonAdmin.TenantA.identityType} sessions, no provider fixtures.`);
   }
   const startedAt = options.startedAt ?? new Date();
   const runId = `payment-automation-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
@@ -446,7 +446,7 @@ export async function executePaymentAutomationRun(
           nonAdminSignOuts++;
         } catch {
           stopAfterCurrentItem = true;
-          log(`[${executionItem.tenantCode}] Guest sign-out was not verified. No further cases will run.`);
+          log(`[${executionItem.tenantCode}] Non-admin identity sign-out was not verified. No further cases will run.`);
         }
       }
       if (provisioner && fixtureIds.length > 0) {
@@ -551,7 +551,7 @@ export async function executePaymentAutomationRun(
   if (options.operatorAssistedEntra && !options.dryRun && operatorAuthPreflight?.status !== "FAIL") {
     if (nonAdmin) {
       operatorSignOut = nonAdminSignOuts === executionItems.length ? { status: "PASS" }
-        : { status: "FAIL", error: "Not every non-admin guest case completed and verified sign-out." };
+        : { status: "FAIL", error: "Not every non-admin account case completed and verified sign-out." };
     } else if (options.authPreflightOnly) {
       if (isAuthPreflightSignOutVerified(rows)) {
         operatorSignOut = { status: "PASS" };

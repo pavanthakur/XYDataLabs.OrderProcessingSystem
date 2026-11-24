@@ -51,6 +51,12 @@ Run **5 Run: Azure Dev 05b Organizational Member Isolation (No Payments)**. Sign
 
 Each distinct identity must authenticate separately at least once. This is required evidence for regular-user isolation; an administrator session or a single account reused across tenants is not a substitute.
 
+## Optional supervised sandbox payment matrix
+
+Payment acceptance is a separate, payment-mutating gate; the no-payment isolation PASS does not cover it. After member `Verify` succeeds and only with separate approval for sandbox transactions, run **5 Run: Azure Dev 06b Organizational Member Sandbox Payments (Submits Sandbox Payments)**. The task re-verifies the member manifest and deployment identity, requires confirmation of the approved dev subscription and the typed phrase `RUN SANDBOX`, then runs serially for TenantA/Razorpay, TenantB/Razorpay, and TenantC/OpenPay. Complete normal sign-in/MFA for each account when prompted.
+
+The runner must preserve the server-assigned provider routes, create one fresh order per tenant, and submit no more than one payment per order. It does not change provider routes or automatically retry an uncertain transaction. If a result is ambiguous, stop and reconcile the existing order/payment status before any new attempt. The sanitized report identifies the identity type and records per-tenant hashes; it does not include UPNs or object IDs. This matrix is sandbox acceptance, not real-money or production certification.
+
 ## Safety boundary
 
-The GitHub guide workflow is informational only. 04a is read-only. 04b performs directory writes only from the operator's trusted local workstation after explicit confirmation. 05b is a headed, no-payment browser test. None of these steps deploys Azure resources or changes application registrations.
+The GitHub guide workflow is informational only. 04a is read-only. 04b performs directory writes only from the operator's trusted local workstation after explicit confirmation. 05b is a headed, no-payment browser test. 06b is a separate supervised sandbox payment test and requires its own approval. None of these steps deploys Azure resources or changes application registrations.

@@ -35,7 +35,7 @@ public sealed class EntraBearerValidationTests
         var key = new RsaSecurityKey(rsa) { KeyId = "fixture-key" };
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> {
             ["IdentityProvider:Enabled"]="true", ["IdentityProvider:Mode"]="Entra", ["IdentityProvider:Authority"]=authority,
-            ["IdentityProvider:Audience"]="fixture-api", ["IdentityProvider:RequiredScope"]="access_as_user", ["IdentityProvider:TenantClaimType"]="extn.applicationTenantCode"
+            ["IdentityProvider:Audience"]="fixture-api", ["IdentityProvider:RequiredScope"]="access_as_user", ["IdentityProvider:TenantClaimType"]="extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode"
         }).Build();
         using var server = new TestServer(new WebHostBuilder().ConfigureServices(services => {
             services.AddLogging();
@@ -55,7 +55,7 @@ public sealed class EntraBearerValidationTests
         }));
         var claims = new List<Claim> { new("sub", "fixture-user"), new("tid", "not-the-application-tenant") };
         if (scenario != "missing-scope") claims.Add(new("scp", "access_as_user"));
-        if (scenario is not "missing-tenant" and not "admin-without-tenant") claims.Add(new("extn.applicationTenantCode", "CustomTenant"));
+        if (scenario is not "missing-tenant" and not "admin-without-tenant") claims.Add(new("extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "CustomTenant"));
         if (scenario == "admin-without-tenant") claims.Add(new("roles", "platform-admin"));
         var token = new JwtSecurityToken(issuer: scenario == "wrong-issuer" ? "https://wrong.example.test" : authority,
             audience: scenario == "wrong-audience" ? "different-api" : "fixture-api", claims: claims,

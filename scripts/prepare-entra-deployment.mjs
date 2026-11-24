@@ -2,6 +2,12 @@ import { writeFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createPublicRuntimeConfig } from "../frontend/apps/web/public-runtime-config.mjs";
 
+export function getApplicationTenantClaimType(apiClientId) {
+  if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(apiClientId ?? ""))
+    throw new Error("API client ID must be a GUID before deriving the Entra extension claim name.");
+  return `extension_${apiClientId.replaceAll("-", "").toLowerCase()}_applicationTenantCode`;
+}
+
 export function validateEntraDeployment(settings, environment) {
   if (!settings || typeof settings !== "object") throw new Error("Entra provisioning manifest must be an object.");
   if (!["dev", "staging", "prod"].includes(environment)) throw new Error("Select dev, staging or prod.");
@@ -9,7 +15,9 @@ export function validateEntraDeployment(settings, environment) {
     if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(settings[key] ?? "") || /^0+-0+-0+-0+-0+$/.test(settings[key]))
       throw new Error(`Configure the real environment-specific ${key}; provisioning has not been completed.`);
   }
-  if (!settings.tenantClaimType?.startsWith("extn.") || settings.tenantClaimType === "extn.tid") throw new Error("Configure an application-tenant directory extension claim (extn.*), never tid.");
+  const tenantClaimType = getApplicationTenantClaimType(settings.apiClientId);
+  if (settings.tenantClaimType && settings.tenantClaimType !== tenantClaimType)
+    throw new Error("tenantClaimType must exactly match the API app's emitted applicationTenantCode extension claim; derive it from apiClientId.");
   const authority = `https://login.microsoftonline.com/${settings.directoryId}/v2.0`;
   const config = createPublicRuntimeConfig({ IDENTITY_MODE: "Entra", APP_ENVIRONMENT: environment,
     PUBLIC_WEB_ORIGIN: settings.webOrigin, PUBLIC_IDENTITY_AUTHORITY: authority,
@@ -17,7 +25,7 @@ export function validateEntraDeployment(settings, environment) {
   if (!settings.registeredRedirectUris?.includes(config.redirectUri) || !settings.registeredLogoutUris?.includes(config.postLogoutRedirectUri))
     throw new Error("The provisioning manifest must include the exact callback and signed-out URLs registered for this environment.");
   return { authority, audience: settings.apiClientId, spaClientId: settings.spaClientId,
-    requiredScope: "access_as_user", apiScope: config.scopes[0], tenantClaimType: settings.tenantClaimType,
+    requiredScope: "access_as_user", apiScope: config.scopes[0], tenantClaimType,
     webOrigin: settings.webOrigin, selectorEnabled: settings.selectorEnabled === true };
 }
 
@@ -28,7 +36,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const settings = process.argv.includes("--manifest") ? JSON.parse(readFileSync(value("--manifest"), "utf8")) : {
       directoryId: process.env.ENTRA_DIRECTORY_ID, apiClientId: process.env.ENTRA_API_CLIENT_ID,
       spaClientId: process.env.ENTRA_SPA_CLIENT_ID, webOrigin: process.env.IDENTITY_PUBLIC_WEB_ORIGIN,
-      tenantClaimType: process.env.ENTRA_TENANT_CLAIM_TYPE,
       registeredRedirectUris: JSON.parse(process.env.ENTRA_REGISTERED_REDIRECT_URIS || "[]"),
       registeredLogoutUris: JSON.parse(process.env.ENTRA_REGISTERED_LOGOUT_URIS || "[]"),
       selectorEnabled: process.env.IDENTITY_TENANT_SELECTOR_ENABLED === "true"

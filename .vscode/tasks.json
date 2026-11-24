@@ -3050,7 +3050,7 @@
             "problemMatcher": []
         },
         {
-            "label": "5 Run: Azure Dev 03 Entra Test-User Plan (Read-Only)",
+            "label": "5 Run: Azure Dev 03 Optional B2B Guest Plan (Read-Only)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3061,13 +3061,13 @@
                 "Plan",
                 "-PromptForExpectedSubscriptionId"
             ],
-            "detail": "Read-only directory and active-tenant preflight. Uses the private LOCALAPPDATA manifest; no invitations or claims are changed.",
+            "detail": "Optional external B2B guest flow. Read-only directory and active-tenant preflight using the private LOCALAPPDATA guest manifest; no invitations or claims are changed.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []
         },
         {
-            "label": "5 Run: Azure Dev 04 Entra Test-User Apply (Invites Guests)",
+            "label": "5 Run: Azure Dev 04 Optional B2B Guest Apply (Directory Writes)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3079,7 +3079,7 @@
                 "-PromptForExpectedSubscriptionId",
                 "-Confirm"
             ],
-            "detail": "Directory-write task: may send guest invitations and set per-user tenant claims. Requires -Confirm and a typed phrase; do not use until the Plan output is reviewed.",
+            "detail": "Optional external B2B guest flow. Directory-write task: may send guest invitations and set per-user tenant claims. Requires -Confirm and a typed phrase; review the Plan output first.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []
@@ -3120,7 +3120,7 @@
             "problemMatcher": []
         },
         {
-            "label": "5 Run: Azure Dev 05 Non-Admin Tenant Isolation (No Payments)",
+            "label": "5 Run: Azure Dev 05 Optional B2B Guest Isolation (No Payments)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3129,7 +3129,7 @@
                 "${workspaceFolder}/scripts/run-phase10-azure-dev-identity-isolation.ps1",
                 "-PromptForExpectedSubscriptionId"
             ],
-            "detail": "Shows the active Azure CLI subscription and asks for the approved GUID. Sign in once per non-admin tenant when prompted. Checks tenant access and sign-out. No payments or orders are created.",
+            "detail": "Optional external B2B guest coverage. Verifies the private guest manifest, then tests tenant access and sign-out. Sign in once per guest. No payments or orders are created.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []
@@ -3152,7 +3152,7 @@
             "problemMatcher": []
         },
         {
-            "label": "5 Run: Azure Dev 06 Non-Admin Sandbox Payments (Submits Sandbox Payments)",
+            "label": "5 Run: Azure Dev 06 Optional B2B Guest Sandbox Payments (Submits Sandbox Payments)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3160,9 +3160,27 @@
                 "-File",
                 "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
                 "-Mode", "NonAdminSandbox",
+                "-IdentityType", "guest",
                 "-PromptForExpectedSubscriptionId"
             ],
-            "detail": "Requires RUN SANDBOX. Sign in once per non-admin tenant. Submits one payment per tenant using its assigned sandbox provider; does not switch routes.",
+            "detail": "Optional external B2B guest coverage. Requires RUN SANDBOX. Sign in once per guest; submits one payment per tenant using assigned routes (A/B Razorpay, C OpenPay), without switching providers.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 06b Organizational Member Sandbox Payments (Submits Sandbox Payments)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
+                "-Mode", "NonAdminSandbox",
+                "-IdentityType", "member",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Preferred organizational-member coverage. Verify the member manifest first; then confirm the dev subscription and type RUN SANDBOX. Sign in once per tenant. Submits one payment per tenant on its assigned route (A/B Razorpay, C OpenPay); no route changes or automatic retries.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []

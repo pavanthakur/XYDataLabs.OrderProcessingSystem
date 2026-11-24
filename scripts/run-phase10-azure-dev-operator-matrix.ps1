@@ -7,7 +7,8 @@ param(
     [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN,
     [string]$ResumeCheckpoint,
     [switch]$RequireSandboxConfirmation,
-    [string]$ManifestPath = (Join-Path $env:LOCALAPPDATA 'XYDataLabs/phase10-entra-test-users.dev.json'),
+    [ValidateSet('guest','member')][string]$IdentityType = 'guest',
+    [string]$ManifestPath,
     [switch]$NonAdminPreflightOnly
 )
 
@@ -19,7 +20,12 @@ if ($ResumeCheckpoint -and $Mode -notin @('ProviderMatrix','Reconcile')) { throw
 if ($Mode -eq 'Reconcile' -and -not $ResumeCheckpoint) { throw 'Reconcile requires an existing ResumeCheckpoint; it never creates orders/payments or opens a browser.' }
 if ($RequireSandboxConfirmation -and $Mode -ne 'ProviderMatrix') { throw 'Sandbox confirmation applies only to ProviderMatrix.' }
 if ($NonAdminPreflightOnly -and $Mode -ne 'NonAdminSandbox') { throw 'NonAdminPreflightOnly requires NonAdminSandbox mode.' }
+if ($Mode -ne 'NonAdminSandbox' -and $IdentityType -ne 'guest') { throw 'IdentityType applies only to NonAdminSandbox mode.' }
 if ($PromptForExpectedSubscriptionId -and $Mode -eq 'Reconcile') { throw 'Reconcile requires an explicit expected subscription ID.' }
+if ($Mode -eq 'NonAdminSandbox' -and [string]::IsNullOrWhiteSpace($ManifestPath)) {
+    $manifestName = if ($IdentityType -eq 'member') { 'phase10-entra-member-test-users/phase10-entra-member-test-users.dev.json' } else { 'phase10-entra-test-users.dev.json' }
+    $ManifestPath = Join-Path $env:LOCALAPPDATA (Join-Path 'XYDataLabs' $manifestName)
+}
 $targetCatalogPath = Join-Path $repoRoot 'automation/config/runtime-targets.json'
 $targetCatalog = Get-Content -LiteralPath $targetCatalogPath -Raw | ConvertFrom-Json
 $targets = @($targetCatalog.targets | Where-Object key -eq 'azure-dev')
@@ -97,6 +103,7 @@ $deploymentHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashDat
 $priorDeploymentIdentity = $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY
 $priorSettingsIdentity = $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY
 $priorNonAdminManifest = $env:XYDATALABS_NONADMIN_VERIFIED_MANIFEST
+$priorNonAdminIdentityType = $env:XYDATALABS_NONADMIN_IDENTITY_TYPE
 $verifiedManifest = $null
 $settingsHash = $null
 
@@ -106,15 +113,16 @@ if ($Mode -eq 'AuthPreflight') {
 }
 elseif ($Mode -eq 'NonAdminSandbox') {
     $verifiedManifest = [IO.Path]::GetFullPath($ManifestPath)
-    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-entra-test-users.ps1') -Mode Verify -ManifestPath $verifiedManifest -ExpectedSubscriptionId $ExpectedSubscriptionId
-    if ($LASTEXITCODE -ne 0) { throw 'Guest or tenant-claim verification failed. No orders or payments were attempted.' }
+    $verifierName = if ($IdentityType -eq 'member') { 'phase10-entra-member-test-users.ps1' } else { 'phase10-entra-test-users.ps1' }
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot $verifierName) -Mode Verify -ManifestPath $verifiedManifest -ExpectedSubscriptionId $ExpectedSubscriptionId
+    if ($LASTEXITCODE -ne 0) { throw "$IdentityType identity or tenant-claim verification failed. No orders or payments were attempted." }
     $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--non-admin-sandbox',
         '--tenant','TenantA','--tenant','TenantB','--tenant','TenantC','--tenant-timeout-ms','600000')
     if ($NonAdminPreflightOnly) {
         $matrixArgs += '--auth-preflight-only'
-        Write-Host 'TenantA only: verify guest identity, access, sandbox settings and sign-out. No orders or payments.'
+        Write-Host "TenantA only: verify the assigned $IdentityType identity, access, sandbox settings and sign-out. No orders or payments."
     } else {
-        Write-Host 'One normal Entra sign-in per non-admin guest. The assigned providers will not be changed.'
+        Write-Host "One normal Entra sign-in per non-admin $IdentityType account. The assigned providers will not be changed."
     }
 }
 else {
@@ -146,6 +154,7 @@ try {
     $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $deploymentHash
     $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $settingsHash
     $env:XYDATALABS_NONADMIN_VERIFIED_MANIFEST = $verifiedManifest
+    $env:XYDATALABS_NONADMIN_IDENTITY_TYPE = if ($Mode -eq 'NonAdminSandbox') { $IdentityType } else { $null }
     if($Mode -eq 'Reconcile'){ & npm --prefix automation run reconcile:azure:checkpoint -- --checkpoint $ResumeCheckpoint }
     else { & npm --prefix automation run run:azure:matrix -- @matrixArgs }
     $matrixExit = $LASTEXITCODE
@@ -155,5 +164,6 @@ finally {
     $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $priorDeploymentIdentity
     $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $priorSettingsIdentity
     $env:XYDATALABS_NONADMIN_VERIFIED_MANIFEST = $priorNonAdminManifest
+    $env:XYDATALABS_NONADMIN_IDENTITY_TYPE = $priorNonAdminIdentityType
 }
 exit $matrixExit

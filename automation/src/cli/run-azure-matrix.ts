@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -9,7 +10,7 @@ import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildRunPrefix } from "../support/customer-order-id.js";
 import { resolveEnvironmentKey } from "../support/environment-key.js";
 import {baselinePaymentScenarios} from "../contracts/payment-scenarios.js";
-import type { NonAdminSandboxIdentity } from "../support/non-admin-sandbox.js";
+import { mapNonAdminSandboxIdentities, type NonAdminIdentityType, type NonAdminSandboxIdentity } from "../support/non-admin-sandbox.js";
 
 interface AzureMatrixOptions {
   targets: string[];
@@ -33,6 +34,8 @@ interface AzureMatrixOptions {
 interface AzureMatrixOutput {
   matrixRunId: string;
   identityMode?: "non-admin-assigned-provider";
+  identityType?: NonAdminIdentityType;
+  identities?: Array<{ tenantCode: string; identitySha256: string }>;
   reportDirectory: string;
   environmentKey: string;
   startedUtc: string;
@@ -115,6 +118,13 @@ async function main(): Promise<void> {
   const effectiveProviders: string[] = normalizedProviders;
   const matrixOutput: AzureMatrixOutput = {
     ...(options.nonAdminSandbox ? { identityMode: "non-admin-assigned-provider" as const } : {}),
+    ...(nonAdminSandboxIdentities ? { identityType: nonAdminSandboxIdentities.TenantA.identityType } : {}),
+    ...(nonAdminSandboxIdentities ? {
+      identities: Object.entries(nonAdminSandboxIdentities).map(([tenantCode, identity]) => ({
+        tenantCode,
+        identitySha256: createHash("sha256").update(identity.objectId.toLowerCase()).digest("hex")
+      }))
+    } : {}),
     matrixRunId,
     reportDirectory,
     environmentKey,
@@ -141,6 +151,7 @@ async function main(): Promise<void> {
     `Environment: ${environmentKey}`,
     "Runtime target config: automation/config/runtime-targets.json",
     `Targets: ${options.targets.join(", ")}`,
+    ...(nonAdminSandboxIdentities ? [`Non-admin identity type: ${nonAdminSandboxIdentities.TenantA.identityType}`] : []),
     `Provider selection: ${isAzureDevFixtureMatrix ? "per-tenant Razorpay/OpenPay fixture, with exact route and setting restoration" : "runtime configuration -> tenant registry API"}`,
     `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
     `All-active-tenant two-provider fixture matrix: ${isAzureDevFixtureMatrix ? "yes" : "no"}`,
@@ -634,20 +645,12 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
 
 async function readNonAdminIdentities(): Promise<Record<string, NonAdminSandboxIdentity>> {
   const manifestPath = process.env.XYDATALABS_NONADMIN_VERIFIED_MANIFEST;
-  if (!manifestPath || !process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY || process.env.CI === "true") {
-    throw new Error("Use the supervised Azure-dev PowerShell task to verify guests and confirm the sandbox run.");
+  const identityType = process.env.XYDATALABS_NONADMIN_IDENTITY_TYPE as NonAdminIdentityType | undefined;
+  if (!manifestPath || !process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY || process.env.CI === "true" || !identityType || !["guest", "member"].includes(identityType)) {
+    throw new Error("Use the supervised Azure-dev PowerShell task to verify the selected non-admin identities and confirm the sandbox run.");
   }
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-    schemaVersion: number; environment: string; directoryId: string; apiClientId: string;
-    users: Array<{ tenantCode: string; objectId: string }>;
-  };
-  const isGuid = (value: unknown) => typeof value === "string" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value);
-  if (manifest.schemaVersion !== 1 || manifest.environment !== "dev" || !isGuid(manifest.directoryId) || !isGuid(manifest.apiClientId) ||
-    manifest.users?.length !== 3 || manifest.users.map(user => user.tenantCode).sort().join(",") !== "TenantA,TenantB,TenantC" ||
-    !manifest.users.every(user => isGuid(user.objectId)) || new Set(manifest.users.map(user => user.objectId.toLowerCase())).size !== 3) {
-    throw new Error("Private manifest must contain three distinct, verified Azure-dev guest identities.");
-  }
-  return Object.fromEntries(manifest.users.map(({ tenantCode, objectId }) => [tenantCode, { objectId, directoryId: manifest.directoryId, apiClientId: manifest.apiClientId }]));
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
+  return mapNonAdminSandboxIdentities(manifest, identityType);
 }
 
 function normalizeRequestedProviders(requestedProviders: string[]): string[] {

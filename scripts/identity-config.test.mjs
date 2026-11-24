@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createPublicRuntimeConfig } from "../frontend/apps/web/public-runtime-config.mjs";
-import { validateEntraDeployment } from "./prepare-entra-deployment.mjs";
+import { getApplicationTenantClaimType, validateEntraDeployment } from "./prepare-entra-deployment.mjs";
 const origin = "https://test-app.example.test";
 const settings = { directoryId:"11111111-1111-1111-1111-111111111111", apiClientId:"22222222-2222-2222-2222-222222222222",
-  spaClientId:"33333333-3333-3333-3333-333333333333", webOrigin:origin, tenantClaimType:"extn.applicationTenantCode",
+  spaClientId:"33333333-3333-3333-3333-333333333333", webOrigin:origin,
   registeredRedirectUris:[`${origin}/auth/callback`], registeredLogoutUris:[`${origin}/signed-out`], selectorEnabled:false };
 test("validates Entra contract for every cloud environment with production selector off", () => {
   for (const env of ["dev", "staging", "prod"]) {
@@ -14,12 +14,18 @@ test("validates Entra contract for every cloud environment with production selec
     assert.equal(identity.requiredScope, "access_as_user");
     assert.equal(identity.audience, settings.apiClientId);
     assert.equal(identity.apiScope, `api://${settings.apiClientId}/access_as_user`);
+    assert.equal(identity.tenantClaimType, "extension_22222222222222222222222222222222_applicationTenantCode");
   }
 });
 test("rejects incomplete provisioning, insecure origins, missing registration and directory tenant as application tenant", () => {
   for (const change of [{directoryId:""}, {apiClientId:""}, {spaClientId:""}, {tenantClaimType:"tid"},
     {webOrigin:"http://localhost:5022"}, {registeredRedirectUris:[]}, {registeredLogoutUris:[]}])
     assert.throws(() => validateEntraDeployment({...settings,...change}, "dev"));
+});
+test("derives the exact Entra extension-claim name from API client ID and rejects stale aliases", () => {
+  assert.equal(getApplicationTenantClaimType(settings.apiClientId), "extension_22222222222222222222222222222222_applicationTenantCode");
+  assert.throws(() => getApplicationTenantClaimType("not-a-guid"), /API client ID must be a GUID/);
+  assert.throws(() => validateEntraDeployment({ ...settings, tenantClaimType: "extn.applicationTenantCode" }, "dev"), /exactly match the API app's emitted/);
 });
 test("public runtime is allowlisted, same-origin and does not contain credentials", () => {
   const result = createPublicRuntimeConfig({ IDENTITY_MODE:"KeycloakLocal", APP_ENVIRONMENT:"local", PUBLIC_WEB_ORIGIN:"http://localhost:5173",
