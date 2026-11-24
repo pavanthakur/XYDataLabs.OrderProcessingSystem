@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory,ParameterSetName='ExplicitSubscription')][guid]$ExpectedSubscriptionId,
     [Parameter(Mandatory,ParameterSetName='PromptSubscription')][switch]$PromptForExpectedSubscriptionId,
-    [string]$ManifestPath = (Join-Path $env:LOCALAPPDATA 'XYDataLabs/phase10-entra-test-users.dev.json')
+    [ValidateSet('guest','member')][string]$IdentityType = 'guest',
+    [string]$ManifestPath
 )
 
 Set-StrictMode -Version Latest
@@ -13,9 +14,13 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not (Get-Command az -ErrorAction SilentlyContinue) -or -not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI, Node.js, and npm are required; no browser was launched.'
 }
+$defaultManifestPath = if ($IdentityType -eq 'member') { Join-Path $env:LOCALAPPDATA 'XYDataLabs/phase10-entra-member-test-users/phase10-entra-member-test-users.dev.json' } else { Join-Path $env:LOCALAPPDATA 'XYDataLabs/phase10-entra-test-users.dev.json' }
+if ([string]::IsNullOrWhiteSpace($ManifestPath)) { $ManifestPath = $defaultManifestPath }
 $manifestFullPath = [IO.Path]::GetFullPath($ManifestPath)
 if (-not (Test-Path -LiteralPath $manifestFullPath -PathType Leaf)) { throw 'Private Entra test-user manifest is missing; run the provisioning Plan task first.' }
 $manifest = Get-Content -LiteralPath $manifestFullPath -Raw | ConvertFrom-Json
+$manifestIdentityType = if ($manifest.PSObject.Properties.Name -contains 'identityType' -and $manifest.identityType -ceq 'member') { 'member' } else { 'guest' }
+if ($manifestIdentityType -cne $IdentityType) { throw 'IdentityType does not match the selected private manifest; no browser was launched.' }
 $directoryId = [guid]::Empty
 if (-not [guid]::TryParse([string]$manifest.directoryId,[ref]$directoryId)) { throw 'Private manifest has no valid Entra directory ID.' }
 
@@ -49,7 +54,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Generated dev UI/API origin validation failed.
 $resolved = $origins | ConvertFrom-Json
 
 # A read-only verification gate proves the guest/claim baseline before opening a browser.
-& pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-entra-test-users.ps1') -Mode Verify -ManifestPath $manifestFullPath -ExpectedDirectoryId $directoryId -ExpectedSubscriptionId $ExpectedSubscriptionId
+if ($IdentityType -eq 'member') {
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-entra-member-test-users.ps1') -Mode Verify -ManifestPath $manifestFullPath -ExpectedSubscriptionId $ExpectedSubscriptionId
+}
+else {
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-entra-test-users.ps1') -Mode Verify -ManifestPath $manifestFullPath -ExpectedDirectoryId $directoryId -ExpectedSubscriptionId $ExpectedSubscriptionId
+}
 if ($LASTEXITCODE -ne 0) { throw 'Entra test-user verification failed; no browser was launched.' }
 
 function Get-DeploymentFingerprint {
@@ -77,7 +87,9 @@ try {
     $sourceStatus = & git -C $repoRoot status --porcelain --untracked-files=all
     if ($LASTEXITCODE -ne 0) { throw 'Could not determine whether the runner worktree is dirty.' }
     $runnerFiles = @('scripts/phase10-entra-test-users.ps1','scripts/phase10-entra-test-users.module.psm1',
-        'scripts/run-phase10-azure-dev-identity-isolation.ps1','automation/src/browser/entra-regular-user-isolation.browser.test.ts')
+        'scripts/phase10-entra-member-test-users.ps1','scripts/phase10-entra-member-test-users.module.psm1',
+        'scripts/run-phase10-azure-dev-identity-isolation.ps1','automation/src/browser/entra-regular-user-isolation.browser.test.ts',
+        'automation/src/browser/entra-isolation-observation.ts','automation/src/browser/entra-isolation-tab.ts','automation/package.json')
     $sourceContent = foreach ($file in $runnerFiles) {
         $path = Join-Path $repoRoot $file
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'A required identity runner source file is missing.' }
@@ -90,11 +102,13 @@ try {
     $env:PHASE10_AZURE_UI_ORIGIN = [string]$resolved.uiOrigin
     $env:PHASE10_AZURE_API_ORIGIN = [string]$resolved.apiOrigin
     $env:PHASE10_ENTRA_TEST_USERS_MANIFEST = $manifestFullPath
+    Write-Host "$IdentityType identity verification passed. Capturing deployment identity before opening the browser."
     $env:PHASE10_AZURE_DEPLOYMENT_IDENTITY_SHA256 = Get-DeploymentFingerprint
     Push-Location $repoRoot
     try { & npm --prefix automation run test:azure:regular-user-isolation; $testExit = $LASTEXITCODE }
     finally { Pop-Location }
     if ($testExit -ne 0) { exit $testExit }
+    Write-Host 'Browser checks passed. Verifying deployment identity did not change during the run.'
     $after = Get-DeploymentFingerprint
     if ($after -ne $env:PHASE10_AZURE_DEPLOYMENT_IDENTITY_SHA256) { throw 'Deployment identity changed during the browser run; evidence is invalidated.' }
 }

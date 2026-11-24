@@ -1,0 +1,68 @@
+name: 04a-04b Phase 10 Entra Member Setup Guide
+
+on:
+  workflow_dispatch:
+    inputs:
+      guideStep:
+        description: 'Show the manual local steps. This workflow does not access Entra or perform writes.'
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply-guidance-only
+
+permissions: {}
+
+jobs:
+  operator_guide:
+    name: Entra member setup instructions (no directory access)
+    runs-on: ubuntu-24.04
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Validate safe guide selection
+        shell: pwsh
+        env:
+          GUIDE_STEP: ${{ inputs.guideStep }}
+          SELECTED_REF: ${{ github.ref }}
+        run: |
+          if ($env:SELECTED_REF -ne 'refs/heads/dev') { throw 'Run this guide from branch dev.' }
+          if ($env:GUIDE_STEP -notin @('plan','apply-guidance-only')) { throw 'Unknown guide selection.' }
+
+      - name: Publish manual steps (no Azure, Graph, or identity values)
+        shell: pwsh
+        env:
+          GUIDE_STEP: ${{ inputs.guideStep }}
+          GUIDE_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/runbooks/phase10-entra-member-test-users.md
+        run: |
+          $summary = @(
+            '# Entra organizational test-user guide'
+            ''
+            '**This GitHub run is guidance only.** It has no Azure credentials or permissions and did not query Azure/Entra, create accounts, send email, change claims, or run browser/payment tests.'
+            ''
+            "Guide: [$env:GUIDE_URL]($env:GUIDE_URL)"
+            ''
+          )
+          if ($env:GUIDE_STEP -eq 'plan') {
+            $summary += @(
+              '## 04a — Read-only plan'
+              '1. Prepare the private manifest locally as described in the guide; never paste UPNs or IDs into this workflow.'
+              '2. Run the VS Code task **5 Run: Azure Dev 04a Organizational Member Plan (Read Only)**, or use the documented local command.'
+              '3. Review its sanitized proposed account/claim actions and resolve any permission or configuration gaps before proceeding.'
+              ''
+              'No directory changes are performed by this workflow or by 04a.'
+            )
+          } else {
+            $summary += @(
+              '## 04b — Apply guidance only (this workflow does not apply changes)'
+              '1. First pass and review 04a. Confirm the three unique organizational UPNs and API tenant mappings.'
+              '2. Confirm the operator has the approved delegated Microsoft Graph permissions and supported Entra directory role. Subscription Owner alone is not sufficient.'
+              '3. On your trusted Windows workstation, run **5 Run: Azure Dev 04b Organizational Member Apply (Directory Writes)**.'
+              '4. Read each confirmation prompt carefully; enter a unique temporary password only into the local secure prompt. Never enter passwords, tokens, UPNs, directory IDs, or app IDs in GitHub inputs, logs, or artifacts.'
+              '5. Review the sanitized local report, then complete normal password-change/MFA sign-in and run **05b Organizational Member Isolation (No Payments)**.'
+              ''
+              '**This workflow did not approve or execute the directory write.** The local 04b task is a separate consequential operation and requires its own explicit operator confirmation.'
+            )
+          }
+          $summary | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY

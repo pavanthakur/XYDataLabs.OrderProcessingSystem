@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile, open, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CleanupOutcome } from "../contracts/payment-fixture-provisioner.js";
+import { assertAssignedSandboxRoutes, type NonAdminSandboxIdentity } from "../support/non-admin-sandbox.js";
 import type { PaymentFixtureProvisioner } from "../contracts/payment-fixture-provisioner.js";
 import type { ExecutiveSummaryRow } from "../contracts/report-composer.js";
 import { PowerShellPaymentProviderProvisioner } from "../adapters/fixtures/powershell-payment-provider-provisioner.js";
@@ -42,6 +43,7 @@ export interface ExecutePaymentAutomationRunOptions {
   threeDs?: boolean;
   loginUsername?: string;
   operatorAssistedEntra?: boolean;
+  nonAdminSandboxIdentities?: Record<string, NonAdminSandboxIdentity>;
   authPreflightOnly?: boolean;
   manualEntry?: boolean;
   challengeRequired?: boolean;
@@ -113,6 +115,19 @@ export async function executePaymentAutomationRun(
   );
   log(`Resolved ${tenantPlan.resolvedTenants.length} tenant(s); skipped ${tenantPlan.skippedTenantCodes.length}.`);
   const resolvedTenants = applyTenantLimit(tenantPlan.resolvedTenants, options.tenantLimit, log);
+  const nonAdmin = options.nonAdminSandboxIdentities;
+  if (nonAdmin) {
+    if (target.key !== "azure-dev" || !options.operatorAssistedEntra || options.headless || !options.verify ||
+        options.dryRun || options.requestedProviders?.length || options.resumeCheckpoint ||
+        options.allowPartialExecution || options.expectedOutcome || options.continueAfterVerificationFailure ||
+        options.expectedAdapterMode === "deterministic" || options.tenantLimit !== undefined) {
+      throw new Error("Non-admin checkout requires a full, verified Azure-dev assigned-provider run.");
+    }
+    assertAssignedSandboxRoutes(resolvedTenants);
+    if (resolvedTenants.some(tenant => !nonAdmin[tenant.tenantCode])) throw new Error("A verified guest mapping is missing.");
+    resolvedTenants.sort((a, b) => a.tenantCode.localeCompare(b.tenantCode));
+    log("Non-admin assigned-provider mode: three separate guest sessions, no provider fixtures.");
+  }
   const startedAt = options.startedAt ?? new Date();
   const runId = `payment-automation-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
   const runPrefix = options.runPrefix ?? buildRunPrefix(startedAt);
@@ -235,6 +250,7 @@ export async function executePaymentAutomationRun(
   }
 
   const runnableExecutionItems = operatorAuthPreflight?.status === "FAIL" ? [] : executionItems;
+  let nonAdminSignOuts = 0;
   for (const executionItem of runnableExecutionItems) {
     if (checkpointEnabled && checkpoint.cases.some((item) => item.key === caseKey(executionItem))) continue;
     // Durable intent precedes fixture or order mutation. An interrupted intent is never auto-retried.
@@ -319,9 +335,10 @@ export async function executePaymentAutomationRun(
             expectedThreeDs: options.threeDs,
             loginUsername: options.loginUsername,
             operatorAssistedEntra: options.operatorAssistedEntra,
+            nonAdminIdentity: nonAdmin?.[executionItem.tenantCode],
             reuseEntraSession: options.operatorAssistedEntra,
             authPreflightOnly: options.authPreflightOnly,
-            retainOperatorSessionAfterAuthPreflight: false,
+            retainOperatorSessionAfterAuthPreflight: !!nonAdmin && options.authPreflightOnly === true,
             manualEntry: options.manualEntry,
             expectedOutcome: options.expectedOutcome,
             signal:journeyAbort.signal,
@@ -423,6 +440,15 @@ export async function executePaymentAutomationRun(
       }
     }
     finally {
+      if (nonAdmin) {
+        try {
+          await paymentJourneyRunner.closeOperatorAssistedSession(log, true);
+          nonAdminSignOuts++;
+        } catch {
+          stopAfterCurrentItem = true;
+          log(`[${executionItem.tenantCode}] Guest sign-out was not verified. No further cases will run.`);
+        }
+      }
       if (provisioner && fixtureIds.length > 0) {
         try {
           const fixtureCleanupResult = await provisioner.cleanup(executionItem.tenantCode, fixtureIds);
@@ -476,7 +502,7 @@ export async function executePaymentAutomationRun(
         const row = rows.at(-1)!;
         const receipt = checkpoint.cases.find((item) => item.key === caseKey(executionItem))!;
         if (row.journeyOutcome.startsWith("completed") && row.verificationOutcome === "passed"
-          && row.cleanupOutcome === "reset" && row.adapterMode === "sandbox") {
+          && (row.cleanupOutcome === "reset" || (nonAdmin && row.cleanupOutcome === "not-applicable")) && row.adapterMode === "sandbox") {
           receipt.state = "verified-restored";
           // Explicit field projection: no URLs, arbitrary errors, tokens or raw provider payloads.
           receipt.row = {
@@ -523,7 +549,10 @@ export async function executePaymentAutomationRun(
 
   let operatorSignOut: PaymentAutomationRunOutput["operatorSignOut"];
   if (options.operatorAssistedEntra && !options.dryRun && operatorAuthPreflight?.status !== "FAIL") {
-    if (options.authPreflightOnly) {
+    if (nonAdmin) {
+      operatorSignOut = nonAdminSignOuts === executionItems.length ? { status: "PASS" }
+        : { status: "FAIL", error: "Not every non-admin guest case completed and verified sign-out." };
+    } else if (options.authPreflightOnly) {
       if (isAuthPreflightSignOutVerified(rows)) {
         operatorSignOut = { status: "PASS" };
       } else {

@@ -3085,7 +3085,42 @@
             "problemMatcher": []
         },
         {
-            "label": "5 Run: Azure Dev 05 Regular-User Isolation (No Payments)",
+            "label": "5 Run: Azure Dev 04a Organizational Member Plan (Read Only)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-member-test-users.ps1",
+                "-Mode",
+                "Plan",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Read-only plan for three distinct organizational Entra test accounts and API tenant claims. Does not create users, send email, or change claims. Requires the private member manifest.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04b Organizational Member Apply (Directory Writes)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-member-test-users.ps1",
+                "-Mode",
+                "Apply",
+                "-PromptForExpectedSubscriptionId",
+                "-Confirm"
+            ],
+            "detail": "Creates only mapped dev organizational Member accounts and assigns the API applicationTenantCode claim. No guest invitations or emails. Prompts for each temporary password, requires confirmation, and forces password change/MFA at first sign-in. Review the read-only 04a plan first.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 05 Non-Admin Tenant Isolation (No Payments)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -3094,7 +3129,40 @@
                 "${workspaceFolder}/scripts/run-phase10-azure-dev-identity-isolation.ps1",
                 "-PromptForExpectedSubscriptionId"
             ],
-            "detail": "Headed Playwright task. Requires verified guest claims and one normal Entra sign-in/MFA per regular user; tests tenant isolation only and submits no payments.",
+            "detail": "Shows the active Azure CLI subscription and asks for the approved GUID. Sign in once per non-admin tenant when prompted. Checks tenant access and sign-out. No payments or orders are created.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 05b Organizational Member Isolation (No Payments)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-dev-identity-isolation.ps1",
+                "-IdentityType",
+                "member",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Runs the no-payment tenant isolation matrix using the three organizational member accounts. Verify users first; then sign in once per account when prompted. No orders or payments.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 06 Non-Admin Sandbox Payments (Submits Sandbox Payments)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-dev-operator-matrix.ps1",
+                "-Mode", "NonAdminSandbox",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Requires RUN SANDBOX. Sign in once per non-admin tenant. Submits one payment per tenant using its assigned sandbox provider; does not switch routes.",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "always", "panel": "new", "focus": true },
             "problemMatcher": []

@@ -76,6 +76,11 @@ jobs:
         shell: pwsh
         run: Resources/Azure-Deployment/test-phase10-sql-bootstrap-connection.ps1
 
+      - name: Test Entra organizational member provisioning contracts (offline)
+        id: entra-member-provisioning
+        shell: pwsh
+        run: scripts/tests/phase10-entra-member-test-users.test.ps1
+
       - name: Set up .NET
         id: setup-dotnet
         uses: actions/setup-dotnet@v5
@@ -107,7 +112,7 @@ jobs:
 
       - name: Test immutable Phase 10 release and Functions package contracts
         id: release-contract-tests
-        run: node --test scripts/tests/phase10-release-artifacts.test.mjs scripts/tests/phase10-release-run.test.mjs scripts/tests/phase10-hosted-ci-evidence.test.mjs scripts/tests/phase10-deployment-identity.test.mjs scripts/tests/phase10-release-inputs.test.mjs scripts/tests/phase10-azure-static-preflight.test.mjs scripts/tests/phase10-azure-preflight.test.mjs scripts/tests/phase10-function-package-runtime.test.mjs scripts/tests/phase10-payment-verifier-sql-auth.test.mjs scripts/tests/resolve-phase10-azure-generated-urls.test.mjs scripts/tests/phase10-cost-snapshot.test.mjs
+        run: node --test scripts/tests/phase10-release-artifacts.test.mjs scripts/tests/phase10-release-run.test.mjs scripts/tests/phase10-hosted-ci-evidence.test.mjs scripts/tests/phase10-deployment-identity.test.mjs scripts/tests/phase10-release-inputs.test.mjs scripts/tests/phase10-azure-static-preflight.test.mjs scripts/tests/phase10-azure-preflight.test.mjs scripts/tests/phase10-function-package-runtime.test.mjs scripts/tests/phase10-payment-verifier-sql-auth.test.mjs scripts/tests/resolve-phase10-azure-generated-urls.test.mjs scripts/tests/phase10-cost-snapshot.test.mjs scripts/tests/phase10-entra-test-users-contract.test.mjs
 
       - name: Test Azure tenant topology discovery with synthetic API responses
         id: tenant-catalog-tests

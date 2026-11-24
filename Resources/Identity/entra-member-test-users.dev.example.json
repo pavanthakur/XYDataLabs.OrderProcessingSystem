@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "environment": "dev",
+  "identityType": "member",
+  "directoryId": "",
+  "apiClientId": "",
+  "signInDomain": "",
+  "users": [
+    { "tenantCode": "TenantA", "displayName": "Phase 10 Tenant A Test", "userPrincipalName": "", "objectId": "" },
+    { "tenantCode": "TenantB", "displayName": "Phase 10 Tenant B Test", "userPrincipalName": "", "objectId": "" },
+    { "tenantCode": "TenantC", "displayName": "Phase 10 Tenant C Test", "userPrincipalName": "", "objectId": "" }
+  ]
+}

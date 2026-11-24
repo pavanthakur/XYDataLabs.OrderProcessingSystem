@@ -4,11 +4,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { chromium, request as playwrightRequest, type BrowserContext, type Page } from "playwright";
+import { chromium, request as playwrightRequest, type BrowserContext, type Page, type Request } from "playwright";
+import { isAppSignedOutUrl, isCustomerListUrl, resolveBrowserApiOrigin } from "./entra-isolation-observation.js";
+import { openSameSessionTab } from "./entra-isolation-tab.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-type UserMapping = { tenantCode: string; email: string; objectId: string };
-type PrivateManifest = { schemaVersion: number; environment: string; directoryId: string; apiClientId: string; users: UserMapping[] };
+type UserMapping = { tenantCode: string; email?: string; userPrincipalName?: string; objectId: string };
+type PrivateManifest = { schemaVersion: number; environment: string; identityType?: "guest" | "member"; directoryId: string; apiClientId: string; users: UserMapping[] };
 
 function decodePayload(token: string): Record<string, unknown> {
   const parts = token.split(".");
@@ -33,20 +35,32 @@ async function discoverTenants(apiOrigin: string): Promise<string[]> {
   return codes.sort((left, right) => left.localeCompare(right));
 }
 
-async function waitForOwnCustomerResponse(page: Page, apiOrigin: string, tenantCode: string): Promise<string> {
-  const response = await page.waitForResponse(candidate => {
-    const url = new URL(candidate.url());
-    return url.origin === apiOrigin && url.pathname.toLowerCase() === "/api/v1/customer/getallcustomers"
-      && candidate.request().headers()["x-tenant-code"] === tenantCode && candidate.status() === 200;
+function progress(message: string): void {
+  console.log(`[${new Date().toISOString()}] ${message}`);
+}
+
+async function waitForOwnCustomerResponse(page: Page, browserApiOrigin: string, tenantCode: string): Promise<string> {
+  const response = await page.waitForResponse(async candidate => {
+    const request = candidate.request();
+    return request.method() === "GET" && isCustomerListUrl(candidate.url(), browserApiOrigin)
+      && await request.headerValue("x-tenant-code") === tenantCode
+      && /^Bearer\s+\S+$/i.test(await request.headerValue("authorization") ?? "");
   }, { timeout: 300000 });
-  const authorization = response.request().headers().authorization;
-  assert.match(authorization ?? "", /^Bearer\s+[^\s]+$/i, "An authenticated own-tenant API request is required.");
+  assert.equal(response.status(), 200, `${tenantCode} authenticated browser customer-list request did not succeed.`);
+  const authorization = await response.request().headerValue("authorization");
+  assert.ok(authorization, "An authenticated own-tenant API request is required.");
   return authorization!.replace(/^Bearer\s+/i, "");
 }
 
 async function signedOut(page: Page, uiOrigin: string): Promise<void> {
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.waitForURL(`${uiOrigin}/signed-out`, { timeout: 30000 });
+  try {
+    await Promise.all([
+      page.waitForURL(url => isAppSignedOutUrl(url, uiOrigin), { timeout: 30000, waitUntil: "domcontentloaded" }),
+      page.getByRole("button", { name: "Sign out", exact: true }).click({ timeout: 15000 })
+    ]);
+  } catch {
+    throw new Error("Sign-out did not return to the approved application signed-out page.");
+  }
   await page.getByRole("button", { name: "Sign in", exact: true }).waitFor({ state: "visible", timeout: 15000 });
 }
 
@@ -66,12 +80,23 @@ test("Azure dev regular Entra users are isolated to exactly one assigned tenant 
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as PrivateManifest;
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.environment, "dev");
+  assert.ok(manifest.identityType === undefined || manifest.identityType === "guest" || manifest.identityType === "member", "Identity type must be guest or member.");
   assert.ok(!path.resolve(manifestPath).toLowerCase().startsWith(`${repoRoot.toLowerCase()}${path.sep}`), "PII manifest must be outside the repository.");
   const activeTenantCodes = await discoverTenants(apiOrigin);
+  const configApi = await playwrightRequest.newContext();
+  let browserApiOrigin: string;
+  try {
+    const config = await configApi.get(`${uiOrigin}/runtime-config.json`, { timeout: 15000, maxRedirects: 0 });
+    assert.equal(config.status(), 200, "Live UI runtime configuration must be reachable.");
+    browserApiOrigin = resolveBrowserApiOrigin(uiOrigin, apiOrigin, (await config.json()).apiBaseUrl);
+  } finally { await configApi.dispose(); }
+  progress(`Browser requests use ${browserApiOrigin === uiOrigin ? "the UI proxy" : "the gateway"}; direct access checks use the gateway.`);
   const mappings = [...manifest.users].sort((left, right) => left.tenantCode.localeCompare(right.tenantCode));
   assert.deepEqual(mappings.map(item => item.tenantCode), activeTenantCodes, "A distinct regular test user is required for every active Azure-dev tenant.");
   for (const item of mappings) {
-    assert.match(item.email, /^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+    const signInName = item.userPrincipalName ?? item.email;
+    assert.match(signInName ?? "", /^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+    if (manifest.identityType === "member") assert.ok(item.userPrincipalName, `Member manifest must provide an organizational UPN for ${item.tenantCode}.`);
     assert.match(item.objectId, /^[0-9a-f-]{36}$/i, `Run provisioning Verify first for ${item.tenantCode}.`);
   }
 
@@ -84,7 +109,7 @@ test("Azure dev regular Entra users are isolated to exactly one assigned tenant 
     await writeFile(path.join(reportDir, "regular-user-isolation.json"), JSON.stringify({
       schema: "phase10-azure-regular-user-isolation-evidence-v1",
       status: results.length === mappings.length && results.every(row => row.status === "passed") ? "passed" : "failed",
-      environment: "dev", activeTenantCodes, startedUtc: startedUtc,
+      environment: "dev", identityType: manifest.identityType ?? "guest", activeTenantCodes, startedUtc: startedUtc,
       completedUtc: new Date().toISOString(), regularUserIsolation: matrix,
       deploymentIdentitySha256, sourceRevision, sourceDirty, runnerSourceSha256,
       forgedTenantHeaderDenied: results.length === mappings.length && results.every(row => row.forgedHeaderDenied === true) ? "passed" : "failed",
@@ -100,6 +125,7 @@ test("Azure dev regular Entra users are isolated to exactly one assigned tenant 
 
   // Invalid credentials are checked without producing or retaining user tokens.
   const unauthenticatedApi = await playwrightRequest.newContext({ baseURL: apiOrigin });
+  progress("Checking that the gateway rejects missing and malformed credentials.");
   try {
     for (const tenantCode of activeTenantCodes) {
       const anonymous = await unauthenticatedApi.get("/api/v1/Customer/GetAllCustomers", { headers: { "X-Tenant-Code": tenantCode } });
@@ -109,13 +135,17 @@ test("Azure dev regular Entra users are isolated to exactly one assigned tenant 
     }
   } finally { await unauthenticatedApi.dispose(); }
 
-  for (const mapping of mappings) {
+  for (const [index, mapping] of mappings.entries()) {
     const context: BrowserContext = await browser.newContext();
     const page = await context.newPage();
     try {
-      await page.goto(`${uiOrigin}/customers?tenantCode=${encodeURIComponent(mapping.tenantCode)}`, { waitUntil: "domcontentloaded" });
-      console.log(`Complete normal Entra sign-in/MFA for the ${mapping.tenantCode} regular test user. No payment will be submitted.`);
-      const token = await waitForOwnCustomerResponse(page, apiOrigin, mapping.tenantCode);
+      const signInName = mapping.userPrincipalName ?? mapping.email;
+      progress(`[${index + 1}/${mappings.length}] ${mapping.tenantCode}: sign in as ${signInName} and complete normal Entra MFA in the opened browser. Waiting up to five minutes for the authenticated customer request. No payments.`);
+      const [token] = await Promise.all([
+        waitForOwnCustomerResponse(page, browserApiOrigin, mapping.tenantCode),
+        page.goto(`${uiOrigin}/customers?tenantCode=${encodeURIComponent(mapping.tenantCode)}`, { waitUntil: "domcontentloaded" })
+      ]);
+      progress(`${mapping.tenantCode}: authenticated customer request returned HTTP 200. Validating identity and tenant selector.`);
       const claims = decodePayload(token);
       assert.equal(String(claims.oid ?? "").toLowerCase(), mapping.objectId.toLowerCase(), `Signed-in directory object must match the provisioned ${mapping.tenantCode} user.`);
       assert.equal(String(claims.tid ?? "").toLowerCase(), manifest.directoryId.toLowerCase(), "Token must come from the expected resource directory.");
@@ -142,31 +172,41 @@ test("Azure dev regular Entra users are isolated to exactly one assigned tenant 
         });
         const allowed = requestedTenantCode === mapping.tenantCode;
         assert.equal(tenantResponse.status(), allowed ? 200 : 403, `${mapping.tenantCode} must ${allowed ? "access" : "be denied"} ${requestedTenantCode}.`);
+        progress(`${mapping.tenantCode} → ${requestedTenantCode}: gateway returned expected HTTP ${tenantResponse.status()}.`);
         matrix.push({ assignedTenantCode: mapping.tenantCode, requestedTenantCode, result: allowed ? "allowed" : "denied", status: "passed", httpStatus: tenantResponse.status() });
       }
 
       const identityHash = createHash("sha256").update(mapping.objectId.toLowerCase()).digest("hex");
       const alternate = activeTenantCodes.find(code => code !== mapping.tenantCode);
       if (alternate) {
-        const deepLinkDenied = page.waitForResponse(candidate => {
-          const url = new URL(candidate.url());
-          return url.origin === apiOrigin && url.pathname.toLowerCase() === "/api/v1/customer/getallcustomers"
-            && candidate.request().headers()["x-tenant-code"] === alternate && candidate.status() === 403;
-        }, { timeout: 15000 });
-        await page.goto(`${uiOrigin}/customers?tenantCode=${encodeURIComponent(alternate)}`, { waitUntil: "domcontentloaded" });
-        await deepLinkDenied;
-        assert.equal(await selector.inputValue(), mapping.tenantCode, "A forged tenant deep link must not change the selected tenant.");
+        progress(`${mapping.tenantCode}: checking rejection of a ${alternate} deep link in the signed-in tab.`);
+        let customerRequestAttempted = false;
+        const observe = (request: Request) => {
+          if (isCustomerListUrl(request.url(), browserApiOrigin)) customerRequestAttempted = true;
+        };
+        page.on("request", observe);
+        try {
+          await page.goto(`${uiOrigin}/customers?tenantCode=${encodeURIComponent(alternate)}`, { waitUntil: "domcontentloaded" });
+          await page.getByRole("alert").filter({ hasText: /requested application tenant is not authorized or is not active/i })
+            .waitFor({ state: "visible", timeout: 15000 });
+          assert.equal(customerRequestAttempted, false, "Denied deep link must not request customer data.");
+        } finally { page.off("request", observe); }
+        await page.goto(`${uiOrigin}/customers?tenantCode=${encodeURIComponent(mapping.tenantCode)}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("button", { name: "Sign out", exact: true }).waitFor({ state: "visible", timeout: 15000 });
       }
-      const otherTab = await context.newPage();
-      await otherTab.goto(`${uiOrigin}/customers?tenantCode=${encodeURIComponent(mapping.tenantCode)}`, { waitUntil: "domcontentloaded" });
-      await otherTab.locator(".customer-link").first().waitFor({ state: "visible", timeout: 20000 });
+      progress(`${mapping.tenantCode}: opening a same-session tab to check cross-tab sign-out. No additional sign-in is expected.`);
+      const otherTab = await openSameSessionTab(page, `${uiOrigin}/customers?tenantCode=${encodeURIComponent(mapping.tenantCode)}`);
+      await otherTab.getByRole("button", { name: "Sign out", exact: true }).waitFor({ state: "visible", timeout: 20000 });
+      progress(`${mapping.tenantCode}: second tab is signed in. Starting application sign-out.`);
       await signedOut(page, uiOrigin);
+      progress(`${mapping.tenantCode}: app returned signed out. Checking that the second tab cleared its session.`);
       await otherTab.getByRole("button", { name: "Sign in", exact: true }).waitFor({ state: "visible", timeout: 15000 });
       assert.equal(await otherTab.locator(".customer-link").count(), 0, "Sign-out must clear the other application's tab.");
       const signedOutRequest = await context.request.get(`${apiOrigin}/api/v1/Customer/GetAllCustomers`, { headers: { "X-Tenant-Code": mapping.tenantCode } });
       assert.equal(signedOutRequest.status(), 401, "A post-sign-out request without credentials must be denied.");
       await otherTab.close();
       results.push({ tenantCode: mapping.tenantCode, identitySha256: identityHash, status: "passed", forgedHeaderDenied: true, deepLinkDenied: true, signOut: true });
+      progress(`${mapping.tenantCode}: isolation and sign-out passed.`);
     } catch (error) {
       results.push({ tenantCode: mapping.tenantCode, identitySha256: createHash("sha256").update(mapping.objectId.toLowerCase()).digest("hex"), status: "failed", error: error instanceof Error ? error.message.slice(0, 300) : "Unexpected failure." });
       throw error;

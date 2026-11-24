@@ -35,6 +35,7 @@ Use this rule before removing anything:
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `04 Phase 10 Azure Payment Matrix` | Validation | Yes, after transport smoke | Dev-only service preflight by default; optional desktop browser/payment handoff or read-only Razorpay lookup |
+| `04a-04b Phase 10 Entra Member Setup Guide` | Operator guidance | Yes, dev branch only | Prints local read-only Plan or guarded Apply instructions; no Azure credentials, directory queries, or writes |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Do not dispatch for acceptance | Retained workflow; hosted execution cannot satisfy the local Docker safety guard. The accepted check is the manual local Docker hook under DW-028 Option A. |
 | `build-phase10-images.yml` | Release producer | Yes, separately approval-gated | Builds six service images and the Functions package from one exact SHA; publishes a manifest with image digests |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
@@ -54,6 +55,7 @@ Use the numbered workflows in this order:
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
 | `04` | `04 Phase 10 Azure Payment Matrix` | Verify Azure-dev dependencies and provide supervised desktop instructions; hosted jobs do not run the browser or submit payments |
+| `04a/04b` | `04a-04b Phase 10 Entra Member Setup Guide` | Print operator guidance for local Entra Member setup. Both selections are informational; actual Apply remains a separately confirmed local action |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted parity excluded under DW-028 Option A; run the equivalent local Docker hook manually |
 | `ci.yml` | `CI — Build and Contract Validation (No Deployment)` | Hosted build and safe contract validation on branch push, manual dispatch, or PR; no Azure or Docker acceptance |
 
@@ -114,6 +116,7 @@ Before approving any workflow or infrastructure change, ask:
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
 | `04 Phase 10 Azure Payment Matrix` | Dev service preflight / supervised desktop handoff | No | No | No | No | Current validation |
+| `04a-04b Phase 10 Entra Member Setup Guide` | Sanitized operator instructions only | No | No | No | No | Manual local steps only |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Hosted acceptance excluded; equivalent local hook is manual | No | Hosted workflow not accepted | Local Docker only | Local Docker cleanup | DW-028 Option A scope |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |

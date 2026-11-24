@@ -58,6 +58,7 @@ export interface PaymentJourneyRequest {
   sandboxOtpCode: string;
   headless: boolean;
   requestedProvider?: string;
+  nonAdminIdentity?: import("../support/non-admin-sandbox.js").NonAdminSandboxIdentity;
   loginUsername?: string;
   operatorAssistedEntra?: boolean;
   reuseEntraSession?: boolean;
@@ -206,6 +207,13 @@ export class PaymentJourneyRunner {
       }
       await this.completeLocalKeycloakLogin(page, request, log);
       const accessToken = await this.waitForLocalAccessToken(page, request, log);
+      if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) authenticatedEntra = true;
+      if (request.nonAdminIdentity) {
+        if (!accessToken) throw new Error("Entra sign-in is required before a non-admin sandbox case.");
+        const { assertNonAdminSandboxClaims } = await import("../support/non-admin-sandbox.js");
+        assertNonAdminSandboxClaims(accessToken, request.tenantCode, request.nonAdminIdentity);
+        log("Approved non-admin tenant identity verified; checking gateway access and sandbox settings.");
+      }
       if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) {
         authenticatedEntra = true;
         log("AUTHENTICATED: Entra token available; authorization and sandbox preflight must still pass before payment.");
@@ -248,6 +256,18 @@ export class PaymentJourneyRunner {
       if (request.authPreflightOnly) {
         if (request.target.runtime !== "azure" || !request.operatorAssistedEntra || !accessToken) {
           throw new Error("Auth-preflight-only is restricted to a headed, authenticated Azure-dev Entra session.");
+        }
+        if (request.nonAdminIdentity) {
+          return {
+            journeyOutcome: "auth-preflight-passed", challengeOutcome: "not-applicable",
+            threeDsSetting: paymentConfiguration.isThreeDSecure ? "enabled" : "disabled",
+            paymentProvider: paymentConfiguration.activeProviderType,
+            customerOrderId: "not-created", orderId: 0, orderReferenceId: "not-created", orderAmount: 0,
+            orderCurrencyCode: "not-applicable", finalUrl: request.target.baseUrl,
+            statusMessage: "Non-admin identity, assigned gateway access and sandbox payment configuration verified. No order or payment was created.",
+            adapterMode: paymentConfiguration.adapterMode, collectionMode: paymentConfiguration.collectionMode,
+            observedChallenge: "not-applicable", providerVerification: "not-applicable"
+          };
         }
         const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
         const runtimeResponse = await page.request.get(`${apiBaseUrl}/api/v1/Info/runtime-configuration`, {
@@ -687,6 +707,9 @@ export class PaymentJourneyRunner {
         const topologyEnvelope = await topologyResponse.json() as { data?: { availableTenants?: Array<{ tenantCode?: string }> }; availableTenants?: Array<{ tenantCode?: string }> };
         const activeTenants = (topologyEnvelope.data?.availableTenants ?? topologyEnvelope.availableTenants ?? [])
           .map((tenant) => tenant.tenantCode?.trim()).filter((code): code is string => Boolean(code));
+        if (request.nonAdminIdentity && (activeTenants.length !== 1 || activeTenants[0] !== request.tenantCode)) {
+          throw new Error("Gateway did not restrict this session to its assigned tenant; no order was created.");
+        }
         if (!activeTenants.includes(request.tenantCode) || activeTenants.length === 0) {
           throw new Error(`Entra runtime preflight did not authorize/resolve ${request.tenantCode}; no customer or order was created.`);
         }
@@ -699,7 +722,7 @@ export class PaymentJourneyRunner {
             throw new Error(`Entra authorization preflight denied tenant ${tenantCode} (${accessProbe.status()}); confirm delegated API scope, platform-admin role, and active-tenant access. No customer or order was created.`);
           }
         }
-        log(`Entra delegated API access and platform-admin tenant coverage verified read-only for ${activeTenants.length} active tenant(s).`);
+        log(`Entra delegated API access verified read-only for ${activeTenants.length} authorized tenant(s).`);
       }
 
       const response = await apiContext.get("/api/v1/Info/payment-configuration", { timeout: Math.max(1, Math.min(5000, timeoutMs / 2)) });

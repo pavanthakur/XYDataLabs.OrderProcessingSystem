@@ -9,6 +9,7 @@ import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildRunPrefix } from "../support/customer-order-id.js";
 import { resolveEnvironmentKey } from "../support/environment-key.js";
 import {baselinePaymentScenarios} from "../contracts/payment-scenarios.js";
+import type { NonAdminSandboxIdentity } from "../support/non-admin-sandbox.js";
 
 interface AzureMatrixOptions {
   targets: string[];
@@ -26,10 +27,12 @@ interface AzureMatrixOptions {
   servicePreflightOnly: boolean;
   allActiveTenants: boolean;
   resumeCheckpoint?: string;
+  nonAdminSandbox: boolean;
 }
 
 interface AzureMatrixOutput {
   matrixRunId: string;
+  identityMode?: "non-admin-assigned-provider";
   reportDirectory: string;
   environmentKey: string;
   startedUtc: string;
@@ -66,6 +69,7 @@ function formatIstTimestamp(date: Date): string {
 
 async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
+  const nonAdminSandboxIdentities = options.nonAdminSandbox ? await readNonAdminIdentities() : undefined;
   const startedAt = new Date();
   const matrixRunId = `payment-automation-azure-matrix-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
   const reportComposer = new FileReportComposer();
@@ -110,6 +114,7 @@ async function main(): Promise<void> {
   }
   const effectiveProviders: string[] = normalizedProviders;
   const matrixOutput: AzureMatrixOutput = {
+    ...(options.nonAdminSandbox ? { identityMode: "non-admin-assigned-provider" as const } : {}),
     matrixRunId,
     reportDirectory,
     environmentKey,
@@ -179,7 +184,7 @@ async function main(): Promise<void> {
     const runtimeTarget = resolvedTargets[index];
 
     await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile} expectedTenantSource=${runtimeTarget.expectedTenantSource}`);
-    if (!options.dryRun) {
+    if (!options.dryRun && !(options.nonAdminSandbox && options.authPreflightOnly)) {
       const environment = runtimeTarget.environment;
       const safeTarget = target.replace(/[^a-z0-9_-]/gi, "-");
       const preflightPath = path.join(reportDirectory, `verification-preflight-${safeTarget}.json`);
@@ -230,6 +235,7 @@ async function main(): Promise<void> {
       headless: options.headless,
       verify: options.verify,
       operatorAssistedEntra: options.operatorAssistedEntra,
+      nonAdminSandboxIdentities,
       resumeCheckpoint: options.resumeCheckpoint,
       manualEntry: !options.authPreflightOnly,
       continueAfterVerificationFailure: isAzureDevFixtureMatrix,
@@ -271,6 +277,11 @@ async function main(): Promise<void> {
       return journeyFailed || verificationFailed || restorationFailed;
     })
   );
+  const expectedNonAdminCount = options.authPreflightOnly ? 1 : 3;
+  if (options.nonAdminSandbox && (rows.length !== expectedNonAdminCount ||
+    new Set(rows.map(row => row.tenantCode)).size !== expectedNonAdminCount ||
+    rows.some(row => row.adapterMode !== "sandbox" || row.cleanupOutcome !== "not-applicable") ||
+    targetRuns[0]?.operatorSignOut?.status !== "PASS")) hasFailures = true;
   const fixtureCoverageFindings: string[] = [];
   let fixtureExpectedCount = 0;
   let fixtureActualCount = 0;
@@ -491,11 +502,15 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   let servicePreflightOnly = false;
   let allActiveTenants = false;
   let resumeCheckpoint: string | undefined;
+  let nonAdminSandbox = false;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
 
     switch (argument) {
+      case "--non-admin-sandbox":
+        nonAdminSandbox = true;
+        break;
       case "--resume-checkpoint":
         resumeCheckpoint = argumentsList[++index];
         if (!resumeCheckpoint || resumeCheckpoint.startsWith("--")) throw new Error("--resume-checkpoint requires a file path.");
@@ -572,7 +587,7 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   const providerFixtureMatrixRequested = normalizedProviders.length > 0;
   const allTenantMatrix = providerFixtureMatrixRequested && allActiveTenants && tenantCodes.length === 0;
   if (resumeCheckpoint && (!allTenantMatrix || !operatorAssistedEntra || authPreflightOnly || servicePreflightOnly)) throw new Error("Resume is restricted to the complete Azure-dev operator provider matrix.");
-  if (operatorAssistedEntra && (headless || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || (authPreflightOnly ? tenantCodes.length > 1 || allActiveTenants : tenantCodes.length < 1 && !allTenantMatrix))) {
+  if (operatorAssistedEntra && (headless || normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || (authPreflightOnly ? (!nonAdminSandbox && tenantCodes.length > 1) || allActiveTenants : tenantCodes.length < 1 && !allTenantMatrix))) {
     throw new Error("--operator-assisted-entra requires --headed and exactly --target azure-dev; payment mode requires an explicit tenant or the complete --all-active-tenants two-provider fixture matrix, while auth-preflight-only accepts zero or one tenant. It cannot run against staging or production.");
   }
   if (operatorAssistedEntra && new Set(tenantCodes.map((code) => code.toLowerCase())).size !== tenantCodes.length) {
@@ -591,6 +606,11 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
     throw new Error("--service-preflight-only is a hosted, no-payment dependency check that may create and remove a temporary SQL firewall lease; use exactly --target azure-dev without tenant/provider filters, dry-run, or operator-assisted browser authentication.");
   }
   if (operatorAssistedEntra) tenantTimeoutMs = Math.max(tenantTimeoutMs, 420000);
+  if (nonAdminSandbox && (!operatorAssistedEntra || headless || !verify || dryRun || servicePreflightOnly ||
+    normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || tenantCodes.join(",") !== "TenantA,TenantB,TenantC" ||
+    normalizedProviders.length > 0 || allActiveTenants || allowPartialExecution || tenantLimit !== null || resumeCheckpoint)) {
+    throw new Error("Non-admin sandbox mode requires the complete headed Azure-dev assigned-provider matrix from the supervised task.");
+  }
 
   return {
     targets: normalizedTargets,
@@ -607,8 +627,27 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
     authPreflightOnly,
     servicePreflightOnly,
     allActiveTenants,
-    resumeCheckpoint
+    resumeCheckpoint,
+    nonAdminSandbox
   };
+}
+
+async function readNonAdminIdentities(): Promise<Record<string, NonAdminSandboxIdentity>> {
+  const manifestPath = process.env.XYDATALABS_NONADMIN_VERIFIED_MANIFEST;
+  if (!manifestPath || !process.env.XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY || process.env.CI === "true") {
+    throw new Error("Use the supervised Azure-dev PowerShell task to verify guests and confirm the sandbox run.");
+  }
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    schemaVersion: number; environment: string; directoryId: string; apiClientId: string;
+    users: Array<{ tenantCode: string; objectId: string }>;
+  };
+  const isGuid = (value: unknown) => typeof value === "string" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value);
+  if (manifest.schemaVersion !== 1 || manifest.environment !== "dev" || !isGuid(manifest.directoryId) || !isGuid(manifest.apiClientId) ||
+    manifest.users?.length !== 3 || manifest.users.map(user => user.tenantCode).sort().join(",") !== "TenantA,TenantB,TenantC" ||
+    !manifest.users.every(user => isGuid(user.objectId)) || new Set(manifest.users.map(user => user.objectId.toLowerCase())).size !== 3) {
+    throw new Error("Private manifest must contain three distinct, verified Azure-dev guest identities.");
+  }
+  return Object.fromEntries(manifest.users.map(({ tenantCode, objectId }) => [tenantCode, { objectId, directoryId: manifest.directoryId, apiClientId: manifest.apiClientId }]));
 }
 
 function normalizeRequestedProviders(requestedProviders: string[]): string[] {

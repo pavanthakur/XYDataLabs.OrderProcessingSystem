@@ -15,7 +15,7 @@ test('VS Code keeps Entra provisioning preview, directory writes, and no-payment
   const byLabel = label => tasks.filter(task => task.label === label);
   const preview = byLabel('5 Run: Azure Dev 03 Entra Test-User Plan (Read-Only)');
   const apply = byLabel('5 Run: Azure Dev 04 Entra Test-User Apply (Invites Guests)');
-  const browser = byLabel('5 Run: Azure Dev 05 Regular-User Isolation (No Payments)');
+  const browser = byLabel('5 Run: Azure Dev 05 Non-Admin Tenant Isolation (No Payments)');
   assert.equal(preview.length, 1);
   assert.equal(apply.length, 1);
   assert.equal(browser.length, 1);
@@ -24,6 +24,20 @@ test('VS Code keeps Entra provisioning preview, directory writes, and no-payment
   assert.ok(browser[0].args.some(arg => arg.endsWith('/scripts/run-phase10-azure-dev-identity-isolation.ps1')));
   assert.ok(!browser[0].args.includes('ProviderMatrix'));
   assert.match(browser[0].detail, /no payments/i);
+});
+
+test('non-admin sandbox payments use a separate supervised task without provider overrides', async () => {
+  const ts = requireAutomation('typescript');
+  const parsed = ts.parseConfigFileTextToJson('.vscode/tasks.json', await read('.vscode/tasks.json'));
+  const tasks = parsed.config.tasks.filter(task => task.label === '5 Run: Azure Dev 06 Non-Admin Sandbox Payments (Submits Sandbox Payments)');
+  assert.equal(tasks.length, 1);
+  assert.ok(tasks[0].args.includes('NonAdminSandbox') && tasks[0].args.includes('-PromptForExpectedSubscriptionId'));
+  const wrapper = await read('scripts/run-phase10-azure-dev-operator-matrix.ps1');
+  const branch = wrapper.split("elseif ($Mode -eq 'NonAdminSandbox') {")[1].split('\nelse {')[0];
+  assert.match(branch, /-Mode Verify/);
+  assert.match(branch, /--non-admin-sandbox/);
+  assert.doesNotMatch(branch, /'--provider'|'--all-active-tenants'/);
+  assert.match(wrapper, /-cne 'RUN SANDBOX'/);
 });
 
 test('Entra provisioner is dry-run by default and protects external guest writes', async () => {
@@ -88,4 +102,54 @@ test('tracked identity example has only placeholders, not supplied test-account 
   const guide = await read('docs/guides/configuration/tenant-identity-access.md');
   assert.match(guide, /LOCALAPPDATA/);
   assert.match(guide, /regular-user isolation/i);
+});
+
+test('organizational member provisioning is isolated from guest flow and defaults to no writes', async () => {
+  const script = await read('scripts/phase10-entra-member-test-users.ps1');
+  const module = await read('scripts/phase10-entra-member-test-users.module.psm1');
+  const wrapper = await read('scripts/run-phase10-azure-dev-identity-isolation.ps1');
+  const example = JSON.parse(await read('Resources/Identity/entra-member-test-users.dev.example.json'));
+  const ts = requireAutomation('typescript');
+  const tasksResult = ts.parseConfigFileTextToJson('.vscode/tasks.json', await read('.vscode/tasks.json'));
+  assert.equal(tasksResult.error, undefined);
+  const tasks = tasksResult.config.tasks;
+  assert.match(script, /ValidateSet\('Plan','Apply','Verify'\)\]\[string\]\$Mode = 'Plan'/);
+  assert.match(script, /PromptForExpectedSubscriptionId/);
+  assert.match(script, /SupportsShouldProcess\s*=\s*\$true/);
+  assert.match(script, /APPLY DEV MEMBER TEST USERS/);
+  assert.match(script, /Read-Host .*AsSecureString/);
+  assert.match(script, /forceChangePasswordNextSignIn=\$true/);
+  assert.match(script, /emailsSent=0/);
+  assert.match(script, /passwordsStored=\$false/);
+  assert.match(script, /UserPrincipalName.*outside the repository|must be outside the repository/);
+  assert.match(module, /identityType -cne 'member'/);
+  assert.match(module, /organizational domain/);
+  assert.match(module, /Guest.*not accepted|not an organizational Member/);
+  assert.match(module, /conflicting tenant claim/);
+  assert.match(wrapper, /ValidateSet\('guest','member'\).*\$IdentityType/);
+  assert.match(wrapper, /phase10-entra-member-test-users\.ps1/);
+  assert.equal(example.identityType, 'member');
+  assert.ok(example.users.every(user => user.userPrincipalName === '' && user.objectId === ''));
+  for (const label of [
+    '5 Run: Azure Dev 04a Organizational Member Plan (Read Only)',
+    '5 Run: Azure Dev 04b Organizational Member Apply (Directory Writes)',
+    '5 Run: Azure Dev 05b Organizational Member Isolation (No Payments)'
+  ]) assert.equal(tasks.filter(task => task.label === label).length, 1, `${label} exists exactly once`);
+  assert.doesNotMatch(script, /sendInvitationMessage|\/invitations|DELETE.*\/users/i);
+});
+
+test('GitHub Entra member guide is informational and grants no cloud permissions', async () => {
+  const workflow = await read('.github/workflows/phase10-azure-entra-member-setup-guide.yml');
+  const runbook = await read('docs/runbooks/phase10-entra-member-test-users.md');
+  assert.match(workflow, /workflow_dispatch/);
+  assert.match(workflow, /apply-guidance-only/);
+  assert.match(workflow, /permissions:\s*\{\}/);
+  assert.match(workflow, /refs\/heads\/dev/);
+  assert.match(workflow, /did not query Azure\/Entra, create accounts, send email, change claims, or run browser\/payment tests/);
+  assert.match(workflow, /This workflow did not approve or execute the directory write/);
+  assert.doesNotMatch(workflow, /azure\/login|id-token:\s*write|AZUREAPPSERVICE_|ENTRA_API_CLIENT_ID|subscription-id:/i);
+  assert.match(runbook, /04a — Preview only/);
+  assert.match(runbook, /04b — Separate, explicit directory write/);
+  assert.match(runbook, /outside the repository/);
+  assert.match(runbook, /No invitation email is sent/);
 });

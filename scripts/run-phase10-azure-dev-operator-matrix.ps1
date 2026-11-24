@@ -1,21 +1,24 @@
 #Requires -Version 7.0
 [CmdletBinding(DefaultParameterSetName = 'ExplicitSubscription')]
 param(
-    [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix','Reconcile')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('AuthPreflight','ProviderMatrix','NonAdminSandbox','Reconcile')][string]$Mode,
     [Parameter(Mandatory, ParameterSetName = 'ExplicitSubscription')][guid]$ExpectedSubscriptionId,
     [Parameter(Mandatory, ParameterSetName = 'PromptSubscription')][switch]$PromptForExpectedSubscriptionId,
     [string]$ExpectedUiOrigin = $env:IDENTITY_PUBLIC_WEB_ORIGIN,
     [string]$ResumeCheckpoint,
-    [switch]$RequireSandboxConfirmation
+    [switch]$RequireSandboxConfirmation,
+    [string]$ManifestPath = (Join-Path $env:LOCALAPPDATA 'XYDataLabs/phase10-entra-test-users.dev.json'),
+    [switch]$NonAdminPreflightOnly
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ($Mode -ne 'Reconcile' -and (-not [Environment]::UserInteractive -or $env:CI -eq 'true')) { throw 'Run this headed operator command in your signed-in desktop terminal, not a hosted/non-interactive job.' }
-if ($ResumeCheckpoint -and $Mode -eq 'AuthPreflight') { throw 'ResumeCheckpoint is available only for ProviderMatrix or Reconcile.' }
+if ($ResumeCheckpoint -and $Mode -notin @('ProviderMatrix','Reconcile')) { throw 'ResumeCheckpoint is available only for ProviderMatrix or Reconcile.' }
 if ($Mode -eq 'Reconcile' -and -not $ResumeCheckpoint) { throw 'Reconcile requires an existing ResumeCheckpoint; it never creates orders/payments or opens a browser.' }
 if ($RequireSandboxConfirmation -and $Mode -ne 'ProviderMatrix') { throw 'Sandbox confirmation applies only to ProviderMatrix.' }
+if ($NonAdminPreflightOnly -and $Mode -ne 'NonAdminSandbox') { throw 'NonAdminPreflightOnly requires NonAdminSandbox mode.' }
 if ($PromptForExpectedSubscriptionId -and $Mode -eq 'Reconcile') { throw 'Reconcile requires an explicit expected subscription ID.' }
 $targetCatalogPath = Join-Path $repoRoot 'automation/config/runtime-targets.json'
 $targetCatalog = Get-Content -LiteralPath $targetCatalogPath -Raw | ConvertFrom-Json
@@ -47,11 +50,11 @@ if ($PromptForExpectedSubscriptionId) {
 }
 $expectedSubscription = $ExpectedSubscriptionId.ToString('D')
 if ($activeSubscription -ne $ExpectedSubscriptionId) { throw 'The active Azure subscription does not match the explicitly supplied expected subscription ID.' }
-if ($RequireSandboxConfirmation -or ($PromptForExpectedSubscriptionId -and $Mode -eq 'ProviderMatrix')) {
+if ($RequireSandboxConfirmation -or ($Mode -eq 'NonAdminSandbox' -and -not $NonAdminPreflightOnly) -or ($PromptForExpectedSubscriptionId -and $Mode -eq 'ProviderMatrix')) {
     $confirmation = Read-Host 'This task creates fresh Azure-dev orders and submits sandbox payments. Type RUN SANDBOX to continue'
     if ($confirmation -cne 'RUN SANDBOX') { throw 'Sandbox matrix cancelled before querying Azure resources or submitting payments.' }
 }
-if (($PromptForExpectedSubscriptionId -or $RequireSandboxConfirmation) -and (Get-ActiveAzureSubscription) -ne $ExpectedSubscriptionId) {
+if (($PromptForExpectedSubscriptionId -or $RequireSandboxConfirmation -or $Mode -eq 'NonAdminSandbox') -and (Get-ActiveAzureSubscription) -ne $ExpectedSubscriptionId) {
     throw 'The active Azure subscription changed during confirmation; no Azure resources were queried and the browser was not launched.'
 }
 
@@ -93,11 +96,26 @@ $deploymentBytes = [Text.Encoding]::UTF8.GetBytes(($deploymentParts -join "`n"))
 $deploymentHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($deploymentBytes))
 $priorDeploymentIdentity = $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY
 $priorSettingsIdentity = $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY
+$priorNonAdminManifest = $env:XYDATALABS_NONADMIN_VERIFIED_MANIFEST
+$verifiedManifest = $null
 $settingsHash = $null
 
 if ($Mode -eq 'AuthPreflight') {
     $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--auth-preflight-only')
     Write-Host 'Starting headed no-charge Entra preflight. Complete sign-in once; this mode creates no orders and submits no payments.'
+}
+elseif ($Mode -eq 'NonAdminSandbox') {
+    $verifiedManifest = [IO.Path]::GetFullPath($ManifestPath)
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'phase10-entra-test-users.ps1') -Mode Verify -ManifestPath $verifiedManifest -ExpectedSubscriptionId $ExpectedSubscriptionId
+    if ($LASTEXITCODE -ne 0) { throw 'Guest or tenant-claim verification failed. No orders or payments were attempted.' }
+    $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--non-admin-sandbox',
+        '--tenant','TenantA','--tenant','TenantB','--tenant','TenantC','--tenant-timeout-ms','600000')
+    if ($NonAdminPreflightOnly) {
+        $matrixArgs += '--auth-preflight-only'
+        Write-Host 'TenantA only: verify guest identity, access, sandbox settings and sign-out. No orders or payments.'
+    } else {
+        Write-Host 'One normal Entra sign-in per non-admin guest. The assigned providers will not be changed.'
+    }
 }
 else {
     Write-Host 'Running no-charge Azure SQL/provider fixture preflight before opening the browser.'
@@ -127,6 +145,7 @@ Push-Location $repoRoot
 try {
     $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $deploymentHash
     $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $settingsHash
+    $env:XYDATALABS_NONADMIN_VERIFIED_MANIFEST = $verifiedManifest
     if($Mode -eq 'Reconcile'){ & npm --prefix automation run reconcile:azure:checkpoint -- --checkpoint $ResumeCheckpoint }
     else { & npm --prefix automation run run:azure:matrix -- @matrixArgs }
     $matrixExit = $LASTEXITCODE
@@ -135,5 +154,6 @@ finally {
     Pop-Location
     $env:XYDATALABS_AZURE_DEV_DEPLOYMENT_IDENTITY = $priorDeploymentIdentity
     $env:XYDATALABS_AZURE_DEV_SETTINGS_IDENTITY = $priorSettingsIdentity
+    $env:XYDATALABS_NONADMIN_VERIFIED_MANIFEST = $priorNonAdminManifest
 }
 exit $matrixExit
