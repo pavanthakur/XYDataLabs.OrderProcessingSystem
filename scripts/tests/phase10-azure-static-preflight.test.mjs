@@ -955,8 +955,14 @@ test('Phase 10 what-if and deployment pass a live Key Vault policy snapshot', as
   assert.match(legacyKeyVaultTemplate, /accessPolicies:\s*existingKeyVaultAccessPolicies/);
   assert.equal((workflow.match(/az keyvault show --name "\$KV_NAME" --query properties\.accessPolicies -o json/g) ?? []).length, 2,
     'both what-if and actual deployment must capture the live policy list');
-  assert.equal((workflow.match(/grep -Eqi 'ResourceNotFound\|NotFound'/g) ?? []).length, 2,
+  assert.equal((workflow.match(/grep -Eqi 'ResourceNotFound\|VaultNotFound\|The Vault \.\+ not found within subscription'/g) ?? []).length, 2,
     'only a confirmed missing vault may use an empty policy list');
+  const missingVaultPattern = workflow.match(/grep -Eqi '([^']+)' "\$KV_POLICY_ERROR_FILE"/)?.[1];
+  assert.ok(missingVaultPattern, 'the missing-vault classifier must remain explicit');
+  const missingVaultError = new RegExp(missingVaultPattern, 'i');
+  assert.match("ERROR: The Vault 'kv-orderprocessing-dev' not found within subscription.", missingVaultError);
+  assert.doesNotMatch('AuthorizationFailed: caller is not authorized to read this vault.', missingVaultError,
+    'authorization errors must never be treated as an absent vault');
   assert.equal((workflow.match(/Could not read Key Vault '\$KV_NAME' policy state; refusing/g) ?? []).length, 2,
     'permission or service errors must fail closed instead of treating an existing vault as empty');
   assert.equal((workflow.match(/existingKeyVaultAccessPolicies=@\$\{KEYVAULT_ACCESS_POLICIES_FILE\}/g) ?? []).length, 2,

@@ -560,7 +560,7 @@ jobs:
             KV_NAME="kv-orderprocessing-${ENV_SUFFIX}"
             KV_POLICY_ERROR_FILE="$RUNNER_TEMP/keyvault-policy-read.err"
             if ! az keyvault show --name "$KV_NAME" --query properties.accessPolicies -o json > "$KEYVAULT_ACCESS_POLICIES_FILE" 2> "$KV_POLICY_ERROR_FILE"; then
-              if grep -Eqi 'ResourceNotFound|NotFound' "$KV_POLICY_ERROR_FILE"; then
+              if grep -Eqi 'ResourceNotFound|VaultNotFound|The Vault .+ not found within subscription' "$KV_POLICY_ERROR_FILE"; then
                 printf '[]\n' > "$KEYVAULT_ACCESS_POLICIES_FILE"
               else
                 echo "Could not read Key Vault '$KV_NAME' policy state; refusing what-if." >&2
@@ -1112,7 +1112,7 @@ jobs:
             KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
             KV_POLICY_ERROR_FILE="$RUNNER_TEMP/keyvault-policy-read.err"
             if ! az keyvault show --name "$KV_NAME" --query properties.accessPolicies -o json > "$KEYVAULT_ACCESS_POLICIES_FILE" 2> "$KV_POLICY_ERROR_FILE"; then
-              if grep -Eqi 'ResourceNotFound|NotFound' "$KV_POLICY_ERROR_FILE"; then
+              if grep -Eqi 'ResourceNotFound|VaultNotFound|The Vault .+ not found within subscription' "$KV_POLICY_ERROR_FILE"; then
                 printf '[]\n' > "$KEYVAULT_ACCESS_POLICIES_FILE"
               else
                 echo "Could not read Key Vault '$KV_NAME' policy state; refusing deployment." >&2
