@@ -87,3 +87,19 @@ npm --prefix automation run test:customer-directory:browser
 Remove those optional process variables after use. Evidence is written to `TestResults/DockerStorage/customer-directory-browser-*` or the parent E2E run directory. Acceptance covers one admin session switching tenants, refresh, same-browser sign-out/sign-in, cross-tab logout, restricted selectors and direct cross-tenant HTTP 403 responses.
 
 Routing/persistence integration fixtures explicitly disable identity and must run against a verified disposable database; authenticated security is covered separately by bearer and browser tests. Offline Entra tests validate token signatures, issuer, audience, expiry, scopes and claim normalization using fixture signing keys. They are **not** live Azure E2E. Azure acceptance stays pending until approved provisioning/deployment and real Entra browser tests pass. Deterministic local payment tests are not proof of real provider sandbox acceptance.
+
+## Azure dev regular-user isolation test accounts
+
+The Azure dev regular-user isolation gate uses a distinct non-admin account for every active application tenant. Do not reuse the platform administrator: it would not prove regular-user restrictions. Never assign these test accounts `platform-admin` or `phase10-operator`.
+
+For the current dev test, keep the email-to-tenant mapping in `%LOCALAPPDATA%\XYDataLabs\phase10-entra-test-users.dev.json`, copied from `Resources/Identity/entra-test-users.dev.example.json`:
+
+```powershell
+$manifestDir = Join-Path $env:LOCALAPPDATA 'XYDataLabs'
+New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+Copy-Item Resources/Identity/entra-test-users.dev.example.json (Join-Path $manifestDir 'phase10-entra-test-users.dev.json')
+```
+
+Fill `directoryId` and the API app's client ID from the reviewed Entra registrations, plus the approved email/object-ID mappings; the script validates the directory and runtime tenant set. This file contains personal data and must stay outside Git. `scripts/phase10-entra-test-users.ps1 -Mode Plan -PromptForExpectedSubscriptionId` performs a read-only plan. Plan/Verify need read access to the runtime resources and Graph application, extension, user, and API role-assignment data. `-Mode Apply -Confirm -PromptForExpectedSubscriptionId` is a separate external directory write: it may send B2B guest invitation email and set the API app's existing `applicationTenantCode` extension. For Apply, the operator's delegated Graph access must additionally permit guest invitation and updating the user extension; the documented least-privileged permissions include `User.Invite.All` for invitations and `User.ReadWrite.All` for updating user extension data. Supported Entra directory roles are also required. Subscription Owner alone is insufficient. Do not grant new Graph consent or directory roles as part of this run; stop and request separate review if the preflight lacks access. The script also refuses to proceed if a privileged app role is assigned to a group, because it cannot prove group membership safely. It never changes app registrations, grants roles, resets guest redemption or deletes users. `Verify` must pass after invited users redeem their invitations.
+
+Run **5 Run: Azure Dev 05 Regular-User Isolation (No Payments)** only after `Verify` passes. The headed browser requires one normal sign-in/MFA for each distinct user, then checks the complete active-tenant allow/deny matrix, token tenant/scope/role claims, selector filtering, deep-link denial and sign-out. It does not submit payments. Anonymous/malformed-token denial and signed-expired-token validation remain distinct evidence; this browser task does not claim signed-expired-token coverage. See the Microsoft Graph [invitation API](https://learn.microsoft.com/en-us/graph/api/invitation-post?view=graph-rest-1.0) and [API-resource optional-claim guidance](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims).

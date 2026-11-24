@@ -3050,6 +3050,56 @@
             "problemMatcher": []
         },
         {
+            "label": "5 Run: Azure Dev 03 Entra Test-User Plan (Read-Only)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-test-users.ps1",
+                "-Mode",
+                "Plan",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Read-only directory and active-tenant preflight. Uses the private LOCALAPPDATA manifest; no invitations or claims are changed.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04 Entra Test-User Apply (Invites Guests)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-test-users.ps1",
+                "-Mode",
+                "Apply",
+                "-PromptForExpectedSubscriptionId",
+                "-Confirm"
+            ],
+            "detail": "Directory-write task: may send guest invitations and set per-user tenant claims. Requires -Confirm and a typed phrase; do not use until the Plan output is reviewed.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 05 Regular-User Isolation (No Payments)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-dev-identity-isolation.ps1",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Headed Playwright task. Requires verified guest claims and one normal Entra sign-in/MFA per regular user; tests tenant isolation only and submits no payments.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
             "label": "Validate: AI governance bundle",
             "dependsOrder": "sequence",
             "dependsOn": [

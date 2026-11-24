@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "environment": "dev",
+  "directoryId": "",
+  "apiClientId": "",
+  "users": [
+    { "tenantCode": "TenantA", "email": "", "objectId": "" },
+    { "tenantCode": "TenantB", "email": "", "objectId": "" },
+    { "tenantCode": "TenantC", "email": "", "objectId": "" }
+  ]
+}
