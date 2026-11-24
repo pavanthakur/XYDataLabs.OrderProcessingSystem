@@ -105,11 +105,12 @@ test('Entra provisioner is dry-run by default and protects external guest writes
 
 test('Azure regular-user browser gate is headed, payment-free, tenant-complete, and emits sanitized evidence', async () => {
   const testSource = await read('automation/src/browser/entra-regular-user-isolation.browser.test.ts');
+  const identitySupport = await read('automation/src/support/non-admin-sandbox.ts');
   const wrapper = await read('scripts/run-phase10-azure-dev-identity-isolation.ps1');
   assert.match(testSource, /chromium\.launch\(\{ headless: false \}\)/);
   assert.match(testSource, /activeTenantCodes\.length \* activeTenantCodes\.length/);
-  assert.match(testSource, /applicationTenantClaimType\(manifest\.apiClientId\)/);
-  assert.doesNotMatch(testSource, /extn\.applicationTenantCode/);
+  assert.match(testSource, /claims\[applicationTenantClaimType\]/);
+  assert.match(identitySupport, /applicationTenantClaimType\s*=\s*"extn\.applicationTenantCode"/);
   assert.match(testSource, /paymentsAttempted: false/);
   assert.doesNotMatch(testSource, /cardNumber|cardholderName|cvv|passwordInput/i);
   assert.match(wrapper, /-Mode Verify/);
@@ -118,12 +119,13 @@ test('Azure regular-user browser gate is headed, payment-free, tenant-complete, 
   assert.doesNotMatch(wrapper, /ProviderMatrix|run-payment-acceptance/);
 });
 
-test('Azure deployment derives the API tenant-claim name instead of accepting a stale alias', async () => {
+test('Azure deployment uses the emitted API JWT tenant-claim alias, not the registration name', async () => {
   const prepare = await read('scripts/prepare-entra-deployment.mjs');
   const orchestrator = await read('.github/workflows/phase10-deploy-orchestrator.yml');
   const infra = await read('.github/workflows/infra-deploy.yml');
   const bicep = await read('infra/modules/containerapps.bicep');
   assert.match(prepare, /getApplicationTenantClaimType\(settings\.apiClientId\)/);
+  assert.match(prepare, /return "extn\.applicationTenantCode"/);
   assert.match(prepare, /tenantClaimType\s*,/);
   assert.match(bicep, /identity\.tenantClaimType/);
   assert.doesNotMatch(orchestrator, /ENTRA_TENANT_CLAIM_TYPE/);

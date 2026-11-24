@@ -4,8 +4,10 @@ import { createPublicRuntimeConfig } from "../frontend/apps/web/public-runtime-c
 
 export function getApplicationTenantClaimType(apiClientId) {
   if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(apiClientId ?? ""))
-    throw new Error("API client ID must be a GUID before deriving the Entra extension claim name.");
-  return `extension_${apiClientId.replaceAll("-", "").toLowerCase()}_applicationTenantCode`;
+    throw new Error("API client ID must be a GUID before preparing the Entra identity configuration.");
+  // Entra app registration uses extension_<appId>_applicationTenantCode,
+  // but the JWT payload emits directory-extension claims as extn.<attributeName>.
+  return "extn.applicationTenantCode";
 }
 
 export function validateEntraDeployment(settings, environment) {
@@ -17,7 +19,7 @@ export function validateEntraDeployment(settings, environment) {
   }
   const tenantClaimType = getApplicationTenantClaimType(settings.apiClientId);
   if (settings.tenantClaimType && settings.tenantClaimType !== tenantClaimType)
-    throw new Error("tenantClaimType must exactly match the API app's emitted applicationTenantCode extension claim; derive it from apiClientId.");
+    throw new Error("tenantClaimType must match Entra's emitted JWT claim name extn.applicationTenantCode.");
   const authority = `https://login.microsoftonline.com/${settings.directoryId}/v2.0`;
   const config = createPublicRuntimeConfig({ IDENTITY_MODE: "Entra", APP_ENVIRONMENT: environment,
     PUBLIC_WEB_ORIGIN: settings.webOrigin, PUBLIC_IDENTITY_AUTHORITY: authority,

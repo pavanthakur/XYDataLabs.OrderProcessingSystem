@@ -37,7 +37,7 @@ public sealed class EntraPhase10OperatorAuthorizationTests
             ["IdentityProvider:Authority"] = authority,
             ["IdentityProvider:Audience"] = "fixture-api",
             ["IdentityProvider:RequiredScope"] = "access_as_user",
-            ["IdentityProvider:TenantClaimType"] = "extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode"
+            ["IdentityProvider:TenantClaimType"] = "extn.applicationTenantCode"
         }).Build();
 
         using var server = new TestServer(new WebHostBuilder()
@@ -73,7 +73,7 @@ public sealed class EntraPhase10OperatorAuthorizationTests
             [
                 new Claim("sub", "operator-fixture"),
                 new Claim("scp", "access_as_user"),
-                new Claim("extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "TenantA"),
+                new Claim("extn.applicationTenantCode", "TenantA"),
                 new Claim("roles", role)
             ],
             notBefore: DateTime.UtcNow.AddMinutes(-1),

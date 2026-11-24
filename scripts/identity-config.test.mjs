@@ -14,7 +14,7 @@ test("validates Entra contract for every cloud environment with production selec
     assert.equal(identity.requiredScope, "access_as_user");
     assert.equal(identity.audience, settings.apiClientId);
     assert.equal(identity.apiScope, `api://${settings.apiClientId}/access_as_user`);
-    assert.equal(identity.tenantClaimType, "extension_22222222222222222222222222222222_applicationTenantCode");
+    assert.equal(identity.tenantClaimType, "extn.applicationTenantCode");
   }
 });
 test("rejects incomplete provisioning, insecure origins, missing registration and directory tenant as application tenant", () => {
@@ -22,10 +22,10 @@ test("rejects incomplete provisioning, insecure origins, missing registration an
     {webOrigin:"http://localhost:5022"}, {registeredRedirectUris:[]}, {registeredLogoutUris:[]}])
     assert.throws(() => validateEntraDeployment({...settings,...change}, "dev"));
 });
-test("derives the exact Entra extension-claim name from API client ID and rejects stale aliases", () => {
-  assert.equal(getApplicationTenantClaimType(settings.apiClientId), "extension_22222222222222222222222222222222_applicationTenantCode");
+test("configures the emitted Entra JWT alias and rejects the registration-only extension name", () => {
+  assert.equal(getApplicationTenantClaimType(settings.apiClientId), "extn.applicationTenantCode");
   assert.throws(() => getApplicationTenantClaimType("not-a-guid"), /API client ID must be a GUID/);
-  assert.throws(() => validateEntraDeployment({ ...settings, tenantClaimType: "extn.applicationTenantCode" }, "dev"), /exactly match the API app's emitted/);
+  assert.throws(() => validateEntraDeployment({ ...settings, tenantClaimType: "extension_22222222222222222222222222222222_applicationTenantCode" }, "dev"), /emitted JWT claim name extn/);
 });
 test("public runtime is allowlisted, same-origin and does not contain credentials", () => {
   const result = createPublicRuntimeConfig({ IDENTITY_MODE:"KeycloakLocal", APP_ENVIRONMENT:"local", PUBLIC_WEB_ORIGIN:"http://localhost:5173",

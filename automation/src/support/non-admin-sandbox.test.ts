@@ -3,7 +3,7 @@ import test from "node:test";
 import { applicationTenantClaimType, assertAssignedSandboxRoutes, assertNonAdminSandboxClaims, mapNonAdminSandboxIdentities } from "./non-admin-sandbox.js";
 
 const identity = { objectId: "11111111-1111-4111-8111-111111111111", directoryId: "22222222-2222-4222-8222-222222222222", apiClientId: "33333333-3333-4333-8333-333333333333", identityType: "member" as const };
-const tenantClaimType = applicationTenantClaimType(identity.apiClientId);
+const tenantClaimType = applicationTenantClaimType;
 const claims = { oid: identity.objectId, tid: identity.directoryId, aud: `api://${identity.apiClientId}`,
   scp: "access_as_user", [tenantClaimType]: "TenantB" };
 const token = (payload: object) => `fixture.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.fixture`;
@@ -45,9 +45,8 @@ test("private non-admin manifests select exactly the requested guest or member i
   assert.throws(() => mapNonAdminSandboxIdentities({ ...base, users: [base.users[0], base.users[0], base.users[2]] }, "guest"), /one distinct, complete identity/);
 });
 
-test("Entra application-tenant claim name is derived from the API client ID", () => {
-  assert.equal(tenantClaimType, "extension_33333333333343338333333333333333_applicationTenantCode");
-  assert.throws(() => applicationTenantClaimType("not-a-guid"), /valid API client ID/);
+test("Entra directory extension is emitted under its JWT claim alias", () => {
+  assert.equal(tenantClaimType, "extn.applicationTenantCode");
 });
 
 test("provider drift, missing tenants and duplicate routes stop the assigned-provider plan", () => {

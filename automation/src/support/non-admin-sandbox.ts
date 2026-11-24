@@ -6,10 +6,9 @@ const expectedTenantCodes = ["TenantA", "TenantB", "TenantC"] as const;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const isGuid = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value);
 
-export function applicationTenantClaimType(apiClientId: string): string {
-  if (!isGuid(apiClientId)) throw new Error("A valid API client ID is required to identify the Entra tenant-assignment claim.");
-  return `extension_${apiClientId.replaceAll("-", "").toLowerCase()}_applicationTenantCode`;
-}
+// The API registration names the source as extension_<appId>_applicationTenantCode;
+// Entra emits its JWT claim as extn.applicationTenantCode.
+export const applicationTenantClaimType = "extn.applicationTenantCode";
 
 export function mapNonAdminSandboxIdentities(value: unknown, expectedIdentityType: NonAdminIdentityType): Record<string, NonAdminSandboxIdentity> {
   if (!isRecord(value)) throw new Error("The private non-admin identity manifest is invalid; no browser or order was started.");
@@ -51,7 +50,7 @@ export function assertNonAdminSandboxClaims(token: string, tenant: string, expec
   if (String(claims.tid ?? "").toLowerCase() !== expected.directoryId.toLowerCase()) failed.push("directory");
   if (![expected.apiClientId, `api://${expected.apiClientId}`].map(value => value.toLowerCase()).includes(String(claims.aud ?? "").toLowerCase())) failed.push("api-audience");
   if (!String(claims.scp ?? "").split(/\s+/).includes("access_as_user")) failed.push("delegated-scope");
-  if (claims[applicationTenantClaimType(expected.apiClientId)] !== tenant) failed.push("application-tenant");
+  if (claims[applicationTenantClaimType] !== tenant) failed.push("application-tenant");
   if (roles !== undefined && (!Array.isArray(roles) || roles.some(role => typeof role !== "string" || ["platform-admin", "phase10-operator"].includes(role.toLowerCase())))) failed.push("privileged-or-invalid-roles");
   if (failed.length) throw new Error(`Non-admin identity checks failed: ${failed.join(", ")}; no order was created.`);
 }

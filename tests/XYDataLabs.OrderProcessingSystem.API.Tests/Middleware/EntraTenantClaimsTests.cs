@@ -9,11 +9,11 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Middleware;
 public sealed class EntraTenantClaimsTests
 {
     [Theory]
-    [InlineData("tenant-user", "extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "CustomTenant", "access_as_user", true)]
-    [InlineData("tenant-user", "extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "", "access_as_user", false)]
-    [InlineData("platform-admin", "extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "", "access_as_user", true)]
-    [InlineData("platform-admin", "extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "", "", false)]
-    [InlineData("tenant-admin", "extension_4c9b3b4852234de3b572d820e69f6321_applicationTenantCode", "", "access_as_user", false)]
+    [InlineData("tenant-user", "extn.applicationTenantCode", "CustomTenant", "access_as_user", true)]
+    [InlineData("tenant-user", "extn.applicationTenantCode", "", "access_as_user", false)]
+    [InlineData("platform-admin", "extn.applicationTenantCode", "", "access_as_user", true)]
+    [InlineData("platform-admin", "extn.applicationTenantCode", "", "", false)]
+    [InlineData("tenant-admin", "extn.applicationTenantCode", "", "access_as_user", false)]
     public void ValidatedEntraClaims_AreNormalizedWithoutUsingDirectoryTenant(string role, string type, string tenant, string scope, bool accepted)
     {
         var identity = new ClaimsIdentity(new[] { new Claim("roles", role), new Claim("tid", "TenantA"),

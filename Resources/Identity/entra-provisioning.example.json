@@ -3,6 +3,7 @@
   "apiClientId": "",
   "spaClientId": "",
   "webOrigin": "",
+  "tenantClaimType": "extn.applicationTenantCode",
   "registeredRedirectUris": [],
   "registeredLogoutUris": [],
   "selectorEnabled": false
