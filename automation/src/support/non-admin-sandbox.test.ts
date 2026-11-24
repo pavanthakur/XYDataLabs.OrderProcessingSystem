@@ -10,12 +10,18 @@ const token = (payload: object) => `fixture.${Buffer.from(JSON.stringify(payload
 
 test("only the pinned delegated non-admin tenant identity passes for guest and member accounts", () => {
   assert.doesNotThrow(() => assertNonAdminSandboxClaims(token(claims), "TenantB", identity));
+  assert.doesNotThrow(() => assertNonAdminSandboxClaims(token({
+    ...Object.fromEntries(Object.entries(claims).filter(([claimType]) => claimType.toLowerCase() !== tenantClaimType.toLowerCase())),
+    [tenantClaimType.toUpperCase()]: " tenantb "
+  }), "TenantB", identity));
+  assert.doesNotThrow(() => assertNonAdminSandboxClaims(token({ ...claims, [tenantClaimType]: ["TenantB"] }), "TenantB", identity));
   for (const changes of [
     { oid: "other-user" }, { tid: "other-directory" }, { aud: "other-app" }, { scp: "other_scope" },
     { [tenantClaimType]: "TenantA" }, { roles: ["Platform-Admin"] }, { roles: ["phase10-operator"] }
   ]) {
     assert.throws(() => assertNonAdminSandboxClaims(token({ ...claims, ...changes }), "TenantB", identity), /no order was created/);
   }
+  assert.throws(() => assertNonAdminSandboxClaims(token({ ...claims, [tenantClaimType]: ["TenantA", "TenantB"] }), "TenantB", identity), /no order was created/);
   assert.throws(() => assertNonAdminSandboxClaims("malformed", "TenantB", identity), /no order was created/);
   assert.throws(() => assertNonAdminSandboxClaims(token({ ...claims, oid: "private-value", scp: "other_scope" }), "TenantB", identity),
     { message: "Non-admin identity checks failed: account-object-id, delegated-scope; no order was created." });
@@ -47,6 +53,22 @@ test("private non-admin manifests select exactly the requested guest or member i
 
 test("Entra directory extension is emitted under its JWT claim alias", () => {
   assert.equal(tenantClaimType, "extn.applicationTenantCode");
+});
+
+test("tenant-claim failure diagnostics identify claim shape without exposing values", () => {
+  const claimValueSentinel = "DO_NOT_LOG_PRIVATE_CLAIM_VALUE";
+  let message = "";
+  try {
+    assertNonAdminSandboxClaims(token({
+      ...Object.fromEntries(Object.entries(claims).filter(([claimType]) => claimType.toLowerCase() !== tenantClaimType.toLowerCase())),
+      extension_33333333333343338333833333333333_applicationTenantCode: claimValueSentinel
+    }), "TenantB", identity);
+  } catch (error) { message = error instanceof Error ? error.message : ""; }
+  assert.match(message, /tenant-claim-diagnostic=/);
+  assert.match(message, /"expectedAliasPresent":false/);
+  assert.match(message, /extension_33333333333343338333833333333333_applicationTenantCode/);
+  assert.match(message, /"shape":"string"/);
+  assert.doesNotMatch(message, new RegExp(claimValueSentinel));
 });
 
 test("provider drift, missing tenants and duplicate routes stop the assigned-provider plan", () => {

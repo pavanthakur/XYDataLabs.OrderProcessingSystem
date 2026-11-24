@@ -10,6 +10,23 @@ const isGuid = (value: unknown): value is string => typeof value === "string" &&
 // Entra emits its JWT claim as extn.applicationTenantCode.
 export const applicationTenantClaimType = "extn.applicationTenantCode";
 
+function tenantClaimDiagnostic(claims: Record<string, unknown>, expectedTenant: string): string {
+  const expectedName = applicationTenantClaimType.toLowerCase();
+  const tenantClaimEntries = Object.entries(claims).filter(([name]) => name.toLowerCase() === expectedName);
+  const values = tenantClaimEntries.flatMap(([, value]) => Array.isArray(value) ? value : [value]);
+  const strings = values.filter((value): value is string => typeof value === "string").map(value => value.trim()).filter(Boolean);
+  const distinct = [...new Set(strings.map(value => value.toLowerCase()))];
+  const matches = values.length > 0 && strings.length === values.length && distinct.length === 1
+    && distinct[0] === expectedTenant.trim().toLowerCase();
+  const shape = (value: unknown): string => Array.isArray(value)
+    ? `array(${value.map(item => typeof item).join(",")})`
+    : value === null ? "null" : typeof value;
+  const candidateNames = Object.entries(claims)
+    .filter(([name]) => /applicationtenantcode/i.test(name))
+    .map(([name, value]) => ({ name: name.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120), shape: shape(value) }));
+  return JSON.stringify({ expectedAliasPresent: tenantClaimEntries.length > 0, expectedAliasShape: tenantClaimEntries.map(([, value]) => shape(value)), matchesExpectedTenant: matches, candidateNames });
+}
+
 export function mapNonAdminSandboxIdentities(value: unknown, expectedIdentityType: NonAdminIdentityType): Record<string, NonAdminSandboxIdentity> {
   if (!isRecord(value)) throw new Error("The private non-admin identity manifest is invalid; no browser or order was started.");
   const manifestType = value.identityType === undefined ? "guest" : value.identityType;
@@ -50,7 +67,25 @@ export function assertNonAdminSandboxClaims(token: string, tenant: string, expec
   if (String(claims.tid ?? "").toLowerCase() !== expected.directoryId.toLowerCase()) failed.push("directory");
   if (![expected.apiClientId, `api://${expected.apiClientId}`].map(value => value.toLowerCase()).includes(String(claims.aud ?? "").toLowerCase())) failed.push("api-audience");
   if (!String(claims.scp ?? "").split(/\s+/).includes("access_as_user")) failed.push("delegated-scope");
-  if (claims[applicationTenantClaimType] !== tenant) failed.push("application-tenant");
+  // Match the API's validated-principal normalization: claim type and tenant
+  // code comparisons are case-insensitive, and surrounding whitespace is
+  // ignored. Do not accept missing, non-string, or conflicting tenant claims.
+  const tenantClaimValues = Object.entries(claims)
+    .filter(([claimType]) => claimType.toLowerCase() === applicationTenantClaimType.toLowerCase())
+    .flatMap(([, value]) => Array.isArray(value) ? value : [value]);
+  const normalizedTenantValues = tenantClaimValues
+    .filter((value): value is string => typeof value === "string")
+    .map(value => value.trim())
+    .filter(Boolean);
+  const distinctTenantValues = [...new Set(normalizedTenantValues.map(value => value.toLowerCase()))];
+  const assignedTenant = tenantClaimValues.length > 0
+    && normalizedTenantValues.length === tenantClaimValues.length
+    && distinctTenantValues.length === 1
+    ? normalizedTenantValues[0]!
+    : "";
+  if (!assignedTenant || assignedTenant.toLowerCase() !== tenant.trim().toLowerCase()) {
+    failed.push(`application-tenant; tenant-claim-diagnostic=${tenantClaimDiagnostic(claims, tenant)}`);
+  }
   if (roles !== undefined && (!Array.isArray(roles) || roles.some(role => typeof role !== "string" || ["platform-admin", "phase10-operator"].includes(role.toLowerCase())))) failed.push("privileged-or-invalid-roles");
   if (failed.length) throw new Error(`Non-admin identity checks failed: ${failed.join(", ")}; no order was created.`);
 }
