@@ -58,7 +58,7 @@ test('guest and member sandbox payment tasks are separate, supervised, identity-
   assert.match(cli, /identityType: nonAdminSandboxIdentities\.TenantA\.identityType/);
   assert.match(cli, /identitySha256: createHash\("sha256"\)/);
   assert.doesNotMatch(cli, /userPrincipalName.*summary\.json|email.*summary\.json/i);
-  assert.match(executor, /three separate \$\{nonAdmin\.TenantA\.identityType\} sessions/);
+  assert.match(executor, /one verified session per mapped tenant/);
   assert.doesNotMatch(executor, /verified guest mapping|three separate guest sessions|Guest sign-out was not verified/);
   assert.match(executor, /Non-admin identity sign-out was not verified/);
 });

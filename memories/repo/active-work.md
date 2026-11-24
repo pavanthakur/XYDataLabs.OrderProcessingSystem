@@ -5,7 +5,8 @@ Navigation, not proof. Verify Git, Azure state and referenced evidence before re
 ## Phase 10 Azure-dev checkpoint — 24 November 2026
 
 - Review revision: `1bdc10e194558ec341e39f4faacc87f394eda53c`
-- Worktree state: `DIRTY` — member-payment task and supporting tests/documentation are under review; not committed.
+- Worktree state: `DIRTY`
+- Worktree note: member-payment task and supporting tests/documentation are under review; not committed.
 - Evidence status: `BLOCKED`
 - Evidence revision: `51769efdbcdd8ca7701b9f5fb169c9db17c208de`
 - Evidence environment: `AZURE_DEV`

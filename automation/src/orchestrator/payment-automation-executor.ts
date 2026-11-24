@@ -126,7 +126,7 @@ export async function executePaymentAutomationRun(
     assertAssignedSandboxRoutes(resolvedTenants);
     if (resolvedTenants.some(tenant => !nonAdmin[tenant.tenantCode])) throw new Error("A verified non-admin identity mapping is missing.");
     resolvedTenants.sort((a, b) => a.tenantCode.localeCompare(b.tenantCode));
-    log(`Non-admin assigned-provider mode: three separate ${nonAdmin.TenantA.identityType} sessions, no provider fixtures.`);
+    log("Non-admin assigned-provider mode: one verified session per mapped tenant, no provider fixtures.");
   }
   const startedAt = options.startedAt ?? new Date();
   const runId = `payment-automation-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
