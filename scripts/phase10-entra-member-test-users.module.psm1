@@ -82,4 +82,11 @@ function New-Phase10EntraMemberTestUserPlan {
     return @($plan | Sort-Object tenantCode)
 }
 
-Export-ModuleMember -Function ConvertTo-Phase10EntraMemberTestManifest, New-Phase10EntraMemberTestUserPlan
+function Get-Phase10GraphNextLink {
+    param([Parameter(Mandatory)][object]$Page)
+    $property = $Page.PSObject.Properties['@odata.nextLink']
+    if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) { return $null }
+    return [string]$property.Value
+}
+
+Export-ModuleMember -Function ConvertTo-Phase10EntraMemberTestManifest, New-Phase10EntraMemberTestUserPlan, Get-Phase10GraphNextLink

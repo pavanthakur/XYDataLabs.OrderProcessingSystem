@@ -19,6 +19,11 @@ $inputManifest = [pscustomobject]@{
 $manifest = ConvertTo-Phase10EntraMemberTestManifest -InputObject $inputManifest -ExpectedDirectoryId $directory
 Assert-Equal $manifest.users.Count 3 'three distinct member accounts'
 Assert-Equal $manifest.identityType 'member' 'identity type is explicit'
+$singlePageNextLink = Get-Phase10GraphNextLink -Page ([pscustomobject]@{ value = @() })
+Assert-Equal $singlePageNextLink $null 'Graph final page may omit nextLink'
+$nextPageUrl = 'https://graph.microsoft.com/v1.0/users?$skiptoken=opaque'
+$pagedNextLink = Get-Phase10GraphNextLink -Page ([pscustomobject]@{ value = @(); '@odata.nextLink' = $nextPageUrl })
+Assert-Equal $pagedNextLink $nextPageUrl 'Graph nextLink continues pagination when present'
 $guestManifest = $inputManifest | ConvertTo-Json -Depth 8 | ConvertFrom-Json
 $guestManifest.identityType='guest'
 Assert-Throws { ConvertTo-Phase10EntraMemberTestManifest -InputObject $guestManifest -ExpectedDirectoryId $directory } 'guest manifest cannot enter member flow'
@@ -56,6 +61,7 @@ $runner = Get-Content (Join-Path (Split-Path -Parent $PSScriptRoot) 'phase10-ent
 Assert-Equal ([bool]($runner -match 'forceChangePasswordNextSignIn=\$true')) $true 'initial password rotation is required'
 Assert-Equal ([bool]($runner -match 'Read-Host .*AsSecureString')) $true 'temporary password uses secure prompt'
 Assert-Equal ([bool]($runner -match 'passwordsStored=\$false')) $true 'passwords are not persisted in reports'
+Assert-Equal ([bool]($runner -match 'accounts=\$rows; emailsSent=0; privilegedRolesAssigned=0; passwordsStored=\$false')) $true 'plan summary uses a PowerShell boolean literal'
 Assert-Equal ([bool]($runner -match 'emailsSent=0')) $true 'member flow does not send invitations'
 Assert-Equal ([bool]($runner -match 'APPLY DEV MEMBER TEST USERS')) $true 'writes require typed confirmation'
 Assert-Equal ([bool]($runner -match 'UserPrincipalName.*must be stored outside the repository|must be outside the repository')) $true 'identity manifest remains outside source control'

@@ -39,7 +39,7 @@ function Get-GraphItems {
         $page = Invoke-Graph -Method GET -Uri $next
         if ($null -eq $page.value) { throw 'Microsoft Graph returned an invalid collection.' }
         $items += @($page.value)
-        $next = [string]$page.'@odata.nextLink'
+        $next = Get-Phase10GraphNextLink -Page $page
     }
     return $items
 }
@@ -175,7 +175,7 @@ $reportPath = Join-Path $reportRoot 'provisioning-summary.json'
 if ($Mode -eq 'Plan' -or $Mode -eq 'Verify') {
     $rows = @($plan | ForEach-Object { [ordered]@{ tenantCode=$_.tenantCode; action=$_.action; status=if ($_.action -eq 'no-change') {'verified'} else {'planned'} } })
     $status = if (@($plan | Where-Object action -ne 'no-change').Count -eq 0) {'passed'} elseif ($Mode -eq 'Plan') {'planned'} else {'failed'}
-    [ordered]@{ schema='phase10-entra-member-test-user-provisioning-v1'; mode=$Mode.ToLowerInvariant(); status=$status; directoryId=$expectedDirectory.ToString('D'); activeTenantCodes=@($activeTenants | Sort-Object -Unique); accounts=$rows; emailsSent=0; privilegedRolesAssigned=0; passwordsStored=false } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding utf8NoBOM
+    [ordered]@{ schema='phase10-entra-member-test-user-provisioning-v1'; mode=$Mode.ToLowerInvariant(); status=$status; directoryId=$expectedDirectory.ToString('D'); activeTenantCodes=@($activeTenants | Sort-Object -Unique); accounts=$rows; emailsSent=0; privilegedRolesAssigned=0; passwordsStored=$false } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding utf8NoBOM
     $plan | Select-Object tenantCode,action,status | Format-Table -AutoSize
     Write-Host "Sanitized report: $reportPath"
     if ($Mode -eq 'Verify' -and $status -ne 'passed') { exit 1 }
