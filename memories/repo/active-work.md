@@ -4,15 +4,15 @@ Navigation, not proof. Verify Git, Azure state and referenced evidence before re
 
 ## Phase 10 Azure-dev checkpoint — 24 November 2026
 
-- Review revision: `a56c468dccda1de5b47ecd5034bf49fa7f08344e` (new identity guide/workflow changes are also pending)
-- Worktree state: `DIRTY`
+- Review revision: `018d953e2b1585f9fdcca1183047cdf6698eacc4`
+- Worktree state: `CLEAN`
 - Evidence status: `BLOCKED`
 - Evidence revision: `51769efdbcdd8ca7701b9f5fb169c9db17c208de`
 - Evidence environment: `AZURE_DEV`
 - Evidence scope: Azure dev deployment/runtime/transport, no-charge preflight and six-case supervised sandbox matrix passed for the recorded release; overall Phase 10 remains open for regular-user isolation, duplicate replay/recovery/restoration and L5-R/L6 reconciliation.
 - Evidence reference: `TestResults/Playwright/azure-https/payment-automation-azure-matrix-2026-11-24T09-43-39-072Z/summary.json`
 - Phase 10 is **OPEN**. Azure dev was redeployed and validated; no staging/prod, cleanup or teardown was run in this checkpoint.
-- Deployment provenance: workflow SHA `51769efdbcdd8ca7701b9f5fb169c9db17c208de`; immutable app release source `b38590af8a936072a301fc744e12f4c54f612827`. Workflow `01` verified six image digests, Functions package and parameter identity at deployment. Checkpoint commit `a56c468d` passed four hosted checks without deploying. The current worktree has pending identity-test, runner, and documentation changes; the organizational-member provisioning addition is uncommitted and has not been applied to Entra.
+- Deployment provenance: workflow SHA `51769efdbcdd8ca7701b9f5fb169c9db17c208de`; immutable app release source `b38590af8a936072a301fc744e12f4c54f612827`. Workflow `01` verified six image digests, Functions package and parameter identity at deployment. Checkpoint commit `a56c468d` passed four hosted checks without deploying. Identity-test, runner, documentation, and organizational-member provisioning changes are committed in review revision `018d953e`; the member provisioning flow has not been applied to Entra.
 - Workflow `01` deployment `45360420141`, `02` runtime smoke `45364125339`, `03` transport smoke `45365542421`, and `04` service preflight `45365998186` passed. Generated dev origins are recorded in the run summaries; do not treat their current availability as permanent. Workflow `04` handoff `45366348978` only printed desktop instructions; it did not run the browser or payments.
 - Workflow `03` verified Service Bus publish/fan-out, durable Inventory and Notifications effects, dead-letter forwarding, Functions quarantine intake and firewall-lease cleanup. `prepareReplayCandidate=false`; duplicate replay, recovery and exact publisher-setting restoration were **NOT RUN**.
 - Workflow `04` no-charge preflight validated Azure dependencies and the active tenant/provider contract; no-charge topology verification and firewall cleanup passed.
