@@ -198,6 +198,13 @@ export class PaymentJourneyRunner {
         }
       });
       const targetUrl = `${request.target.baseUrl}${request.target.paymentPagePath}?tenantCode=${encodeURIComponent(request.tenantCode)}`;
+      // For non-admin Entra identities, use the same token source as the no-payment
+      // isolation gate: the bearer token on the app's own-tenant customer request.
+      // Reading localStorage immediately after callback can observe an early/stale
+      // token before the authenticated API request has completed.
+      const nonAdminCustomerToken = request.nonAdminIdentity
+        ? this.waitForNonAdminCustomerToken(page, request, log)
+        : undefined;
 
       log(`Navigating to ${targetUrl}.`);
       await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
@@ -206,7 +213,9 @@ export class PaymentJourneyRunner {
         log(previousSession ? "AUTH_SESSION_REUSED: checking the existing Entra session." : "WAITING_FOR_SIGN_IN: complete normal Entra sign-in/MFA in the local browser window.");
       }
       await this.completeLocalKeycloakLogin(page, request, log);
-      const accessToken = await this.waitForLocalAccessToken(page, request, log);
+      const accessToken = nonAdminCustomerToken
+        ? await nonAdminCustomerToken
+        : await this.waitForLocalAccessToken(page, request, log);
       if (request.target.runtime === "azure" && request.operatorAssistedEntra && accessToken) authenticatedEntra = true;
       if (request.nonAdminIdentity) {
         if (!accessToken) throw new Error("Entra sign-in is required before a non-admin sandbox case.");
@@ -808,6 +817,36 @@ export class PaymentJourneyRunner {
 
     log(`Local access token is ready for ${request.tenantCode}.`);
     return accessToken;
+  }
+
+  private async waitForNonAdminCustomerToken(
+    page: Page,
+    request: PaymentJourneyRequest,
+    log: (message: string) => void
+  ): Promise<string> {
+    const allowedOrigins = new Set(
+      [request.target.baseUrl, request.target.apiBaseUrl]
+        .filter((origin): origin is string => typeof origin === "string" && origin.length > 0)
+        .map((origin) => new URL(origin).origin)
+    );
+    const response = await page.waitForResponse(async (candidate) => {
+      const candidateUrl = new URL(candidate.url());
+      if (!allowedOrigins.has(candidateUrl.origin)
+        || candidateUrl.pathname.toLowerCase() !== "/api/v1/customer/getallcustomers"
+        || candidate.request().method() !== "GET") return false;
+      const tenant = await candidate.request().headerValue("x-tenant-code");
+      const authorization = await candidate.request().headerValue("authorization");
+      return tenant === request.tenantCode && /^Bearer\s+\S+$/i.test(authorization ?? "");
+    }, { timeout: 300000 });
+
+    if (response.status() !== 200) {
+      throw new Error(`The authenticated ${request.tenantCode} customer request returned HTTP ${response.status()}; no order was created.`);
+    }
+    const authorization = await response.request().headerValue("authorization");
+    const token = authorization?.replace(/^Bearer\s+/i, "");
+    if (!token) throw new Error("The successful own-tenant customer request did not contain an API bearer token; no order was created.");
+    log(`Authenticated ${request.tenantCode} customer request returned HTTP 200; validating the assigned member identity before payment.`);
+    return token;
   }
 
   private async completeLocalKeycloakLogin(

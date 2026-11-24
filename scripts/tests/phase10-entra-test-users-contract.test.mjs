@@ -106,11 +106,14 @@ test('Entra provisioner is dry-run by default and protects external guest writes
 test('Azure regular-user browser gate is headed, payment-free, tenant-complete, and emits sanitized evidence', async () => {
   const testSource = await read('automation/src/browser/entra-regular-user-isolation.browser.test.ts');
   const identitySupport = await read('automation/src/support/non-admin-sandbox.ts');
+  const paymentRunner = await read('automation/src/browser/payment-journey-runner.ts');
   const wrapper = await read('scripts/run-phase10-azure-dev-identity-isolation.ps1');
   assert.match(testSource, /chromium\.launch\(\{ headless: false \}\)/);
   assert.match(testSource, /activeTenantCodes\.length \* activeTenantCodes\.length/);
   assert.match(testSource, /claims\[applicationTenantClaimType\]/);
   assert.match(identitySupport, /applicationTenantClaimType\s*=\s*"extn\.applicationTenantCode"/);
+  assert.match(paymentRunner, /request\.nonAdminIdentity\s*\?\s*this\.waitForNonAdminCustomerToken/);
+  assert.match(paymentRunner, /Authenticated \$\{request\.tenantCode\} customer request returned HTTP 200/);
   assert.match(testSource, /paymentsAttempted: false/);
   assert.doesNotMatch(testSource, /cardNumber|cardholderName|cvv|passwordInput/i);
   assert.match(wrapper, /-Mode Verify/);
