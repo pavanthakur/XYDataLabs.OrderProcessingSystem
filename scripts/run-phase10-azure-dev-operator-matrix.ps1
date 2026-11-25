@@ -8,6 +8,7 @@ param(
     [string]$ResumeCheckpoint,
     [switch]$RequireSandboxConfirmation,
     [ValidateSet('guest','member')][string]$IdentityType = 'guest',
+    [string[]]$TenantCodes,
     [string]$ManifestPath,
     [switch]$NonAdminPreflightOnly
 )
@@ -21,6 +22,18 @@ if ($Mode -eq 'Reconcile' -and -not $ResumeCheckpoint) { throw 'Reconcile requir
 if ($RequireSandboxConfirmation -and $Mode -ne 'ProviderMatrix') { throw 'Sandbox confirmation applies only to ProviderMatrix.' }
 if ($NonAdminPreflightOnly -and $Mode -ne 'NonAdminSandbox') { throw 'NonAdminPreflightOnly requires NonAdminSandbox mode.' }
 if ($Mode -ne 'NonAdminSandbox' -and $IdentityType -ne 'guest') { throw 'IdentityType applies only to NonAdminSandbox mode.' }
+if ($Mode -eq 'NonAdminSandbox') {
+    if (-not $TenantCodes -or $TenantCodes.Count -eq 0) {
+        $TenantCodes = if ($NonAdminPreflightOnly) { @('TenantA') } else { @('TenantA','TenantB','TenantC') }
+    }
+    $allowedTenantCodes = @('TenantA','TenantB','TenantC')
+    if (@($TenantCodes | Where-Object { $_ -cnotin $allowedTenantCodes }).Count -gt 0 -or
+        @($TenantCodes | Select-Object -Unique).Count -ne $TenantCodes.Count) {
+        throw 'NonAdminSandbox TenantCodes must be a non-empty, unique subset of TenantA, TenantB and TenantC.'
+    }
+    if ($NonAdminPreflightOnly -and $TenantCodes.Count -ne 1) { throw 'NonAdminPreflightOnly accepts exactly one TenantCodes selection.' }
+}
+elseif ($TenantCodes) { throw 'TenantCodes applies only to NonAdminSandbox mode.' }
 if ($PromptForExpectedSubscriptionId -and $Mode -eq 'Reconcile') { throw 'Reconcile requires an explicit expected subscription ID.' }
 if ($Mode -eq 'NonAdminSandbox' -and [string]::IsNullOrWhiteSpace($ManifestPath)) {
     $manifestName = if ($IdentityType -eq 'member') { 'phase10-entra-member-test-users/phase10-entra-member-test-users.dev.json' } else { 'phase10-entra-test-users.dev.json' }
@@ -116,13 +129,14 @@ elseif ($Mode -eq 'NonAdminSandbox') {
     $verifierName = if ($IdentityType -eq 'member') { 'phase10-entra-member-test-users.ps1' } else { 'phase10-entra-test-users.ps1' }
     & pwsh -NoProfile -File (Join-Path $PSScriptRoot $verifierName) -Mode Verify -ManifestPath $verifiedManifest -ExpectedSubscriptionId $ExpectedSubscriptionId
     if ($LASTEXITCODE -ne 0) { throw "$IdentityType identity or tenant-claim verification failed. No orders or payments were attempted." }
-    $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--non-admin-sandbox',
-        '--tenant','TenantA','--tenant','TenantB','--tenant','TenantC','--tenant-timeout-ms','600000')
+    $matrixArgs = @('--target','azure-dev','--headed','--operator-assisted-entra','--non-admin-sandbox')
+    foreach ($tenantCode in $TenantCodes) { $matrixArgs += @('--tenant',$tenantCode) }
+    $matrixArgs += @('--tenant-timeout-ms','600000')
     if ($NonAdminPreflightOnly) {
         $matrixArgs += '--auth-preflight-only'
-        Write-Host "TenantA only: verify the assigned $IdentityType identity, access, sandbox settings and sign-out. No orders or payments."
+        Write-Host "Selected tenant(s): $($TenantCodes -join ', '). Verify assigned $IdentityType identity, access, sandbox settings and sign-out. No orders or payments."
     } else {
-        Write-Host "One normal Entra sign-in per non-admin $IdentityType account. The assigned providers will not be changed."
+        Write-Host "Selected tenant(s): $($TenantCodes -join ', '). One normal Entra sign-in per selected non-admin $IdentityType account. The assigned providers will not be changed."
     }
 }
 else {

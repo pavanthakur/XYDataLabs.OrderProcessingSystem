@@ -123,7 +123,7 @@ export async function executePaymentAutomationRun(
         options.expectedAdapterMode === "deterministic" || options.tenantLimit !== undefined) {
       throw new Error("Non-admin checkout requires a full, verified Azure-dev assigned-provider run.");
     }
-    assertAssignedSandboxRoutes(resolvedTenants);
+    assertAssignedSandboxRoutes(resolvedTenants, options.tenantCodes);
     if (resolvedTenants.some(tenant => !nonAdmin[tenant.tenantCode])) throw new Error("A verified non-admin identity mapping is missing.");
     resolvedTenants.sort((a, b) => a.tenantCode.localeCompare(b.tenantCode));
     log("Non-admin assigned-provider mode: one verified session per mapped tenant, no provider fixtures.");

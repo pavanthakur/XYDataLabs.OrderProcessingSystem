@@ -10,6 +10,15 @@ const isGuid = (value: unknown): value is string => typeof value === "string" &&
 // Entra emits its JWT claim as extn.applicationTenantCode.
 export const applicationTenantClaimType = "extn.applicationTenantCode";
 
+export function assertNonAdminSandboxTenantSelection(tenantCodes: readonly string[]): void {
+  const selected = tenantCodes;
+  const allowed = new Set<string>(expectedTenantCodes);
+  if (selected.length === 0 || selected.some(code => !allowed.has(code)) ||
+      new Set(selected.map(code => code.toLowerCase())).size !== selected.length) {
+    throw new Error("Non-admin sandbox mode requires one or more unique TenantA/TenantB/TenantC selections.");
+  }
+}
+
 function tenantClaimDiagnostic(claims: Record<string, unknown>, expectedTenant: string): string {
   const expectedName = applicationTenantClaimType.toLowerCase();
   const tenantClaimEntries = Object.entries(claims).filter(([name]) => name.toLowerCase() === expectedName);
@@ -90,8 +99,12 @@ export function assertNonAdminSandboxClaims(token: string, tenant: string, expec
   if (failed.length) throw new Error(`Non-admin identity checks failed: ${failed.join(", ")}; no order was created.`);
 }
 
-export function assertAssignedSandboxRoutes(tenants: readonly { tenantCode: string; paymentProviderCode?: string | null }[]): void {
-  const expected = Object.entries(assignedSandboxRoutes);
+export function assertAssignedSandboxRoutes(
+  tenants: readonly { tenantCode: string; paymentProviderCode?: string | null }[],
+  selectedTenantCodes: readonly string[] = expectedTenantCodes
+): void {
+  assertNonAdminSandboxTenantSelection(selectedTenantCodes);
+  const expected = selectedTenantCodes.map(code => [code, assignedSandboxRoutes[code as keyof typeof assignedSandboxRoutes]] as const);
   if (tenants.length !== expected.length || expected.some(([code, provider]) =>
     tenants.filter(tenant => tenant.tenantCode === code && tenant.paymentProviderCode?.toLowerCase() === provider.toLowerCase()).length !== 1)) {
     throw new Error("Azure-dev tenant/provider routes differ from the approved assigned-provider matrix. No provider settings or orders were changed.");

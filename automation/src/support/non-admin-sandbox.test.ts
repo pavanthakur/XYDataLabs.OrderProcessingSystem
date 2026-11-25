@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applicationTenantClaimType, assertAssignedSandboxRoutes, assertNonAdminSandboxClaims, mapNonAdminSandboxIdentities } from "./non-admin-sandbox.js";
+import { applicationTenantClaimType, assertAssignedSandboxRoutes, assertNonAdminSandboxClaims, assertNonAdminSandboxTenantSelection, mapNonAdminSandboxIdentities } from "./non-admin-sandbox.js";
 
 const identity = { objectId: "11111111-1111-4111-8111-111111111111", directoryId: "22222222-2222-4222-8222-222222222222", apiClientId: "33333333-3333-4333-8333-333333333333", identityType: "member" as const };
 const tenantClaimType = applicationTenantClaimType;
@@ -55,6 +55,15 @@ test("Entra directory extension is emitted under its JWT claim alias", () => {
   assert.equal(tenantClaimType, "extn.applicationTenantCode");
 });
 
+test("non-admin sandbox selection supports a safe tenant subset without permitting empty, duplicate or unknown tenants", () => {
+  assert.doesNotThrow(() => assertNonAdminSandboxTenantSelection(["TenantB"]));
+  assert.doesNotThrow(() => assertNonAdminSandboxTenantSelection(["TenantB", "TenantC"]));
+  assert.doesNotThrow(() => assertNonAdminSandboxTenantSelection(["TenantA", "TenantB", "TenantC"]));
+  for (const selected of [[], ["TenantB", "TenantB"], ["tenantb"], [" TenantB "], ["TenantD"]]) {
+    assert.throws(() => assertNonAdminSandboxTenantSelection(selected), /unique TenantA\/TenantB\/TenantC selections/);
+  }
+});
+
 test("tenant-claim failure diagnostics identify claim shape without exposing values", () => {
   const claimValueSentinel = "DO_NOT_LOG_PRIVATE_CLAIM_VALUE";
   let message = "";
@@ -78,6 +87,10 @@ test("provider drift, missing tenants and duplicate routes stop the assigned-pro
     { tenantCode: "TenantC", paymentProviderCode: "OpenPay" }
   ];
   assert.doesNotThrow(() => assertAssignedSandboxRoutes(plan));
+  assert.doesNotThrow(() => assertAssignedSandboxRoutes([plan[1]], ["TenantB"]));
+  assert.doesNotThrow(() => assertAssignedSandboxRoutes([plan[2]], ["TenantC"]));
+  assert.throws(() => assertAssignedSandboxRoutes([plan[2]], ["TenantB"]), /routes differ/);
+  assert.throws(() => assertAssignedSandboxRoutes([plan[1]], ["TenantB", "TenantC"]), /routes differ/);
   assert.throws(() => assertAssignedSandboxRoutes(plan.slice(0, 2)), /routes differ/);
   assert.throws(() => assertAssignedSandboxRoutes([plan[0], plan[0], plan[2]]), /routes differ/);
   assert.throws(() => assertAssignedSandboxRoutes([...plan.slice(0, 2), { ...plan[2], paymentProviderCode: "Razorpay" }]), /routes differ/);

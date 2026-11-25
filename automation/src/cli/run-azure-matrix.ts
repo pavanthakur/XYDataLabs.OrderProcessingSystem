@@ -10,7 +10,7 @@ import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildRunPrefix } from "../support/customer-order-id.js";
 import { resolveEnvironmentKey } from "../support/environment-key.js";
 import {baselinePaymentScenarios} from "../contracts/payment-scenarios.js";
-import { mapNonAdminSandboxIdentities, type NonAdminIdentityType, type NonAdminSandboxIdentity } from "../support/non-admin-sandbox.js";
+import { assertNonAdminSandboxTenantSelection, mapNonAdminSandboxIdentities, type NonAdminIdentityType, type NonAdminSandboxIdentity } from "../support/non-admin-sandbox.js";
 
 interface AzureMatrixOptions {
   targets: string[];
@@ -118,9 +118,9 @@ async function main(): Promise<void> {
   const effectiveProviders: string[] = normalizedProviders;
   const matrixOutput: AzureMatrixOutput = {
     ...(options.nonAdminSandbox ? { identityMode: "non-admin-assigned-provider" as const } : {}),
-    ...(nonAdminSandboxIdentities ? { identityType: nonAdminSandboxIdentities.TenantA.identityType } : {}),
+    ...(nonAdminSandboxIdentities ? { identityType: nonAdminSandboxIdentities[options.tenantCodes[0]].identityType } : {}),
     ...(nonAdminSandboxIdentities ? {
-      identities: Object.entries(nonAdminSandboxIdentities).map(([tenantCode, identity]) => ({
+      identities: options.tenantCodes.map(tenantCode => [tenantCode, nonAdminSandboxIdentities[tenantCode]] as const).map(([tenantCode, identity]) => ({
         tenantCode,
         identitySha256: createHash("sha256").update(identity.objectId.toLowerCase()).digest("hex")
       }))
@@ -151,7 +151,7 @@ async function main(): Promise<void> {
     `Environment: ${environmentKey}`,
     "Runtime target config: automation/config/runtime-targets.json",
     `Targets: ${options.targets.join(", ")}`,
-    ...(nonAdminSandboxIdentities ? [`Non-admin identity type: ${nonAdminSandboxIdentities.TenantA.identityType}`] : []),
+    ...(nonAdminSandboxIdentities ? [`Non-admin identity type: ${nonAdminSandboxIdentities[options.tenantCodes[0]].identityType}`] : []),
     `Provider selection: ${isAzureDevFixtureMatrix ? "per-tenant Razorpay/OpenPay fixture, with exact route and setting restoration" : "runtime configuration -> tenant registry API"}`,
     `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
     `All-active-tenant two-provider fixture matrix: ${isAzureDevFixtureMatrix ? "yes" : "no"}`,
@@ -288,9 +288,10 @@ async function main(): Promise<void> {
       return journeyFailed || verificationFailed || restorationFailed;
     })
   );
-  const expectedNonAdminCount = options.authPreflightOnly ? 1 : 3;
+  const expectedNonAdminCount = options.authPreflightOnly ? 1 : options.tenantCodes.length;
   if (options.nonAdminSandbox && (rows.length !== expectedNonAdminCount ||
     new Set(rows.map(row => row.tenantCode)).size !== expectedNonAdminCount ||
+    rows.some(row => !options.tenantCodes.includes(row.tenantCode)) ||
     rows.some(row => row.adapterMode !== "sandbox" || row.cleanupOutcome !== "not-applicable") ||
     targetRuns[0]?.operatorSignOut?.status !== "PASS")) hasFailures = true;
   const fixtureCoverageFindings: string[] = [];
@@ -607,6 +608,9 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   if (authPreflightOnly && !operatorAssistedEntra) {
     throw new Error("--auth-preflight-only requires --operator-assisted-entra; it never creates an order or submits a payment.");
   }
+  if (nonAdminSandbox && authPreflightOnly && tenantCodes.length !== 1) {
+    throw new Error("Non-admin auth preflight requires exactly one selected tenant; no order or payment was created.");
+  }
   if (allActiveTenants && (!providerFixtureMatrixRequested || !operatorAssistedEntra || tenantCodes.length > 0 || tenantLimit !== null || allowPartialExecution || dryRun || !verify || headless || normalizedProviders.length !== 2 || !normalizedProviders.some((provider) => provider.toLowerCase() === "razorpay") || !normalizedProviders.some((provider) => provider.toLowerCase() === "openpay"))) {
     throw new Error("--all-active-tenants requires a complete headed Azure-dev Entra matrix with both Razorpay and OpenPay, verification enabled, no partial mode, no dry-run, and no tenant limit.");
   }
@@ -618,10 +622,11 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   }
   if (operatorAssistedEntra) tenantTimeoutMs = Math.max(tenantTimeoutMs, 420000);
   if (nonAdminSandbox && (!operatorAssistedEntra || headless || !verify || dryRun || servicePreflightOnly ||
-    normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" || tenantCodes.join(",") !== "TenantA,TenantB,TenantC" ||
+    normalizedTargets.length !== 1 || normalizedTargets[0] !== "azure-dev" ||
     normalizedProviders.length > 0 || allActiveTenants || allowPartialExecution || tenantLimit !== null || resumeCheckpoint)) {
-    throw new Error("Non-admin sandbox mode requires the complete headed Azure-dev assigned-provider matrix from the supervised task.");
+    throw new Error("Non-admin sandbox mode requires one or more unique TenantA/TenantB/TenantC selections in the headed Azure-dev assigned-provider matrix from the supervised task.");
   }
+  if (nonAdminSandbox) assertNonAdminSandboxTenantSelection(tenantCodes);
 
   return {
     targets: normalizedTargets,

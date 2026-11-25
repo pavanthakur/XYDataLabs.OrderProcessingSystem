@@ -57,6 +57,8 @@ Payment acceptance is a separate, payment-mutating gate; the no-payment isolatio
 
 The runner must preserve the server-assigned provider routes, create one fresh order per tenant, and submit no more than one payment per order. It does not change provider routes or automatically retry an uncertain transaction. If a result is ambiguous, stop and reconcile the existing order/payment status before any new attempt. The sanitized report identifies the identity type and records per-tenant hashes; it does not include UPNs or object IDs. This matrix is sandbox acceptance, not real-money or production certification.
 
+If a multi-tenant run stops after a tenant has already passed, do not rerun the default all-tenant command. Reconcile the interrupted provider order first, then select only the remaining tenants, for example `-TenantCodes TenantB` or `-TenantCodes TenantC`. This creates a fresh order only for the selected tenant(s); the original ambiguous order is never retried. For no-payment preflight, select exactly one tenant; its default remains TenantA.
+
 ## Safety boundary
 
 The GitHub guide workflow is informational only. 04a is read-only. 04b performs directory writes only from the operator's trusted local workstation after explicit confirmation. 05b is a headed, no-payment browser test. 06b is a separate supervised sandbox payment test and requires its own approval. None of these steps deploys Azure resources or changes application registrations.
