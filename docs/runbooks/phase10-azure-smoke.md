@@ -690,6 +690,19 @@ Live-run record for the approved dev window, updated 13 Nov 2026 after the first
 | Successful `01` What-If | Run [43454063480](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/43454063480): 26 creates, one ACA Log Analytics reference modification, two unchanged, no deletes. Secure Key Vault child details were not expanded in What-If; the Key Vault deployment later succeeded. |
 | Functions verifier and App Service auth remediation | Local implementation now uses Entra Bearer auth for SCM package verification, adds SCM/FTP Basic-auth-disable policies to all existing App Service modules, and makes the Azure preflight inspect all Bicep templates and deployment workflows for future App Services. Focused verifier/static-preflight tests pass 26/26, both affected Bicep modules compile, and static Azure preflight passes. The implementation is uncommitted and not deployed; live Basic-auth disablement and credential invalidation are therefore NOT VERIFIED. |
 
+### Functions storage RBAC split — implementation prerequisite
+
+The Phase 10 deployment implementation now provisions the dedicated Functions host Storage account and user-assigned identity in Bicep, but does not create the Storage Blob Data Owner role assignment there. Normal deployment OIDC is not expected to have `Microsoft.Authorization/roleAssignments/write`.
+
+Before running workflow `01`, configure and review a **separate environment-scoped OIDC bootstrap identity**:
+
+- Add `AZURE_RBAC_BOOTSTRAP_CLIENTID` as a GitHub Environment secret and `AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID` as its matching service-principal object-ID variable. Its federated credential must be limited to this repository and the matching GitHub environment subject/audience; the client ID must differ from `AZUREAPPSERVICE_CLIENTID`.
+- Grant that principal `Role Based Access Control Administrator` at the already-created application resource-group scope, with a condition permitting only `Storage Blob Data Owner` assignment create/delete for ServicePrincipal targets. Do not grant subscription Owner, User Access Administrator, or unconditioned RBAC administration. The workflow's read-only bootstrap preflight checks the exact grant and fails closed if it differs.
+- During actual deployment, the routine identity creates resources; the bootstrap identity assigns Storage Blob Data Owner at the exact Functions host Storage account ID and verifies it; the job then reauthenticates as the routine identity before continuing. Dry-run performs no grant. Functions is restarted after the grant so its managed-identity host-storage connection can initialize.
+- The existing temporary conditional RBAC grant recorded on the normal deployment principal is from the pre-split design and does **not** satisfy this bootstrap identity check. Do not dispatch workflow `01` until the distinct identity, federation, scope and condition are verified. Removal of the superseded temporary assignment is a separate exact-ID review/action.
+
+This separation is the Phase 10 Dev pilot. Before Staging/Production, complete [P11-W8](../internal/phase11-implementation-plan.md#p11-w8-environment-deployment-rbac-hardening-required-before-stagingproduction), including environment-specific identities, required-reviewer protection, and negative cross-scope/role tests. Local structural checks do not prove the Azure identities or RBAC grants exist.
+
 For each active Phase 10 service, preserve the currently deployed image digest and one verified rollback digest. Retention must use manifest digests, not tag strings: deleting a tag can delete its underlying manifest and all tags on that digest. Keep sanitized evidence outside the disposable dev resource group. Never remove staging/prod-protected digests during dev cleanup.
 
 Use the read-only usage snapshot before deployment, after each test day, and after cleanup:

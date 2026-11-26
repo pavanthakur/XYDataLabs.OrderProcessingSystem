@@ -61,6 +61,37 @@ The runner must preserve the server-assigned provider routes, create one fresh o
 
 If a multi-tenant run stops after a tenant has already passed, do not rerun the default all-tenant command. Reconcile the interrupted provider order first, then select only the remaining tenants, for example `-TenantCodes TenantB` or `-TenantCodes TenantC`. This creates a fresh order only for the selected tenant(s); the original ambiguous order is never retried. For no-payment preflight, select exactly one tenant; its default remains TenantA.
 
+## Optional fresh-account provisioning check
+
+This is a separate test of the account-provisioning tool, not a prerequisite for proving isolation when the existing three Member accounts are healthy. Do not delete or replace the established TenantA/B/C accounts to simulate a fresh start.
+
+After the dev API/UI have been redeployed and runtime smoke has passed:
+
+1. Copy the existing private manifest to a second file under `%LOCALAPPDATA%\XYDataLabs\phase10-entra-member-test-users\`. Keep the original baseline manifest unchanged.
+2. In the copy, retain exactly one mapping for every active tenant. Leave TenantB and TenantC rows and pinned object IDs unchanged. Replace only TenantA's UPN/display name with a unique disposable UPN on the verified organizational sign-in domain, and leave its `objectId` empty. Do not use a Gmail personal Microsoft account as an organizational Member.
+3. Run `Plan` with `-ManifestPath <private-copy>`. Proceed only if the result is exactly one `create-member-and-assign-tenant` for TenantA and `no-change` for TenantB and TenantC. Stop on any other proposed action.
+4. After separate approval, run `Apply` against that same copy with `-Confirm`; use the secure unique temporary-password prompt. The script pins the created object ID in the copy. Run `Verify` against the same file before browser sign-in.
+5. Run the no-payment isolation script with `-IdentityType member -ManifestPath <private-copy>`. Complete normal password change/MFA and confirm the disposable account is allowed only for TenantA, denied TenantB/C, and signs out successfully. This tests account provisioning and authorization, not payment acceptance.
+6. Preserve the sanitized report and exact object ID in the operator's private evidence record. Retire the disposable identity only through a separately reviewed and explicitly approved directory operation. Never infer deletion targets from UPN patterns or remove the baseline test accounts.
+
+Example command shape (replace `<private-copy>` with the full private path; do not put identity values in repository files or workflow inputs):
+
+```powershell
+$manifest = '<private-copy>'
+pwsh -NoProfile -File scripts/phase10-entra-member-test-users.ps1 -Mode Plan -ManifestPath $manifest -PromptForExpectedSubscriptionId
+pwsh -NoProfile -File scripts/phase10-entra-member-test-users.ps1 -Mode Apply -ManifestPath $manifest -PromptForExpectedSubscriptionId -Confirm
+pwsh -NoProfile -File scripts/phase10-entra-member-test-users.ps1 -Mode Verify -ManifestPath $manifest -PromptForExpectedSubscriptionId
+pwsh -NoProfile -File scripts/run-phase10-azure-dev-identity-isolation.ps1 -IdentityType member -ManifestPath $manifest -PromptForExpectedSubscriptionId
+```
+
+Do not automate deletion for this one-off check. If disposable-account cleanup becomes a recurring requirement, design a separate Plan/Apply lifecycle tool whose deletion allowlist comes only from a run-owned manifest of exact object IDs created by that run, with independent confirmation and post-action verification. Keep that tool and all Entra directory permissions separate from Azure resource-group cleanup.
+
+## Preserve Entra applications and identities during Azure cleanup
+
+Azure resource-group cleanup is not Entra directory cleanup. Keep the baseline Member test users, the separate replay approver/operator identities, and any existing guest accounts unless they are explicitly reviewed for retirement. Do not add user deletion, app deletion, or directory-wide cleanup options to workflows `00`/`01` or resource-group teardown.
+
+Retain the existing `GitHub-Actions-OIDC`, dev API, and dev SPA app registrations. They are directory-level authentication configuration, not disposable resource-group resources. After a fresh deployment, verify the OIDC federation, API scopes/tenant-claim extension/roles and service principal assignments; resolve the generated dev UI origin and confirm the SPA callback and logout URLs match that exact origin. Update only a demonstrated mismatch through a separately reviewed directory change. Do not create duplicate registrations for each deployment or delete/recreate these registrations as a cleanup shortcut.
+
 ## Safety boundary
 
 The GitHub guide workflow is informational only. 04a is read-only. 04b performs directory writes only from the operator's trusted local workstation after explicit confirmation. 05b is a headed, no-payment browser test. 06b is a separate supervised sandbox payment test and requires its own approval. None of these steps deploys Azure resources or changes application registrations.

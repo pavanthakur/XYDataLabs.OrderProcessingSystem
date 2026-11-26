@@ -1199,6 +1199,8 @@ jobs:
           GATEWAY_FQDN=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.gatewayContainerAppFqdn.value" -o tsv)
           UI_FQDN=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.uiContainerAppFqdn.value" -o tsv)
           FUNC_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.functionAppName.value" -o tsv)
+          HOST_STORAGE_ID=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.functionHostStorageAccountId.value" -o tsv)
+          HOST_STORAGE_PRINCIPAL_ID=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.functionHostStorageIdentityPrincipalId.value" -o tsv)
           KV_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.keyVaultName.value" -o tsv)
           AI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.appInsightsName.value" -o tsv)
           ACR_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.acrName.value" -o tsv)
@@ -1224,6 +1226,8 @@ jobs:
           echo "gatewayFqdn=${GATEWAY_FQDN}" >> $GITHUB_OUTPUT
           echo "uiFqdn=${UI_FQDN}" >> $GITHUB_OUTPUT
           echo "function=${FUNC_NAME}" >> $GITHUB_OUTPUT
+          echo "functionHostStorageAccountId=${HOST_STORAGE_ID}" >> $GITHUB_OUTPUT
+          echo "functionHostStorageIdentityPrincipalId=${HOST_STORAGE_PRINCIPAL_ID}" >> $GITHUB_OUTPUT
           echo "keyvault=${KV_NAME}" >> $GITHUB_OUTPUT
           echo "insights=${AI_NAME}" >> $GITHUB_OUTPUT
           echo "acr=${ACR_NAME}" >> $GITHUB_OUTPUT
@@ -1237,6 +1241,64 @@ jobs:
           echo "redis=${REDIS_NAME}" >> $GITHUB_OUTPUT
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
+
+      - name: Azure CLI Login (OIDC) for Functions storage RBAC bootstrap
+        if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_RBAC_BOOTSTRAP_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Grant exact Functions host Storage role using bootstrap identity
+        if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false }}
+        shell: bash
+        env:
+          STORAGE_ACCOUNT_ID: ${{ steps.outputs.outputs.functionHostStorageAccountId }}
+          STORAGE_IDENTITY_PRINCIPAL_ID: ${{ steps.outputs.outputs.functionHostStorageIdentityPrincipalId }}
+        run: |
+          set -euo pipefail
+          ROLE_ID='b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
+          [[ "$STORAGE_ACCOUNT_ID" == /subscriptions/*/resourceGroups/rg-orderprocessing-*/*/storageAccounts/* ]] || { echo 'Deployment output is not a resource-group-scoped Storage account ID.' >&2; exit 1; }
+          [[ "$STORAGE_IDENTITY_PRINCIPAL_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'Deployment output is not a valid managed-identity principal ID.' >&2; exit 1; }
+          ASSIGNMENTS="$(az role assignment list --scope "$STORAGE_ACCOUNT_ID" --assignee-object-id "$STORAGE_IDENTITY_PRINCIPAL_ID" --output json --only-show-errors)"
+          MATCHES="$(jq --arg role "$ROLE_ID" --arg scope "${STORAGE_ACCOUNT_ID,,}" --arg principal "${STORAGE_IDENTITY_PRINCIPAL_ID,,}" '[.[] | select((.roleDefinitionId | ascii_downcase | endswith($role)) and (.scope | ascii_downcase) == $scope and (.principalId | ascii_downcase) == $principal and .principalType == "ServicePrincipal")]' <<< "$ASSIGNMENTS")"
+          MATCH_COUNT="$(jq 'length' <<< "$MATCHES")"
+          if [[ "$MATCH_COUNT" == '0' ]]; then
+            az role assignment create \
+              --assignee-object-id "$STORAGE_IDENTITY_PRINCIPAL_ID" \
+              --assignee-principal-type ServicePrincipal \
+              --role "$ROLE_ID" \
+              --scope "$STORAGE_ACCOUNT_ID" \
+              --only-show-errors \
+              --output none
+          elif [[ "$MATCH_COUNT" != '1' ]]; then
+            echo "Expected one exact Functions host storage role assignment or none; found ${MATCH_COUNT}." >&2
+            exit 1
+          fi
+
+          VERIFIED="$(az role assignment list --scope "$STORAGE_ACCOUNT_ID" --assignee-object-id "$STORAGE_IDENTITY_PRINCIPAL_ID" --output json --only-show-errors | jq --arg role "$ROLE_ID" --arg scope "${STORAGE_ACCOUNT_ID,,}" --arg principal "${STORAGE_IDENTITY_PRINCIPAL_ID,,}" '[.[] | select((.roleDefinitionId | ascii_downcase | endswith($role)) and (.scope | ascii_downcase) == $scope and (.principalId | ascii_downcase) == $principal and .principalType == "ServicePrincipal")] | length')"
+          [[ "$VERIFIED" == '1' ]] || { echo 'Functions host Storage Blob Data Owner assignment could not be verified at exact resource scope.' >&2; exit 1; }
+          echo '✅ The dedicated RBAC bootstrap identity verified the Functions host Storage assignment at the exact Storage account scope.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refresh Azure CLI Login (OIDC) as routine deployment identity
+        if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Restart Functions host after storage access is granted
+        if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false }}
+        shell: bash
+        env:
+          RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
+          FUNCTION_APP: ${{ steps.outputs.outputs.function }}
+        run: |
+          set -euo pipefail
+          [[ -n "$RESOURCE_GROUP" && -n "$FUNCTION_APP" ]] || { echo 'Function App outputs are missing after deployment.' >&2; exit 1; }
+          az functionapp restart --resource-group "$RESOURCE_GROUP" --name "$FUNCTION_APP" --only-show-errors
 
       - name: Verify Functions SQL endpoint matches Azure SQL host
         shell: bash

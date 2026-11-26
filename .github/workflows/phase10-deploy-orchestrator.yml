@@ -312,6 +312,39 @@ jobs:
           export AZURE_TARGET_RESOURCE_GROUP="rg-orderprocessing-${ENV_SUFFIX}"
           node scripts/phase10-azure-preflight.mjs
 
+      - name: Require distinct environment-scoped RBAC bootstrap OIDC identity
+        shell: bash
+        env:
+          DEPLOY_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          RBAC_BOOTSTRAP_CLIENT_ID: ${{ secrets.AZURE_RBAC_BOOTSTRAP_CLIENTID }}
+          RBAC_BOOTSTRAP_PRINCIPAL_ID: ${{ vars.AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$RBAC_BOOTSTRAP_CLIENT_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'The environment-specific RBAC bootstrap OIDC client ID is not configured.' >&2; exit 1; }
+          [[ "$RBAC_BOOTSTRAP_PRINCIPAL_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'The environment-specific RBAC bootstrap principal object ID is not configured.' >&2; exit 1; }
+          [[ "${RBAC_BOOTSTRAP_CLIENT_ID,,}" != "${DEPLOY_CLIENT_ID,,}" ]] || { echo 'RBAC bootstrap must use a principal distinct from routine deployment OIDC.' >&2; exit 1; }
+
+      - name: Azure CLI Login (OIDC) as constrained RBAC bootstrap identity
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_RBAC_BOOTSTRAP_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Verify exact conditional RBAC bootstrap permission
+        shell: bash
+        env:
+          AZURE_EXPECTED_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+          AZURE_EXPECTED_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          AZURE_RBAC_BOOTSTRAP_CLIENT_ID: ${{ secrets.AZURE_RBAC_BOOTSTRAP_CLIENTID }}
+          AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_ENVIRONMENT" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="$TARGET_ENVIRONMENT"; fi
+          export AZURE_TARGET_RESOURCE_GROUP="rg-orderprocessing-${ENV_SUFFIX}"
+          node scripts/phase10-azure-rbac-bootstrap-preflight.mjs
+
   resolve_platform:
     name: Resolve Phase 10 Platform Foundation
     needs: [preflight]

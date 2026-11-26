@@ -541,6 +541,27 @@ Run these scenarios in local Docker, CI, Azure dev, and staging before Phase 11 
 
 Production promotion requires staging evidence plus an explicit approval. Production testing must use bounded, non-destructive verification unless a separately approved tenant migration is being executed.
 
+### P11-W8 Environment Deployment RBAC Hardening — Required Before Staging/Production
+
+**Problem statement:** the previous Phase 10 workflow `01` design deployed a dedicated Functions host Storage account and user-assigned identity, then created an account-scoped `Storage Blob Data Owner` assignment in `infra/modules/functions.bicep`. Its preflight required `Microsoft.Authorization/roleAssignments/write` from the normal GitHub OIDC deployment principal. The Dev dry-run stopped before what-if because that principal had subscription `Contributor` but no effective role-assignment write permission at `rg-orderprocessing-dev`. The Phase 10 pilot now separates this runtime grant from Bicep and defines a distinct bootstrap OIDC identity, but environment setup and live validation remain outstanding. Repeating the old pattern in Staging or Prod would either block deployment or encourage an unsafe permanent Owner/User Access Administrator grant to routine CI. Environment differences must not produce different ad-hoc privilege models.
+
+**Target standard:** separate resource deployment from IAM provisioning. Give each GitHub environment a distinct OIDC deployment identity with resource-management permissions scoped to that environment. A separately approved platform/IAM bootstrap path creates and verifies runtime managed-identity role assignments. The ordinary release path must verify required grants read-only and fail clearly when a grant is missing; it must not create, broaden, or delete RBAC assignments. Protect Staging and Prod GitHub environments with required reviewers and deployment branch/tag restrictions. Prefer separate Azure subscriptions for production (and staging where practical); otherwise use isolated environment resource groups, identities, app registrations, Key Vaults, policy, and budgets. Promote the same immutable image digests through environments rather than rebuilding.
+
+**Implementation steps:**
+
+1. Inventory every `Microsoft.Authorization/roleAssignments` resource in Bicep and workflow code. For each, record the target principal, exact role definition, narrowest resource scope, environment, creator workflow, and whether it is required only on first provisioning or on every deployment. Include the Functions Storage grant and optional Dev replay-runner Service Bus grants; do not infer optional grants from defaults.
+2. Split role assignments from the routine deployment template into a separately reviewed RBAC/bootstrap module or workflow. Keep the managed identity and target resources in the normal resource deployment path, but make IAM grant creation an explicit ordered prerequisite that receives the exact resource/principal IDs after provisioning.
+3. Create one OIDC identity per environment, bound to the repository and GitHub environment subject; scope ordinary deployment permissions to that environment's resource group and remove subscription-wide Contributor where feasible. Use GitHub environment approvals and branch restrictions for Staging/Prod. Do not store client secrets.
+4. Restrict the bootstrap identity to role-assignment administration at the environment scope. Prefer a time-bound/PIM or manually approved operator activation; where delegated automation is required, use conditional `Role Based Access Control Administrator` limited to the exact allowed role definitions and principal IDs/types, and constrain both role-assignment creation and deletion. Never grant subscription Owner or unrestricted User Access Administrator to routine CI.
+5. Migrate without deleting existing assignments: read and compare current role grants, create/verify the new bootstrap-owned grants, then remove only superseded permissions after runtime access checks pass. Preserve unrelated grants and resource state.
+6. Add deterministic tests proving normal deployment preflight is read-only, missing grants fail before deployment, existing grants permit routine redeploy without IAM-write access, and the bootstrap path rejects unapproved role IDs, principal types/IDs, environments, or scopes. Test idempotent first setup and subsequent redeploy separately.
+7. Prove the model in Dev: run bootstrap and deployment dry-runs, review exact role/scope deltas, deploy only after separate approval, then verify Functions host storage access and all configured Service Bus effects. Revoke temporary bootstrap elevation and prove normal redeploy still succeeds. Apply the same identity/workflow contract to Staging, then Prod only after independent staging acceptance and explicit production approval.
+8. Record per-environment OIDC subject, identity object ID, resource scope, allowed role set, approval policy, artifact digests, and sanitized verification evidence. Never record tokens or secret values.
+
+**Risks and controls:** missing a runtime role can leave a healthy-looking deployment unable to process storage or broker operations; preflight must validate exact grants and runtime smoke must exercise them. Splitting deployment ordering can create a bootstrap/deploy race; make the dependency explicit and fail closed. Existing assignments may be lost during refactoring; inventory and migrate additively before removing anything. Per-environment identities and approvals add administration overhead, but contain credential/federation mistakes and prevent Dev authority from reaching Prod.
+
+**Acceptance:** (a) the routine deployment identity has no `roleAssignments/write` or subscription-wide Contributor; (b) it can deploy and redeploy only inside its environment scope; (c) a separate audited bootstrap path can create only the approved runtime grants at exact scopes; (d) negative tests prove broader roles, principals, scopes, and cross-environment use are denied; (e) Dev, Staging, and Prod share the same workflow contract with environment-specific identities/configuration and explicit promotion approvals. **Effort estimate:** 1–2 engineering days after inventory, plus environment-specific validation windows; longer if the current subscription-scope deployment needs refactoring.
+
 ## Workstream Dependency Order
 
 ```text
@@ -563,6 +584,10 @@ P11-W3 + P11-W4 + P11-W5
         +--> P11-W6 Drift detection and repair
                     |
                     +--> P11-W7 Acceptance and handover
+
+P11-W8 Environment deployment RBAC hardening
+        |-- can proceed independently of tenant-topology work
+        +--> mandatory before any Staging/Production deployment or promotion
 ```
 
 - P11-W0 is the mandatory first implementation step; complete its local Docker acceptance before P11-W1 implementation begins. Azure remains a separately approved later gate.

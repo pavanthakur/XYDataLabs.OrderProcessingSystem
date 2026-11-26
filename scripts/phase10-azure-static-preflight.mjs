@@ -68,7 +68,7 @@ function validateAppServiceDeploymentWorkflows(workflows = []) {
   return failures;
 }
 
-export function auditAzureDeployContract({ functionsProject, functionsBicep, serviceBusBicep, hostingBicep, infraBicepFiles = [], deploymentWorkflows = [], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles, runtimeTargets }) {
+export function auditAzureDeployContract({ functionsProject, functionsBicep, functionsHostStorageBicep = '', serviceBusBicep, hostingBicep, infraBicepFiles = [], deploymentWorkflows = [], functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, rbacBootstrapPreflightScript = '', parameterFiles, runtimeTargets }) {
   const failures = [];
   const blocked = [];
   if (!/TargetFramework>net8\.0<\/TargetFramework>/.test(functionsProject)) failures.push('Functions project must target the validated .NET 8 isolated-worker runtime.');
@@ -138,24 +138,36 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, ser
       }
     }
   }
-  const storageContractPresent = /resource\s+hostStorage\s+'Microsoft\.Storage\/storageAccounts@/.test(functionsBicep)
-    && /resource\s+hostStorageIdentity\s+'Microsoft\.ManagedIdentity\/userAssignedIdentities@/.test(functionsBicep)
-    && /resource\s+hostStorageBlobDataOwner\s+'Microsoft\.Authorization\/roleAssignments@/.test(functionsBicep)
-    && /scope:\s*hostStorage[\s\S]*?roleDefinitionId:\s*storageBlobDataOwnerRoleId[\s\S]*?principalId:\s*hostStorageIdentity\.properties\.principalId/.test(functionsBicep)
-    && /allowBlobPublicAccess:\s*false/.test(functionsBicep)
-    && /allowSharedKeyAccess:\s*false/.test(functionsBicep)
-    && /minimumTlsVersion:\s*'TLS1_2'[\s\S]*?supportsHttpsTrafficOnly:\s*true/.test(functionsBicep)
+  const storageContractPresent = /resource\s+hostStorage\s+'Microsoft\.Storage\/storageAccounts@/.test(functionsHostStorageBicep)
+    && /resource\s+hostStorageIdentity\s+'Microsoft\.ManagedIdentity\/userAssignedIdentities@/.test(functionsHostStorageBicep)
+    && /resource\s+hostStorage\s+'Microsoft\.Storage\/storageAccounts@[\s\S]*?existing\s*=/.test(functionsBicep)
+    && /resource\s+hostStorageIdentity\s+'Microsoft\.ManagedIdentity\/userAssignedIdentities@[\s\S]*?existing\s*=/.test(functionsBicep)
+    && /allowBlobPublicAccess:\s*false/.test(functionsHostStorageBicep)
+    && /allowSharedKeyAccess:\s*false/.test(functionsHostStorageBicep)
+    && /minimumTlsVersion:\s*'TLS1_2'[\s\S]*?supportsHttpsTrafficOnly:\s*true/.test(functionsHostStorageBicep)
     && /name:\s*'AzureWebJobsStorage__accountName'[\s\S]*?value:\s*hostStorage\.name/.test(functionsBicep)
     && /name:\s*'AzureWebJobsStorage__credential'[\s\S]*?value:\s*'managedidentity'/.test(functionsBicep)
     && /name:\s*'AzureWebJobsStorage__clientId'[\s\S]*?value:\s*hostStorageIdentity\.properties\.clientId/.test(functionsBicep)
     && /type:\s*'SystemAssigned, UserAssigned'[\s\S]*?userAssignedIdentities:[\s\S]*?hostStorageIdentity\.id/.test(functionsBicep)
-    && /dependsOn:\s*\[[\s\S]*?hostStorageBlobDataOwner/.test(functionsBicep);
-  if (!storageContractPresent) blocked.push('Dedicated Functions host storage with a scoped managed-identity role assignment is not configured.');
+    && !/Microsoft\.Authorization\/roleAssignments@/.test(functionsBicep)
+    && /functionsHostStorage\.outputs\.hostStorageAccountName/.test(mainBicep)
+    && /functionsHostStorage\.outputs\.hostStorageIdentityName/.test(mainBicep);
+  if (!storageContractPresent) blocked.push('Dedicated Functions host storage and managed identity are not separated from runtime role-assignment provisioning.');
   if (!/param\s+functionsHostStorageSkuName\s+string/.test(mainBicep) || !/hostStorageSkuName:\s*functionsHostStorageSkuName/.test(mainBicep)) {
     failures.push('The Functions host-storage redundancy setting must be explicit in the deployment contract.');
   }
-  if (!/phase10-azure-preflight\.mjs/.test(orchestratorWorkflow) || !/roleAssignments\/write/.test(azurePreflightScript)) {
-    failures.push('Azure preflight must check the scoped role-assignment permission required for identity-based Functions storage.');
+  if (!/phase10-azure-preflight\.mjs/.test(orchestratorWorkflow) || /roleAssignments\/write/.test(azurePreflightScript)) {
+    failures.push('Routine Azure deployment preflight must not require roleAssignments/write.');
+  }
+  if (!/phase10-azure-rbac-bootstrap-preflight\.mjs/.test(orchestratorWorkflow)
+    || !/AZURE_RBAC_BOOTSTRAP_CLIENTID/.test(orchestratorWorkflow)
+    || !/AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID/.test(orchestratorWorkflow)
+    || !/AZURE_RBAC_BOOTSTRAP_CLIENT_ID/.test(rbacBootstrapPreflightScript)
+    || !/exact-conditional-bootstrap-grant/.test(rbacBootstrapPreflightScript)
+    || !/az role assignment create/.test(infraDeployWorkflow)
+    || !/functionHostStorageAccountId/.test(infraDeployWorkflow)
+    || !/Refresh Azure CLI Login \(OIDC\) as routine deployment identity/.test(infraDeployWorkflow)) {
+    failures.push('Functions storage RBAC must use a separate, verified bootstrap OIDC identity and exact storage-account-scoped grant.');
   }
   if (!/dryRun:[\s\S]*?default:\s*true/.test(orchestratorWorkflow)) failures.push('The manual Azure orchestrator must default to dry-run mode.');
   const imageParameterNames = ['gatewayImage', 'ordersImage', 'paymentsImage', 'inventoryImage', 'notificationsImage', 'uiImage'];
@@ -312,9 +324,10 @@ async function main() {
   }
   const infraBicepFiles = await collectBicepFiles(path.join(root, 'infra'));
   const deploymentWorkflows = await collectWorkflowFiles(path.join(root, '.github/workflows'));
-  const [functionsProject, functionsBicep, serviceBusBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
+  const [functionsProject, functionsBicep, functionsHostStorageBicep, serviceBusBicep, hostingBicep, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, rbacBootstrapPreflightScript, devParameters, stagingParameters, prodParameters, runtimeTargets] = await Promise.all([
     readFile(path.join(root, 'XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj'), 'utf8'),
     readFile(path.join(root, 'infra/modules/functions.bicep'), 'utf8'),
+    readFile(path.join(root, 'infra/modules/functions-host-storage.bicep'), 'utf8'),
     readFile(path.join(root, 'infra/modules/servicebus.bicep'), 'utf8'),
     readFile(path.join(root, 'infra/modules/hosting.bicep'), 'utf8'),
     readFile(path.join(root, 'scripts/verify-phase10-function-package-runtime.mjs'), 'utf8'),
@@ -322,12 +335,13 @@ async function main() {
     readFile(path.join(root, '.github/workflows/infra-deploy.yml'), 'utf8'),
     readFile(path.join(root, '.github/workflows/phase10-deploy-orchestrator.yml'), 'utf8'),
     readFile(path.join(root, 'scripts/phase10-azure-preflight.mjs'), 'utf8'),
+    readFile(path.join(root, 'scripts/phase10-azure-rbac-bootstrap-preflight.mjs'), 'utf8'),
     readFile(path.join(root, 'infra/parameters/phase10-dev.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'infra/parameters/phase10-staging.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'infra/parameters/phase10-prod.json'), 'utf8').then(JSON.parse),
     readFile(path.join(root, 'automation/config/runtime-targets.json'), 'utf8').then(JSON.parse),
   ]);
-  const result = auditAzureDeployContract({ functionsProject, functionsBicep, serviceBusBicep, hostingBicep, infraBicepFiles, deploymentWorkflows, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
+  const result = auditAzureDeployContract({ functionsProject, functionsBicep, functionsHostStorageBicep, serviceBusBicep, hostingBicep, infraBicepFiles, deploymentWorkflows, functionsPackageVerifier, mainBicep, infraDeployWorkflow, orchestratorWorkflow, azurePreflightScript, rbacBootstrapPreflightScript, parameterFiles: { dev: devParameters, staging: stagingParameters, prod: prodParameters }, runtimeTargets });
   for (const failure of result.failures) console.error(`[FAIL] ${failure}`);
   for (const reason of result.blocked) console.error(`[BLOCKED] ${reason}`);
   if (result.status === 'PASS') console.log('[PASS] Azure deployment contract is structurally ready for authorized live preflight.');

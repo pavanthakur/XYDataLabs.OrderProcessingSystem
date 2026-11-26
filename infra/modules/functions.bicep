@@ -15,8 +15,11 @@ param baseName string = 'orderprocessing'
 @description('App Service Plan SKU used for the Function App host')
 param sku string = 'B1'
 
-@description('Storage redundancy SKU for dedicated Functions host storage')
-param hostStorageSkuName string = 'Standard_LRS'
+@description('Name of the preprovisioned Functions host storage account')
+param hostStorageAccountName string
+
+@description('Name of the preprovisioned Functions host user-assigned identity')
+param hostStorageIdentityName string
 
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
@@ -63,53 +66,14 @@ var aspNetCoreEnvironment = environment == 'prod'
     ? 'Staging'
     : 'Development'
 var functionAppName = '${baseName}-functions-${effectiveResourceSuffix}'
-// Storage account names are globally unique, deterministic, and remain portable
-// across environments without embedding generated hostnames in runtime config.
-var storageAccountName = '${take(replace(toLower(baseName), '-', ''), 8)}${take(replace(toLower(effectiveResourceSuffix), '-', ''), 3)}${uniqueString(resourceGroup().id)}'
-var hostStorageIdentityName = '${baseName}-functions-storage-${effectiveResourceSuffix}'
 var operationsDatabaseConnectionString = 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Managed Identity;'
-var storageBlobDataOwnerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
 
-resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: storageAccountName
-  location: location
-  sku: {
-    name: hostStorageSkuName
-  }
-  kind: 'StorageV2'
-  properties: {
-    accessTier: 'Hot'
-    allowBlobPublicAccess: false
-    allowSharedKeyAccess: false
-    minimumTlsVersion: 'TLS1_2'
-    publicNetworkAccess: 'Enabled'
-    supportsHttpsTrafficOnly: true
-  }
-  tags: {
-    env: environment
-    app: baseName
-    component: 'functions-host-storage'
-  }
+resource hostStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: hostStorageAccountName
 }
 
-resource hostStorageIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource hostStorageIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: hostStorageIdentityName
-  location: location
-  tags: {
-    env: environment
-    app: baseName
-    component: 'functions-host-storage-identity'
-  }
-}
-
-resource hostStorageBlobDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(hostStorage.id, hostStorageIdentity.id, storageBlobDataOwnerRoleId)
-  scope: hostStorage
-  properties: {
-    roleDefinitionId: storageBlobDataOwnerRoleId
-    principalId: hostStorageIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
@@ -266,9 +230,6 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
       appSettings: appSettings
     }
   }
-  dependsOn: [
-    hostStorageBlobDataOwner
-  ]
 }
 
 // Deployment authentication is Entra/OIDC only. Do not enable publishing

@@ -305,6 +305,18 @@ module containerApps 'modules/containerapps.bicep' = {
   }
 }
 
+module functionsHostStorage 'modules/functions-host-storage.bicep' = {
+  name: 'functions-host-storage-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    resourceSuffix: effectiveResourceSuffix
+    baseName: baseName
+    hostStorageSkuName: functionsHostStorageSkuName
+  }
+}
+
 module functions 'modules/functions.bicep' = {
   name: 'functions-${environment}'
   scope: appRg
@@ -314,7 +326,8 @@ module functions 'modules/functions.bicep' = {
     resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     sku: 'B1'
-    hostStorageSkuName: functionsHostStorageSkuName
+    hostStorageAccountName: functionsHostStorage.outputs.hostStorageAccountName
+    hostStorageIdentityName: functionsHostStorage.outputs.hostStorageIdentityName
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     keyVaultUri: keyVaultUri
@@ -372,6 +385,8 @@ output uiContainerAppFqdn string = containerApps.outputs.uiContainerAppFqdn
 output functionAppName string = functions.outputs.functionAppName
 output functionHostStorageAccountName string = functions.outputs.hostStorageAccountName
 output functionHostStorageIdentityName string = functions.outputs.hostStorageIdentityName
+output functionHostStorageAccountId string = functionsHostStorage.outputs.hostStorageAccountId
+output functionHostStorageIdentityPrincipalId string = functionsHostStorage.outputs.hostStorageIdentityPrincipalId
 output keyVaultName string = keyVault.outputs.keyVaultName
 output appInsightsName string = insights.outputs.appInsightsName
 output acrName string = platformAcrName
