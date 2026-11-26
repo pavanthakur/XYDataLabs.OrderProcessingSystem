@@ -74,6 +74,7 @@
     "run:docker:matrix:dry": "tsx ./src/cli/run-docker-matrix.ts --dry-run",
     "run:azure:matrix": "tsx ./src/cli/run-azure-matrix.ts",
     "run:azure:dlq-replay-approval": "tsx ./src/cli/run-azure-dlq-replay-approval.ts",
+    "test:azure:replay-approver-preflight": "tsx --test src/browser/entra-replay-approver-preflight.browser.test.ts",
     "xydatalabs-test-azure-e2e-dev": "tsx ./src/cli/run-azure-matrix.ts --target azure-dev",
     "run:azure:matrix:dry": "tsx ./src/cli/run-azure-matrix.ts --dry-run"
   },

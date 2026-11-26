@@ -5,6 +5,7 @@ param(
     [ValidateSet('dev')][string]$Environment = 'dev',
     [Parameter(Mandatory = $false)][string]$ExpectedSubscriptionId,
     [string]$RunnerPrincipalObjectId,
+    [switch]$RequireRunnerSession,
     [string]$ReportPath
 )
 
@@ -225,6 +226,16 @@ function Get-ReplayDrillRuntimeChecks {
     return @($checks)
 }
 
+function Assert-ReplayRunnerSession {
+    param([string]$ExpectedObjectId, [string]$SignedInObjectId)
+    $expected = [guid]::Empty
+    $actual = [guid]::Empty
+    if (-not [guid]::TryParse($ExpectedObjectId, [ref]$expected) -or $expected -eq [guid]::Empty -or
+        -not [guid]::TryParse($SignedInObjectId, [ref]$actual) -or $actual -ne $expected) {
+        throw 'Active Azure CLI user is not the pinned replay runner; no runtime checks were started.'
+    }
+}
+
 if ($LibraryOnly) { return }
 if ([string]::IsNullOrWhiteSpace($ExpectedSubscriptionId) -or $ExpectedSubscriptionId -notmatch '^[0-9a-fA-F-]{36}$') {
     throw 'ExpectedSubscriptionId must identify the approved dev subscription; no Azure queries were started.'
@@ -241,6 +252,16 @@ $accountJson = & az account show --subscription $ExpectedSubscriptionId --query 
 if ($LASTEXITCODE -ne 0) { throw 'Azure CLI read-only account check failed; no Azure mutations were attempted.' }
 $account = $accountJson | ConvertFrom-Json
 if ($account.id -ne $ExpectedSubscriptionId -or $account.state -ne 'Enabled') { throw 'Azure CLI is not on the expected enabled subscription.' }
+
+if ($RequireRunnerSession) {
+    $activeAccountId = & az account show --query id -o tsv --only-show-errors 2>$null
+    if ($LASTEXITCODE -ne 0 -or ([string]$activeAccountId).Trim() -ne $ExpectedSubscriptionId) {
+        throw 'Select the approved dev subscription in the dedicated runner CLI session.'
+    }
+    $signedInObjectId = & az ad signed-in-user show --query id -o tsv --only-show-errors 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not verify the signed-in runner user; no runtime checks were started.' }
+    Assert-ReplayRunnerSession -ExpectedObjectId $RunnerPrincipalObjectId -SignedInObjectId ([string]$signedInObjectId).Trim()
+}
 
 $apps = @{}
 foreach ($appName in @($target.azureOrdersContainerAppName, $target.azurePaymentsContainerAppName, $target.azureInventoryContainerAppName, $target.azureNotificationsContainerAppName)) {
@@ -285,6 +306,8 @@ $result = [ordered]@{
     environment = 'dev'
     subscriptionId = $ExpectedSubscriptionId
     subscriptionVerified = $true
+    verificationScope = if ($RequireRunnerSession) { 'pinned-runner-session' } else { 'operator-side-inspection' }
+    runnerSessionVerified = [bool]$RequireRunnerSession
     runnerPrincipalObjectId = $RunnerPrincipalObjectId
     checkedUtc = [DateTimeOffset]::UtcNow.ToString('O')
     applicationRevisions = @($apps.GetEnumerator() | ForEach-Object { [ordered]@{ app = $_.Key; revision = $_.Value.properties.latestReadyRevisionName; image = $_.Value.properties.template.containers[0].image } })
@@ -300,6 +323,7 @@ if (Test-Path -LiteralPath $resolvedReport) { throw 'Replay preflight report alr
 [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($resolvedReport))
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $resolvedReport -Encoding utf8NoBOM
 Write-Output "Replay preflight status: $($result.status)"
+Write-Output "Verification scope: $($result.verificationScope); no Service Bus data-plane operation was attempted."
 Write-Output "Checks: $($checks.Count); blocked: $($failed.Count)"
 Write-Output "Report: $resolvedReport"
 if ($failed.Count -gt 0) { exit 2 }

@@ -6,6 +6,15 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw "Assertion failed: $Message" }
 }
 
+$pinnedRunner = [guid]::NewGuid().ToString('D')
+Assert-ReplayRunnerSession -ExpectedObjectId $pinnedRunner -SignedInObjectId $pinnedRunner.ToUpperInvariant()
+foreach ($wrongPrincipal in @('', 'invalid', [guid]::Empty.ToString('D'), [guid]::NewGuid().ToString('D'))) {
+    $rejected = $false
+    try { Assert-ReplayRunnerSession -ExpectedObjectId $pinnedRunner -SignedInObjectId $wrongPrincipal }
+    catch { $rejected = $_.Exception.Message -like '*not the pinned replay runner*' }
+    Assert-True $rejected 'a missing, malformed, or different principal cannot pass the runner-session check'
+}
+
 function New-ContainerApp([string]$Name, [string]$ReplayEnabled = 'false', [string]$Queue = 'dlq-replay-requests-dev', [string]$Image = 'registry.example.test/app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', [bool]$WithRequestFilter = $false) {
     $env = @(
         [pscustomobject]@{ name = 'ServiceBus__ReplayEnabled'; value = $ReplayEnabled },

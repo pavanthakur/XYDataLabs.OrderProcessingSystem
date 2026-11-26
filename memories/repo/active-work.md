@@ -27,7 +27,7 @@ Navigation, not proof. Verify Git, Azure state and referenced evidence before re
 ### Remaining before Phase 10 closure
 
 1. Verify hosted checks for the reviewed runner commit and inventory member-isolation, payment and release evidence. Use the tenant-scoped runner only for specifically approved missing cases; do not repeat successful sandbox cases solely to refresh reports.
-2. Establish a least-privileged non-Owner replay identity and pass its read-only preflight. Then separately run the duplicate/recovery drill, requiring exactly-once business effect, no cross-tenant effect, interruption recovery and exact publisher-setting restoration. Existing transport/quarantine evidence does not prove these.
+2. The operator reported successful dedicated approver account creation and role assignment. After approved redeployment, use task 04i for operator-side inspection and fresh approver-token verification, then run the separate pinned-runner preflight. Both live checks are NOT RUN for this tooling change. Only then consider the separately approved duplicate/recovery drill; require one business effect, no cross-tenant effect, interruption recovery, and exact publisher-setting restoration.
 3. Decide whether the 23-Nov stateless UI rollback/restore evidence satisfies L6 for the current release. If not, test only the required scope using verified immutable image digests; do not alter SQL state.
 4. Reconcile final L5-R/L6 evidence by source revision, dirty-state/diff identity, deployed image digests, configuration identity and run scope. Keep PASS/FAIL/BLOCKED/NOT RUN distinct. Do not close Phase 10 while required gates remain open.
 

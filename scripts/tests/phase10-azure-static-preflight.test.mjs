@@ -53,6 +53,33 @@ test('desktop Playwright tasks show the active subscription in their own termina
   assert.match(runner.slice(guard, resourceCall), /\(Get-ActiveAzureSubscription\) -ne \$ExpectedSubscriptionId/);
 });
 
+test('replay approver readiness task verifies token and runner without approving or replaying anything', async () => {
+  const ts = requireAutomation('typescript');
+  const taskSource = await readFile(new URL('../../.vscode/tasks.json', import.meta.url), 'utf8');
+  const parsed = ts.parseConfigFileTextToJson('tasks.json', taskSource);
+  assert.equal(parsed.error, undefined);
+  const task = parsed.config.tasks.find(entry => entry.label === '5 Run: Azure Dev 04i Replay Approver Readiness (No Mutations)');
+  assert.ok(task, 'dedicated post-deployment readiness task is discoverable');
+  assert.deepEqual(task.args, ['-NoProfile', '-File', '${workspaceFolder}/scripts/run-phase10-azure-replay-approver-preflight.ps1', '-PromptForExpectedSubscriptionId']);
+  const [runner, browser, token, packageJson] = await Promise.all([
+    readFile('scripts/run-phase10-azure-replay-approver-preflight.ps1', 'utf8'),
+    readFile('automation/src/browser/entra-replay-approver-preflight.browser.test.ts', 'utf8'),
+    readFile('automation/src/support/replay-approver-token.ts', 'utf8'),
+    readFile('automation/package.json', 'utf8')
+  ]);
+  assert.ok(runner.indexOf("-Mode Verify") < runner.indexOf("phase10-azure-replay-drill-preflight.ps1"));
+  assert.ok(runner.indexOf("phase10-azure-replay-drill-preflight.ps1") < runner.indexOf("test:azure:replay-approver-preflight"));
+  assert.match(runner, /no browser was opened/);
+  assert.match(browser, /Complete normal Entra sign-in\/MFA/);
+  assert.match(browser, /isCustomerListUrl/);
+  assert.match(browser, /applicationSignOut/);
+  assert.match(browser, /mutationPerformed: false/);
+  assert.match(token, /phase10-operator/);
+  assert.match(token, /access_as_user/);
+  assert.match(packageJson, /test:azure:replay-approver-preflight/);
+  assert.doesNotMatch(browser, /approveDlqReplay|dlqReplayApproval|paymentPagePath|CreateOrder|payments\/sandbox/i);
+});
+
 test('Azure operator checkpoint and launch safety regressions execute in hosted contract CI', () => {
   const environment = { ...process.env };
   delete environment.NODE_TEST_CONTEXT;

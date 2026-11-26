@@ -3120,6 +3120,103 @@
             "problemMatcher": []
         },
         {
+            "label": "5 Run: Azure Dev 04c Replay Approver Account Plan (Read Only)",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/phase10-entra-replay-approver-account.ps1", "-Mode", "Plan", "-PromptForExpectedSubscriptionId"],
+            "detail": "Read-only preflight for the dedicated Phase 10 replay approver Member account. Confirms the fixed dev UPN/domain and TenantA claim mapping; no directory writes.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04d Replay Approver Account Apply (Directory Write)",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/phase10-entra-replay-approver-account.ps1", "-Mode", "Apply", "-PromptForExpectedSubscriptionId", "-Confirm"],
+            "detail": "Creates only phase10-replay-approver@pavanthakurgmail.onmicrosoft.com as a TenantA organizational Member. Requires User.ReadWrite.All, typed confirmation, ShouldProcess, and a unique secure temporary-password prompt. No email is sent; normal MFA is required.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04e Replay Approver Account Verify (Read Only)",
+            "type": "process",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/phase10-entra-replay-approver-account.ps1", "-Mode", "Verify", "-PromptForExpectedSubscriptionId"],
+            "detail": "Read-only check that the dedicated approver is an enabled Member with only the expected TenantA claim. Run before app-role assignment.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04f Replay Approver Role Plan (Read Only)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-replay-approver.ps1",
+                "-Mode",
+                "Plan",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Read-only plan for assigning only the API phase10-operator app role to a pinned, non-Owner human Member. Requires a private approver manifest. Rejects tenant test users and the replay runner.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04g Replay Approver Role Apply (App Role Write)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-replay-approver.ps1",
+                "-Mode",
+                "Apply",
+                "-PromptForExpectedSubscriptionId",
+                "-Confirm"
+            ],
+            "detail": "Directory app-role assignment. Grants only phase10-operator to the pinned non-Owner human Member; requires typed confirmation and ShouldProcess. Review 04f first; never use a tenant test user or replay runner.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04h Replay Approver Role Verify (Read Only)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/phase10-entra-replay-approver.ps1",
+                "-Mode",
+                "Verify",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "Read-only verification that the pinned human Member has exactly the direct API phase10-operator assignment and remains a non-Owner, separate from the runner and tenant test users.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure Dev 04i Replay Approver Readiness (No Mutations)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-phase10-azure-replay-approver-preflight.ps1",
+                "-PromptForExpectedSubscriptionId"
+            ],
+            "detail": "After Azure dev is deployed, verifies the approver and direct role, inspects infrastructure and runner assignments from the operator's CLI session, then checks the approver's API token after normal Entra sign-in/MFA. This does not verify a signed-in runner or change Azure state.",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "new", "focus": true },
+            "problemMatcher": []
+        },
+        {
             "label": "5 Run: Azure Dev 05 Optional B2B Guest Isolation (No Payments)",
             "type": "process",
             "command": "pwsh",

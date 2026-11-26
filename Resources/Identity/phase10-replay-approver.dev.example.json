@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "environment": "dev",
+  "identityType": "replay-approver",
+  "directoryId": "",
+  "subscriptionId": "",
+  "apiClientId": "",
+  "approverObjectId": "",
+  "approverUserPrincipalName": "phase10-replay-approver@pavanthakurgmail.onmicrosoft.com",
+  "approverDisplayName": "Phase 10 Replay Approver",
+  "replayRunnerObjectId": "",
+  "tenantCode": "TenantA",
+  "tenantTestUserObjectIds": []
+}

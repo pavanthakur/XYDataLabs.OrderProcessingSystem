@@ -2,6 +2,8 @@
 
 This guide provisions three non-privileged Entra **Member** identities for no-payment tenant-isolation testing. Personal Microsoft accounts (including Gmail addresses registered as MSAs) cannot be converted into organizational Members. Use new UPNs under a verified domain in the target Entra directory. Keep existing guest/MSA objects unchanged.
 
+These TenantA/B/C accounts are exclusively regular-user isolation/payment-test identities. Do not grant them the `phase10-operator` API application role or replay-runner Service Bus roles; replay approval and execution use separate principals documented in the [Azure smoke runbook](phase10-azure-smoke.md#phase-10-replay-identities-and-automation).
+
 ## What the GitHub guide workflow does
 
 Run **04a-04b Phase 10 Entra Member Setup Guide** from branch `dev` and select either `plan` or `apply-guidance-only`. It only prints instructions and a link to this page. It has no Azure permissions, does not query Entra, and never provisions accounts. The `apply-guidance-only` choice is not an approval and does not execute Apply.
