@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -19,6 +19,92 @@ const paymentWorkflowSource = await readFile(new URL('../../.github/workflows/ph
 const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-azure-matrix.ts', import.meta.url), 'utf8');
 const replaySqlVerifierSource = await readFile(new URL('../verify-phase10-azure-dlq-replay.ps1', import.meta.url), 'utf8');
 const releaseInputVerifierSource = await readFile(new URL('../verify-phase10-release-inputs.mjs', import.meta.url), 'utf8');
+
+test('routed Azure cleanup verifies absence and never deletes shared platform resources', async t => {
+  const workflow = yaml.load(await readFile('.github/workflows/infra-deploy.yml', 'utf8'));
+  const cleanup = workflow.jobs.cleanup;
+  assert.match(cleanup.if, /run_cleanup == 'true'/);
+  const verify = cleanup.steps.find(step => step.run === 'bash scripts/phase10-azure-cleanup.sh "$CLEANUP_ENVIRONMENT"');
+  assert.ok(verify);
+  assert.equal(verify.env.CLEANUP_EXPECTED_SUBSCRIPTION_ID, '${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}');
+
+  const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles ?? 'C:/Program Files', 'Git/bin/bash.exe') : 'bash';
+  const script = await readFile('scripts/phase10-azure-cleanup.sh', 'utf8');
+  const mock = [
+    'export GITHUB_STEP_SUMMARY=summary.md',
+    'sleep() { :; }',
+    'az() {',
+    '  printf "%s\\n" "$*" >> calls',
+    '  case "$1 $2" in',
+    '    "account show") echo 11111111-1111-4111-8111-111111111111 ;;',
+    '    "group exists")',
+    '      if [[ -f deleted && "$CASE" == group-error ]]; then return 1; fi',
+    '      if [[ "$CASE" == absent || ( -f deleted && "$CASE" != group-still-present ) ]]; then echo false; else echo true; fi ;;',
+    '    "resource list") echo 1 ;;',
+    '    "group delete") [[ "$3 $4" == "--name rg-orderprocessing-dev" ]] || return 1; touch deleted ;;',
+    '    "keyvault list-deleted")',
+    '      if [[ "$CASE" == lookup-error || ( -f purged && "$CASE" == verify-error ) ]]; then return 1; fi',
+    '      if [[ "$CASE" == delayed && ! -f reservation_visible ]]; then touch reservation_visible; return 0; fi',
+    '      if [[ "$CASE" == absent || "$CASE" == delayed-missing || ( -f purged && "$CASE" != retained ) ]]; then return 0; fi',
+    '      owner=dev; if [[ "$CASE" == foreign ]]; then owner=platform; fi',
+    '      printf "/subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/rg-orderprocessing-%s/providers/Microsoft.KeyVault/vaults/kv-orderprocessing-dev\\tcentralindia\\n" "$owner" ;;',
+    '    "keyvault purge") [[ "$3 $4 $5 $6" == "--name kv-orderprocessing-dev --location centralindia" && "$CASE" != purge-error ]] || return 1; touch purged ;;',
+    '    *) return 99 ;;',
+    '  esac',
+    '}',
+  ].join('\n');
+  for (const [scenario, expectedExit, outcome, expectedPurge] of [
+    ['success', 0, /Purged and verified absent/, true],
+    ['delayed', 0, /Purged and verified absent/, true],
+    ['absent', 0, /No reservation observed/, false],
+    ['wrong-subscription', 1, /Not verified/, false],
+    ['group-still-present', 1, /Still present/, false],
+    ['group-error', 1, /Not verified/, false],
+    ['lookup-error', 1, /reservation \| Not verified/, false],
+    ['delayed-missing', 1, /reservation \| Not verified/, false],
+    ['foreign', 1, /purge not verified/, false],
+    ['purge-error', 1, /purge not verified/, true],
+    ['verify-error', 1, /purge not verified/, true],
+    ['retained', 1, /purge not verified/, true],
+  ]) {
+    await t.test(scenario, async () => {
+      const cwd = await mkdtemp(path.join(os.tmpdir(), 'phase10-cleanup-mock-'));
+      try {
+        const result = spawnSync(bash, ['--noprofile', '--norc', '-s', '--', 'dev'], {
+          input: mock + '\n' + script.replaceAll('\r\n', '\n'), cwd,
+          env: {
+            ...process.env, CASE: scenario,
+            CLEANUP_EXPECTED_SUBSCRIPTION_ID: scenario === 'wrong-subscription'
+              ? '22222222-2222-4222-8222-222222222222' : '11111111-1111-4111-8111-111111111111'
+          }, encoding: 'utf8', timeout: 20000
+        });
+        assert.equal(result.status, expectedExit, result.stderr || result.error?.message);
+        const summary = await readFile(path.join(cwd, 'summary.md'), 'utf8');
+        assert.match(summary, outcome);
+        assert.match(summary, /Shared platform ACR and pull identity \| Intentionally retained/);
+        const calls = await readFile(path.join(cwd, 'calls'), 'utf8');
+        assert.doesNotMatch(calls, /group delete --name rg-orderprocessing-platform/);
+        assert.equal(/^keyvault purge /m.test(calls), expectedPurge);
+        if (scenario === 'absent') assert.doesNotMatch(calls, /^group delete /m);
+        if (scenario === 'wrong-subscription') {
+          assert.match(result.stderr, /does not match the configured cleanup subscription/);
+          assert.match(calls.trim(), /^account show [^\r\n]+$/);
+        }
+      } finally {
+        for (const name of ['calls', 'summary.md', 'deleted', 'purged', 'reservation_visible']) {
+          await rm(path.join(cwd, name), { force: true });
+        }
+        await rmdir(cwd);
+      }
+    });
+  }
+  const invalid = spawnSync(bash, ['--noprofile', '--norc', '-s', '--', 'platform'], {
+    input: 'az() { exit 99; }\n' + script.replaceAll('\r\n', '\n'),
+    encoding: 'utf8', timeout: 20000
+  });
+  assert.equal(invalid.status, 1, invalid.stderr || invalid.error?.message);
+  assert.match(invalid.stderr, /Refusing cleanup/);
+});
 
 test('desktop Playwright tasks show the active subscription in their own terminal and confirm before resource calls', async () => {
   const ts = requireAutomation('typescript');

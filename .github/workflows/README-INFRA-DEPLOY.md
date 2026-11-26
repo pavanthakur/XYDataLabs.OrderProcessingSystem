@@ -194,6 +194,7 @@ Phase 10 cleanup is intentionally scoped to the Azure environment stack:
 - `Cleanup Infra=true` deletes the environment-scoped Azure resource group and the resources inside it.
 - `Cleanup Infra=true` does **not** delete container images that were published by the build workflow.
 - In the target platform foundation model, `Cleanup Infra=true` also does **not** delete the platform ACR or the stable pull identity.
+- Cleanup refuses to act if the active Azure CLI subscription does not match the workflow's configured subscription. The summary verifies the selected group is absent and reports the environment vault reservation separately. Lookup errors, an expected reservation that cannot be confirmed, and a reservation still visible after purge fail the run. Purge is restricted to a reservation whose original vault ID matches the selected subscription and environment group. The shared platform is listed as intentionally retained; a green run is not a subscription-wide teardown.
 - `Cleanup Infra=true` does **not** purge historical GitHub Actions logs or artifacts beyond the repository retention settings.
 - `Cleanup Infra=true` does **not** change Azure Log Analytics or Application Insights retention policies.
 

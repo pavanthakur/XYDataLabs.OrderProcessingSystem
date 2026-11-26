@@ -2,6 +2,8 @@
 
 Navigation, not proof. Verify Git, Azure state and referenced evidence before relying on this checkpoint.
 
+- Cleanup follow-up: GitHub run `45682615526` targeted only the dev group and reached its Key Vault purge step. The shared platform registry and pull identity were intentionally out of scope. The cleanup fix adds subscription binding, explicit group and vault verification, and a retained-platform summary; live validation is NOT RUN. Next: verify hosted CI for the cleanup candidate, then confirm the dev test window before any authorized live inventory or mutation.
+
 ## Phase 10 Azure-dev checkpoint — 25 November 2026
 
 - Phase 10 remains **OPEN**. Azure is dev-only; staging/prod and Azure cleanup were not performed in this checkpoint. Owner-reported prior dev resource-group cleanup is not independent cleanup evidence.
