@@ -57,7 +57,7 @@ on:
         default: false
         type: boolean
       deployRedis:
-        description: 'Deploy the Phase 10 Azure Redis baseline slice'
+        description: 'TRUE = Managed Redis for full acceptance; required in staging/prod. FALSE = dev-only in-memory cache, one replica; no Redis/payment acceptance, and existing Redis is not deleted.'
         required: false
         default: false
         type: boolean
@@ -169,7 +169,7 @@ jobs:
           echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
           echo "| SQL Server baseline | ${{ inputs.deploySql }} | Explicitly selected; routine redeploy defaults to preserve SQL credentials and data |" >> $GITHUB_STEP_SUMMARY
-          echo "| Redis baseline | ${{ inputs.deployRedis }} | Explicitly selected; routine redeploy defaults to preserve the existing slice |" >> $GITHUB_STEP_SUMMARY
+          echo "| Redis/cache | ${{ inputs.deployRedis }} | Dev false uses one replica with in-memory cache; it does not delete an existing Redis resource. Staging/prod require true. |" >> $GITHUB_STEP_SUMMARY
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
           echo "| acr_login_server | ${{ inputs.acrLoginServer || '(not provided)' }} |" >> $GITHUB_STEP_SUMMARY
@@ -331,6 +331,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${{ inputs.environment }}" ]; then
+            if [ "${{ inputs.environment }}" != "dev" ] && [ "${{ inputs.deployRedis }}" != "true" ]; then
+              echo "Managed Redis is required outside dev; select deployRedis=true." >&2
+              exit 1
+            fi
             echo "template=infra/main.phase10.bicep" >> $GITHUB_OUTPUT
             echo "params=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
             echo "phase10=true" >> $GITHUB_OUTPUT

@@ -2,6 +2,14 @@
 
 Navigation, not proof. Verify current Git, Azure state and linked evidence before relying on this checkpoint.
 
+## Redis-cost profile implementation — 28 November 2026
+
+- Added an explicit dev-only `in-memory-single-replica-dev` profile for workflow `04` **service-preflight only**. Default remains `managed-redis`; supervised browser/payment handoffs still require that acceptance profile.
+- With `deployRedis=false`, Bicep omits the Redis connection and caps the four cache-using Container Apps at one replica so the existing `IDistributedCache` memory fallback is process-local and bounded. Staging/prod are guarded to require Managed Redis.
+- Fail-closed guards stop a dev deployment from switching to in-memory while the named Redis resource still exists. `deployRedis=false` never deletes Redis; an existing resource must be removed through separately reviewed cleanup.
+- Validation performed locally: Phase 10 Azure static-preflight tests passed (65/65); Bicep build passed; Phase 10 environment contract passed (247 checks); AI-customization validation passed; documentation local-link check passed (201 links); `git diff --check` passed. No Azure workflow, deployment, live resource read, or payment was run. These changes are uncommitted and hosted CI is not run.
+- Limitation: this is a lower-cost learning/preflight profile, not Redis, scale-out, payment, or Phase 10 acceptance evidence. Use Managed Redis for those gates.
+
 ## Phase 10 Azure-dev checkpoint — 27 November 2026
 
 - Review revision: `a34a046ecc48631c277d5996db25c72aa6e81f93`

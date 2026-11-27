@@ -84,6 +84,10 @@ param sqlConnectionString string = ''
 @description('Optional Redis connection string for Phase 10 parity runs')
 param redisConnectionString string = ''
 
+// The in-memory IDistributedCache fallback is process-local. Keep each cache-using
+// app to one replica when Redis is intentionally omitted from the dev learning profile.
+var cacheServiceMaxReplicas = environment == 'dev' && empty(redisConnectionString) ? 1 : 10
+
 @description('Azure Container Registry login server used for image pulls')
 param acrLoginServer string = ''
 
@@ -305,7 +309,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       scale: {
         minReplicas: 1
-        maxReplicas: 10
+        maxReplicas: cacheServiceMaxReplicas
       }
     }
   }
@@ -345,7 +349,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       scale: {
         minReplicas: 1
-        maxReplicas: 10
+        maxReplicas: cacheServiceMaxReplicas
       }
     }
   }
@@ -385,7 +389,7 @@ resource paymentsApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       scale: {
         minReplicas: 1
-        maxReplicas: 10
+        maxReplicas: cacheServiceMaxReplicas
       }
     }
   }
@@ -536,7 +540,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       scale: {
         minReplicas: 1
-        maxReplicas: 10
+        maxReplicas: cacheServiceMaxReplicas
       }
     }
   }

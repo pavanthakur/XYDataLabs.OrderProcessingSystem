@@ -20,6 +20,14 @@ on:
           - supervised-browser-auth
           - supervised-sandbox-payments
           - razorpay-order-lookup
+      cacheProfile:
+        description: 'managed-redis = acceptance/supervised browser and payment profile. in-memory-single-replica-dev = dev no-payment preflight only; Redis must be absent (01 deployRedis=false).'
+        required: true
+        default: managed-redis
+        type: choice
+        options:
+          - managed-redis
+          - in-memory-single-replica-dev
       lookupTenantCode:
         description: 'Razorpay lookup only: exact tenant code for the existing order. Otherwise leave blank.'
         required: false
@@ -53,12 +61,14 @@ jobs:
         shell: pwsh
         env:
           RUN_MODE: ${{ inputs.runMode }}
+          CACHE_PROFILE: ${{ inputs.cacheProfile }}
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
           LOOKUP_ORDER: ${{ inputs.lookupOrderId }}
           LOOKUP_AMOUNT: ${{ inputs.lookupAmountMinor }}
         run: |
           if ($env:TARGET_ENVIRONMENT -ne 'dev' -or $env:GITHUB_REF -ne 'refs/heads/dev') { throw 'Browser handoff requires branch dev and environment dev.' }
+          if ($env:CACHE_PROFILE -ne 'managed-redis') { throw 'Supervised browser and payment handoffs require the managed-Redis acceptance profile.' }
           if ($env:LOOKUP_TENANT -or $env:LOOKUP_ORDER -or [long]$env:LOOKUP_AMOUNT -ne 0) { throw 'Lookup parameters are not allowed in supervised modes.' }
           $desktopMode = if ($env:RUN_MODE -eq 'supervised-browser-auth') { 'AuthPreflight' } else { 'ProviderMatrix' }
           @(
@@ -93,6 +103,7 @@ jobs:
         shell: pwsh
         env:
           RUN_MODE: ${{ inputs.runMode }}
+          CACHE_PROFILE: ${{ inputs.cacheProfile }}
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           LOOKUP_TENANT: ${{ inputs.lookupTenantCode }}
           LOOKUP_ORDER: ${{ inputs.lookupOrderId }}
@@ -100,6 +111,8 @@ jobs:
         run: |
           if ($env:TARGET_ENVIRONMENT -ne 'dev' -or $env:GITHUB_REF -ne 'refs/heads/dev') { throw 'Hosted workflow 04 requires branch dev and environment dev.' }
           if ($env:RUN_MODE -notin @('service-preflight','razorpay-order-lookup')) { throw 'Unknown hosted run mode.' }
+          if ($env:CACHE_PROFILE -notin @('managed-redis','in-memory-single-replica-dev')) { throw 'Unknown cache profile.' }
+          if ($env:CACHE_PROFILE -eq 'in-memory-single-replica-dev' -and $env:RUN_MODE -ne 'service-preflight') { throw 'The in-memory profile is available only for the no-payment dev service preflight.' }
           if ($env:RUN_MODE -eq 'razorpay-order-lookup') {
             if ($env:LOOKUP_TENANT -cnotmatch '^[A-Za-z0-9_-]{1,64}$' -or $env:LOOKUP_ORDER -cnotmatch '^order_[A-Za-z0-9]{1,80}$' -or [long]$env:LOOKUP_AMOUNT -le 0) { throw 'Invalid read-only lookup parameters.' }
           }
@@ -138,6 +151,9 @@ jobs:
 
           RG_NAME="$(read_target_field azureResourceGroupName)"
           GATEWAY_APP="$(read_target_field azureGatewayContainerAppName)"
+          ORDERS_APP="$(read_target_field azureOrdersContainerAppName)"
+          PAYMENTS_APP="$(read_target_field azurePaymentsContainerAppName)"
+          INVENTORY_APP="$(read_target_field azureInventoryContainerAppName)"
           UI_APP="$(read_target_field azureUiContainerAppName)"
           URL_MODE="$(read_target_field publicUrlMode)"
           SQL_SERVER="$(read_target_field azureSqlServerName)"
@@ -203,6 +219,9 @@ jobs:
           echo "targetKey=${TARGET_KEY}" >> "$GITHUB_OUTPUT"
           echo "resourceGroup=${RG_NAME}" >> "$GITHUB_OUTPUT"
           echo "gatewayApp=${GATEWAY_APP}" >> "$GITHUB_OUTPUT"
+          echo "ordersApp=${ORDERS_APP}" >> "$GITHUB_OUTPUT"
+          echo "paymentsApp=${PAYMENTS_APP}" >> "$GITHUB_OUTPUT"
+          echo "inventoryApp=${INVENTORY_APP}" >> "$GITHUB_OUTPUT"
           echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
           echo "sqlServer=${SQL_SERVER}" >> "$GITHUB_OUTPUT"
           echo "redisName=${REDIS_NAME}" >> "$GITHUB_OUTPUT"
@@ -219,6 +238,7 @@ jobs:
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| Environment | ${{ inputs.environment }} |"
+            echo "| Cache Profile | ${{ inputs.cacheProfile }} |"
             echo "| Azure Resource Suffix | ${ENV_SUFFIX} |"
             echo "| Runtime Target | ${TARGET_KEY} |"
             echo "| Resource Group | ${RG_NAME} |"
@@ -237,29 +257,66 @@ jobs:
             echo "- [UI Container App](${UI_URL})"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify SQL and Redis baseline resources exist
+      - name: Verify SQL and selected cache profile
         shell: bash
+        env:
+          CACHE_PROFILE: ${{ inputs.cacheProfile }}
         run: |
+          set -euo pipefail
           RG_NAME="${{ steps.topology.outputs.resourceGroup }}"
           SQL_SERVER="${{ steps.topology.outputs.sqlServer }}"
           REDIS_NAME="${{ steps.topology.outputs.redisName }}"
+          CACHE_APPS=(
+            "${{ steps.topology.outputs.gatewayApp }}"
+            "${{ steps.topology.outputs.ordersApp }}"
+            "${{ steps.topology.outputs.paymentsApp }}"
+            "${{ steps.topology.outputs.inventoryApp }}"
+          )
 
           az sql server show --resource-group "$RG_NAME" --name "$SQL_SERVER" --only-show-errors 1>/dev/null
-          az resource show \
+          redis_resources="$(az resource list \
             --resource-group "$RG_NAME" \
             --resource-type "Microsoft.Cache/redisEnterprise" \
-            --name "$REDIS_NAME" \
-            --only-show-errors \
-            1>/dev/null
+            --only-show-errors --output json)"
+          redis_count="$(printf '%s' "$redis_resources" | jq --arg redisName "$REDIS_NAME" '[.[] | select(.name == $redisName)] | length')"
+
+          if [[ "$CACHE_PROFILE" == "managed-redis" ]]; then
+            [[ "$redis_count" -eq 1 ]] || { echo "Managed Redis profile requires exactly one ${REDIS_NAME} resource." >&2; exit 1; }
+          else
+            [[ "$CACHE_PROFILE" == "in-memory-single-replica-dev" ]] || { echo 'Unknown cache profile.' >&2; exit 1; }
+            [[ "$redis_count" -eq 0 ]] || { echo "In-memory profile requires ${REDIS_NAME} to be absent. deployRedis=false does not delete an existing resource; remove it only through a separately reviewed cleanup action." >&2; exit 1; }
+          fi
+
+          for app in "${CACHE_APPS[@]}"; do
+            [[ -n "$app" ]] || { echo 'A cache-using Container App name is missing from runtime-targets.json.' >&2; exit 1; }
+            app_env_names="$(az containerapp show --resource-group "$RG_NAME" --name "$app" --query 'properties.template.containers[].env[].name' --output tsv --only-show-errors)"
+            max_replicas="$(az containerapp show --resource-group "$RG_NAME" --name "$app" --query 'properties.template.scale.maxReplicas' --output tsv --only-show-errors)"
+            has_redis_env=false
+            if printf '%s\n' "$app_env_names" | grep -Fxq 'ConnectionStrings__Redis'; then has_redis_env=true; fi
+
+            if [[ "$CACHE_PROFILE" == "managed-redis" && "$has_redis_env" != true ]]; then
+              echo "${app} has no Redis connection setting under the managed-Redis profile." >&2; exit 1
+            fi
+            if [[ "$CACHE_PROFILE" == "in-memory-single-replica-dev" ]]; then
+              [[ "$has_redis_env" == false ]] || { echo "${app} still has a Redis connection setting; refusing to label it in-memory." >&2; exit 1; }
+              [[ "$max_replicas" == "1" ]] || { echo "${app} maxReplicas must be 1 for process-local in-memory cache; found ${max_replicas}." >&2; exit 1; }
+            fi
+          done
 
           {
             echo ""
-            echo "### SQL and Redis Baseline"
+            echo "### SQL and Cache Profile"
+            echo ""
+            echo "Selected profile: **${CACHE_PROFILE}**"
             echo ""
             echo "| Resource | Status |"
             echo "|---|---|"
             echo "| SQL Server ${SQL_SERVER} | Present |"
-            echo "| Redis ${REDIS_NAME} | Present |"
+            if [[ "$CACHE_PROFILE" == "managed-redis" ]]; then
+              echo "| Redis ${REDIS_NAME} | Present; configured on cache-using apps |"
+            else
+              echo "| Redis ${REDIS_NAME} | Absent; cache-using apps have no Redis setting and maxReplicas=1 |"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify tenant and provider matrix contract

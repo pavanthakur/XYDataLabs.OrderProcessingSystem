@@ -177,7 +177,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
 **Shared contract with local Docker validation:**
 - same environment suffix pattern (`dev`, `staging`, `prod`)
 - same split-service shape (gateway/orders/inventory/notifications/UI)
-- same baseline SQL and Redis availability in the active Phase 10 path
+- SQL on the active Phase 10 path; Managed Redis for full acceptance, with a dev-only single-replica in-memory learning profile that is not parity evidence
 - same cleanup symmetry (`appname-env` resources can be torn down safely)
 - different public URL style only at the hosting layer: local Docker uses fixed localhost ports, Azure Container Apps uses generated ingress plus optional aliases
 - the image release runs separately from deployment, with one job per service and a run-owned manifest that records immutable digest references
@@ -232,7 +232,7 @@ ACR should be treated as a production prerequisite for the runtime image path, n
 | Add ACR registry | Host Phase 10 images in Azure ACR | Current Phase 10 target |
 | Switch image publish path | Push digest-pinned artifacts to ACR from the separate release workflow | Current Phase 10 target |
 | Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Current Phase 10 target |
-| SQL / Redis baseline | Deploy SQL Server and Redis as part of the default Phase 10 path | Current Phase 10 target |
+| SQL / Redis | SQL is independently selected; Managed Redis is required for full acceptance and outside dev; dev may explicitly use the single-replica in-memory learning profile | Current Phase 10 target |
 | Historical GHCR cleanup | Keep only the cleanup-only path for old package versions | Retained for retention workflow |
 | Historical GHCR runtime token | No longer needed for the active Phase 10 runtime image path | Completed for active deploy path |
 
@@ -254,7 +254,7 @@ Use [docs/internal/phase10-parity-matrix.md](../../docs/internal/phase10-parity-
 | Need | What to add back or decide | Workflow touchpoint |
 |---|---|---|
 | SQL Server | Explicit `deploySql` input; existing SQL bootstrap login is verified and reused, not automatically rotated | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
-| Redis | Explicit `deployRedis` input, off by default on redeploy | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| Redis/cache | Explicit `deployRedis`; false is a dev-only in-memory profile and does not delete an existing Redis resource | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
 | App Service URLs | Not part of the active containerized target; use friendly aliases / Front Door names for Container Apps | alias planning in `infra-deploy.yml` |
 | Portal visibility | Summarize the live portal endpoints and resource inventory in one run summary | wrapper summary + internal deployment summary |
 

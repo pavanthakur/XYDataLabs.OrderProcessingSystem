@@ -529,7 +529,7 @@ Historical 2026-07 dev runs above used the then-configured custom-domain policy.
 | Hosting model | Azure App Service | Azure Container Apps |
 | Image/build path | API/UI code deployment to App Service | Separate service image build + container-app deploy |
 | SQL Server | Created by the active Phase 10 baseline | Created by `01 Phase 10 Azure Deploy Orchestrator` in the environment RG |
-| Redis | Created by the active Phase 10 baseline | Created as Azure Managed Redis by `01 Phase 10 Azure Deploy Orchestrator` in the environment RG |
+| Redis | Required for complete Phase 10 acceptance | Created as Azure Managed Redis by `01` when `deployRedis=true`; dev-only learning profile may omit it |
 | App Insights | Created and configured | Created and configured |
 | Key Vault | Created and used for app secrets | Created and used for runtime secrets |
 | Service Bus | Not the bootstrap focus | Core Phase 10 transport resource |
@@ -541,7 +541,7 @@ If you want Azure to match the local Docker containerized experience, treat the 
 | Requirement | Current Phase 10 state | What would be needed to match the containerized target |
 |---|---|---|
 | SQL Server | Included in the active Phase 10 baseline | Verify the SQL module outputs appear in the deployment summary and portal |
-| Redis | Included in the active Phase 10 baseline | Verify the Redis module outputs appear in the deployment summary and portal |
+| Redis | Required for the managed-Redis acceptance profile | Verify the Redis module outputs appear in the deployment summary and portal |
 | App Service URLs | Not part of the containerized target | Use Container Apps ingress plus friendly aliases / Front Door names; do not expect `azurewebsites.net` from the active path |
 
 ### CI/CD implementation plan for containerized parity
@@ -599,7 +599,7 @@ Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD
 | Azure identity | OIDC for login only | OIDC + Managed Identity for runtime access | `phase10-deploy-orchestrator.yml`, `infra/main.phase10.bicep`, identity modules | No stored Azure client secrets; runtime auth uses identity |
 | Public ingress | Container Apps FQDN only | Container Apps FQDN + friendly alias or Front Door/WAF | `infra-deploy.yml` alias handling, wrapper summary | Stable public URL and summary link for gateway/UI |
 | SQL Server | Included in active Phase 10 baseline | Verify the SQL output appears in Azure summary and portal | `infra/main.phase10.bicep`, workflow outputs, runbook | SQL output appears in Azure summary and portal |
-| Redis | Included in active Phase 10 baseline | Verify the Azure Managed Redis output appears in Azure summary and portal | `infra/main.phase10.bicep`, workflow outputs, runbook | Redis output appears in Azure summary and portal |
+| Redis | Required for full Phase 10 acceptance; optional only in the dev learning profile | Verify the Azure Managed Redis output appears in Azure summary and portal when selected | `infra/main.phase10.bicep`, workflow outputs, runbook | Managed profile has Redis; in-memory dev profile explicitly proves absence |
 | App Service URLs | Legacy only | Not the active target; replace with containerized ingress/aliases | Archive docs/workflows, keep Phase 10 docs containerized | No operator expects `azurewebsites.net` for Phase 10 |
 | Observability | App Insights + LAW present | Add Monitor/trace/alerts as production baseline | `infra/main.phase10.bicep`, monitoring modules | Logs, traces, and alerts visible end to end |
 | Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
@@ -825,9 +825,18 @@ To launch the deployment from GitHub:
 3. Click `01 Phase 10 Azure Deploy Orchestrator`.
 4. Click `Run workflow`.
 5. Choose the target branch.
-6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`. Select `deploySql` and `deployRedis` only for the slices being provisioned or intentionally updated. With `deploySql=true`, configure the environment's SQL Entra administrator object ID and login. The OIDC-authenticated deployment generates a bootstrap credential only for a new SQL server. For an existing server, it reads the environment vault and verifies the credential with `SELECT 1` before ARM can update SQL. Missing, unreadable or rejected credentials block deployment; recover them separately rather than resetting the password during a retry.
+6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`. Select `deploySql` and `deployRedis` only for the slices being provisioned or intentionally updated. In dev only, `deployRedis=false` selects the single-replica in-memory learning configuration; staging/prod require `deployRedis=true`. This flag does not delete an existing Redis resource. For a fresh in-memory dev stack, start from an environment with no Redis resource; otherwise use a separately reviewed resource cleanup before choosing the in-memory profile. With `deploySql=true`, configure the environment's SQL Entra administrator object ID and login. The OIDC-authenticated deployment generates a bootstrap credential only for a new SQL server. For an existing server, it reads the environment vault and verifies the credential with `SELECT 1` before ARM can update SQL. Missing, unreadable or rejected credentials block deployment; recover them separately rather than resetting the password during a retry.
 
    After ARM deploys SQL, the workflow checks the Entra administrator and then verifies that the Key Vault value matches and can open a SQL session before migrations and workload grants. Passing those checks does not replace the runtime managed-identity tenant-registry check. What-if uses a placeholder, not the live bootstrap credential. The local SQL firewall hook is not a deployment prerequisite; use the scoped Entra verifier and its temporary firewall lease for local evidence when authorized.
+
+#### Redis/cache selection quick guide
+
+| Goal | Workflow `01` `deployRedis` | Workflow `04` selection | Scope |
+|---|---|---|---|
+| Full Phase 10 or Redis acceptance | `true` | `managed-redis` | Managed Redis; required for staging/prod and supervised browser/payment acceptance. It has an Azure cost. |
+| Lower-cost dev learning preflight | `false`, only on a dev deployment where the named Redis resource is already absent | `runMode=service-preflight`, `cacheProfile=in-memory-single-replica-dev` | No-payment check of Redis absence, app configuration and one-replica limits. Not Redis, scale-out, or payment acceptance. |
+
+The in-memory fallback is process-local. Workflow `01` blocks switching to it while Redis exists; `deployRedis=false` does not delete the resource. Remove an existing Redis only through a separately reviewed cleanup. Do not use the in-memory profile for staging or production.
 7. Click `Run workflow` to start the deployment.
 
 After the deploy finishes:

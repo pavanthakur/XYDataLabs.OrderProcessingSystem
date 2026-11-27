@@ -16,6 +16,9 @@ const requireAutomation = createRequire(new URL('../../automation/package.json',
 const yaml = requireAutomation('js-yaml');
 const verifierSource = await readFile(new URL('../verify-payment-run-azure.ps1', import.meta.url), 'utf8');
 const paymentWorkflowSource = await readFile(new URL('../../.github/workflows/phase10-azure-payment-matrix.yml', import.meta.url), 'utf8');
+const containerAppsBicepSource = await readFile(new URL('../../infra/modules/containerapps.bicep', import.meta.url), 'utf8');
+const deployOrchestratorSource = await readFile(new URL('../../.github/workflows/phase10-deploy-orchestrator.yml', import.meta.url), 'utf8');
+const infraDeploySource = await readFile(new URL('../../.github/workflows/infra-deploy.yml', import.meta.url), 'utf8');
 const matrixRunnerSource = await readFile(new URL('../../automation/src/cli/run-azure-matrix.ts', import.meta.url), 'utf8');
 const replaySqlVerifierSource = await readFile(new URL('../verify-phase10-azure-dlq-replay.ps1', import.meta.url), 'utf8');
 const releaseInputVerifierSource = await readFile(new URL('../verify-phase10-release-inputs.mjs', import.meta.url), 'utf8');
@@ -405,6 +408,42 @@ test('hosted service-preflight-only mode is dev-only and cannot reach payment au
   assert.ok(preflightGuard >= 0 && paymentExecution > preflightGuard, 'service-only mode must continue past the target without invoking browser payment automation');
   assert.match(matrixRunnerSource, /--service-preflight-only/);
   assert.match(matrixRunnerSource, /runId: process\.env\.GITHUB_RUN_ID \?\? matrixRunId/);
+});
+
+test('dev in-memory learning profile is explicit, single-replica, and excluded from Redis acceptance', () => {
+  const workflow = yaml.load(paymentWorkflowSource);
+  const profile = workflow.on.workflow_dispatch.inputs.cacheProfile;
+  assert.equal(profile.default, 'managed-redis');
+  assert.deepEqual(profile.options, ['managed-redis', 'in-memory-single-replica-dev']);
+  assert.match(profile.description, /acceptance\/supervised browser and payment profile/);
+  assert.match(profile.description, /no-payment preflight only/);
+
+  const hostedSelectionGuard = workflow.jobs.azure_payment_matrix.steps
+    .find(step => step.name === 'Validate hosted Azure-dev run selection').run;
+  assert.match(hostedSelectionGuard, /in-memory-single-replica-dev.*RUN_MODE.*service-preflight/);
+  const profileVerification = workflow.jobs.azure_payment_matrix.steps
+    .find(step => step.name === 'Verify SQL and selected cache profile').run;
+  assert.match(profileVerification, /redis_count/);
+  assert.match(profileVerification, /ConnectionStrings__Redis/);
+  assert.match(profileVerification, /maxReplicas/);
+  assert.match(profileVerification, /in-memory-single-replica-dev/);
+  assert.doesNotMatch(profileVerification, /properties\.template\.containers\[\]\.env\[\]\.value/);
+
+  assert.match(containerAppsBicepSource, /environment == 'dev' && empty\(redisConnectionString\) \? 1 : 10/);
+  assert.equal((containerAppsBicepSource.match(/maxReplicas: cacheServiceMaxReplicas/g) ?? []).length, 4);
+
+  for (const source of [deployOrchestratorSource, infraDeploySource]) {
+    assert.match(source, /Managed Redis is required outside dev/);
+    assert.match(source, /deployRedis=true/);
+  }
+  const deploymentWorkflow = yaml.load(deployOrchestratorSource);
+  assert.match(deploymentWorkflow.on.workflow_dispatch.inputs.deployRedis.description, /TRUE = Managed Redis/);
+  assert.match(deploymentWorkflow.on.workflow_dispatch.inputs.deployRedis.description, /FALSE = dev-only in-memory cache/);
+  const cacheSelectionGuard = deploymentWorkflow.jobs.preflight.steps
+    .find(step => step.name === 'Prevent accidental dev cache-mode change while Redis exists');
+  assert.equal(cacheSelectionGuard.if, "inputs.environment == 'dev' && inputs.deployRedis == false");
+  assert.match(cacheSelectionGuard.run, /az resource list/);
+  assert.match(cacheSelectionGuard.run, /would remove Redis configuration.*would not delete the billable resource/);
 });
 
 test('Azure Functions keep-alive is required in IaC, deployment verification, and transport preflight', () => {
@@ -833,7 +872,7 @@ test('workflow 04 sends supervised modes only to an unprivileged desktop handoff
     await writeFile(script, handoff.steps[0].run, 'utf8');
     const invoke = (overrides) => execFileSync('pwsh', ['-NoProfile', '-File', script], {
       stdio: 'pipe', env: { ...process.env, GITHUB_REF: 'refs/heads/dev', GITHUB_SHA: 'candidate-sha',
-        GITHUB_STEP_SUMMARY: summary, TARGET_ENVIRONMENT: 'dev', RUN_MODE: 'supervised-browser-auth',
+        GITHUB_STEP_SUMMARY: summary, TARGET_ENVIRONMENT: 'dev', RUN_MODE: 'supervised-browser-auth', CACHE_PROFILE: 'managed-redis',
         LOOKUP_TENANT: '', LOOKUP_ORDER: '', LOOKUP_AMOUNT: '0', ...overrides },
     });
     assert.throws(() => invoke({ GITHUB_REF: 'refs/heads/staging' }), /requires branch dev/);

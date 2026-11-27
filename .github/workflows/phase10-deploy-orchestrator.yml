@@ -51,7 +51,7 @@ on:
         default: false
         type: boolean
       deployRedis:
-        description: 'Provision/update the Redis baseline. Select only when the Redis slice must be deployed.'
+        description: 'TRUE = Managed Redis for full acceptance; required in staging/prod and incurs Azure cost. FALSE = dev-only in-memory cache, one replica, no Redis/payment acceptance; blocked if Redis exists and never deletes it.'
         required: true
         default: false
         type: boolean
@@ -270,6 +270,8 @@ jobs:
       - name: Validate configured identity and public origins before Azure login
         shell: bash
         env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOY_REDIS: ${{ inputs.deployRedis }}
           IDENTITY_ENVIRONMENT: ${{ inputs.environment }}
           ENTRA_DIRECTORY_ID: ${{ vars.ENTRA_DIRECTORY_ID }}
           ENTRA_API_CLIENT_ID: ${{ vars.ENTRA_API_CLIENT_ID }}
@@ -278,7 +280,13 @@ jobs:
           ENTRA_REGISTERED_REDIRECT_URIS: ${{ vars.ENTRA_REGISTERED_REDIRECT_URIS }}
           ENTRA_REGISTERED_LOGOUT_URIS: ${{ vars.ENTRA_REGISTERED_LOGOUT_URIS }}
           IDENTITY_TENANT_SELECTOR_ENABLED: ${{ vars.IDENTITY_TENANT_SELECTOR_ENABLED }}
-        run: node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET_ENVIRONMENT" != "dev" && "$DEPLOY_REDIS" != "true" ]]; then
+            echo "Managed Redis is required outside dev; select deployRedis=true." >&2
+            exit 1
+          fi
+          node scripts/prepare-entra-deployment.mjs --output "$RUNNER_TEMP/identity.parameters.json"
 
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -286,6 +294,24 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Prevent accidental dev cache-mode change while Redis exists
+        if: inputs.environment == 'dev' && inputs.deployRedis == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET_JSON="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); if(!t) process.exit(2); process.stdout.write(JSON.stringify(t))')"
+          RG_NAME="$(TARGET_JSON="$TARGET_JSON" node -e 'process.stdout.write(JSON.parse(process.env.TARGET_JSON).azureResourceGroupName)')"
+          REDIS_NAME="$(TARGET_JSON="$TARGET_JSON" node -e 'process.stdout.write(JSON.parse(process.env.TARGET_JSON).azureRedisName)')"
+          redis_count=0
+          if [[ "$(az group exists --name "$RG_NAME" --output tsv)" == "true" ]]; then
+            redis_resources="$(az resource list --resource-group "$RG_NAME" --resource-type Microsoft.Cache/redisEnterprise --output json --only-show-errors)"
+            redis_count="$(printf '%s' "$redis_resources" | jq --arg redisName "$REDIS_NAME" '[.[] | select(.name == $redisName)] | length')"
+          fi
+          [[ "$redis_count" -eq 0 ]] || {
+            echo "${REDIS_NAME} already exists. deployRedis=false would remove Redis configuration from the apps but would not delete the billable resource. Keep deployRedis=true, or explicitly remove the existing Redis through an approved cleanup before switching profiles." >&2
+            exit 1
+          }
 
       - name: Verify generated Azure-dev origin matches Entra registration
         if: inputs.environment == 'dev'
@@ -714,7 +740,7 @@ jobs:
           echo "| OIDC + GitHub Secrets | ✅ Prerequisite | Azure Initial Setup workflow |" >> $GITHUB_STEP_SUMMARY
           echo "| Platform foundation RG + persistent ACR + pull identity | ✅ Yes | 00 Azure Platform Foundation |" >> $GITHUB_STEP_SUMMARY
           echo "| SQL Server baseline | ${{ inputs.deploySql }} | Explicit workflow input; new server generates a bootstrap credential, existing server verifies and reuses it |" >> $GITHUB_STEP_SUMMARY
-          echo "| Redis baseline | ${{ inputs.deployRedis }} | Explicit workflow input; enabling it updates the slice |" >> $GITHUB_STEP_SUMMARY
+          echo "| Redis/cache | ${{ inputs.deployRedis }} | Dev false uses one replica with in-memory cache; it does not delete an existing Redis resource. Staging/prod require true. |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 service images | No | A separately approved immutable release build must exist before the wrapper consumes it |" >> $GITHUB_STEP_SUMMARY
           echo "| Resource Group + Service Bus + Log Analytics + App Insights + Container Apps + Function App + Key Vault | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
