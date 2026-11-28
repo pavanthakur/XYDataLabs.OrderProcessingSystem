@@ -322,6 +322,10 @@ jobs:
           set -euo pipefail
           RG_NAME="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); process.stdout.write(t.azureResourceGroupName)')"
           ENV_NAME="$(node -e 'const t=require("./automation/config/runtime-targets.json").targets.find(x=>x.key==="azure-dev"); process.stdout.write(t.azureManagedEnvironmentName)')"
+          [[ "$(az group exists --name "$RG_NAME" --output tsv --only-show-errors)" == 'true' ]] || {
+            echo 'Dev foundation group missing or unreadable. Verify access and run 00a Dev Hostname Bootstrap, then local 00b Dev Foundation Bootstrap, before workflow 01.' >&2
+            exit 1
+          }
           DOMAIN="$(az containerapp env show --resource-group "$RG_NAME" --name "$ENV_NAME" --query properties.defaultDomain -o tsv --only-show-errors)"
           node scripts/resolve-phase10-azure-generated-urls.mjs \
             --target azure-dev --default-domain "$DOMAIN" --expected-ui-origin "$EXPECTED_UI_ORIGIN" 1>/dev/null

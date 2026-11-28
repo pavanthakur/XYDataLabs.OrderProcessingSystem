@@ -107,6 +107,8 @@ Recommended order:
 1. Run `Azure Initial Setup` if repository auth is not ready.
 2. Run `00 Azure Platform Foundation` only when the shared ACR, pull identity, or provider registrations are missing. Keep `Assign AcrPull=false` for the normal path.
 3. For dev generated URLs only, separately review `00a Azure Dev Hostname Bootstrap` with `dryRun=true`, then approve `dryRun=false` to create the dev RG, Log Analytics and ACA environment. Register the reported exact Entra callback/logout origins and set the matching GitHub environment variables. No generated hostname belongs in Git.
+
+   After a full dev teardown, use the local **00b Dev Foundation Bootstrap** Plan/Apply runhook to recreate and verify the exact resource-group-scoped bootstrap assignment before workflow `01`. See the [dev rebuild procedure](../../docs/runbooks/phase10-azure-smoke.md#rebuild-dev-after-full-resource-group-cleanup). This is an operator command, not a GitHub workflow or an automatic IAM change.
 4. After separate approval, produce an immutable release for the exact reviewed candidate SHA. This publishes to ACR.
 5. Review the release manifest and parameter identity, then run `01 Phase 10 Azure Deploy Orchestrator` with that release. Deployment, dry-run preflight, and cleanup are distinct choices; cleanup is destructive.
 

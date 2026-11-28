@@ -7,6 +7,7 @@ const ROLE_ASSIGNMENT_ADMIN = 'Role Based Access Control Administrator';
 const STORAGE_BLOB_DATA_OWNER_ID = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b';
 const SERVICE_BUS_DATA_RECEIVER_ID = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0';
 const SERVICE_BUS_DATA_SENDER_ID = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39';
+const DEV_BOOTSTRAP_GUIDANCE = 'Run local 00b Dev Foundation Bootstrap (scripts/phase10-azure-dev-foundation-bootstrap.ps1) in Plan mode and review the result before retrying.';
 
 export function buildBootstrapCondition(replayRunnerPrincipalId = '') {
   const storageRule = `(@ATTRIBUTE:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${STORAGE_BLOB_DATA_OWNER_ID}} AND @ATTRIBUTE:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'})`;
@@ -82,7 +83,9 @@ async function main() {
   }
 
   if (runAz(['group', 'exists', '--name', resourceGroup, '--subscription', expectedSubscriptionId]).trim() !== 'true') {
-    throw new Error('Target resource group is missing; create the environment foundation before RBAC bootstrap preflight.');
+    throw new Error(resourceGroup === 'rg-orderprocessing-dev'
+      ? `Target resource group is missing; run 00a first. ${DEV_BOOTSTRAP_GUIDANCE}`
+      : 'Target resource group is missing; create the environment foundation before RBAC bootstrap preflight.');
   }
 
   const targetScope = `/subscriptions/${expectedSubscriptionId}/resourceGroups/${resourceGroup}`;
@@ -105,7 +108,13 @@ async function main() {
     await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
   }
   console.log(`Azure RBAC bootstrap preflight: ${result.status} (${result.checks.filter((check) => check.status === 'PASS').length}/${result.checks.length} checks).`);
-  if (result.status !== 'PASS') process.exitCode = 1;
+  if (result.status !== 'PASS') {
+    if (resourceGroup === 'rg-orderprocessing-dev' && result.checks.some(({ id, status }) =>
+      ['role-assignment-write', 'exact-conditional-bootstrap-grant'].includes(id) && status === 'FAIL')) {
+      console.error(DEV_BOOTSTRAP_GUIDANCE);
+    }
+    process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
