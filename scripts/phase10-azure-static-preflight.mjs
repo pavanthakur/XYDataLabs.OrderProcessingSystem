@@ -268,6 +268,8 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, fun
     || sqlIdentityGrantStep <= sqlMigrationStep || functionPackageStep <= sqlIdentityGrantStep || triggerActivationStep <= functionPackageStep
     || !/Snapshot existing Functions trigger state before ARM deployment/.test(infraDeployWorkflow)
     || !triggerRestoreStep
+    || !/always\(\) && steps\.deploy\.outcome == 'success' && steps\.functions-package\.outcome == 'success'/.test(triggerRestoreStep)
+    || !/steps\.params\.outputs\.cleanupInfra != 'true' && steps\.params\.outputs\.dryRun != 'true'/.test(triggerRestoreStep)
     || !/steps\.params\.outputs\.deploySql != 'true' && steps\.params\.outputs\.activateExistingFunctionsTriggers != 'true'/.test(triggerRestoreStep)
     || !/AzureWebJobs\.DlqIntakeFunction\.Disabled=\$INTAKE_DISABLED/.test(triggerRestoreStep)
     || !/AzureWebJobs\.DlqReplayFunction\.Disabled=\$REPLAY_DISABLED/.test(triggerRestoreStep)

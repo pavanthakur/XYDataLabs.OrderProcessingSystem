@@ -41,34 +41,53 @@ function getFunctionScmEndpoint(functionApp) {
   return new URL(`https://${functionApp}.scm.azurewebsites.net`);
 }
 
-async function getScmBytes(url, accessToken, fetchImpl = fetch) {
+const SCM_RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+const SCM_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
+
+function retryAfterDelayMs(response) {
+  const raw = response.headers?.get?.('retry-after');
+  if (!raw) return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1_000, 10_000);
+  const date = Date.parse(raw);
+  return Number.isFinite(date) ? Math.min(Math.max(date - Date.now(), 0), 10_000) : undefined;
+}
+
+async function getScmBytes(url, accessToken, fetchImpl = fetch, sleepImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
   if (typeof accessToken !== 'string' || !accessToken || /\s/.test(accessToken)) {
     throw new Error('A valid Microsoft Entra access token is required for Function App package verification.');
   }
-  let response;
-  try {
-    response = await fetchImpl(url, {
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'cache-control': 'no-store',
-      },
-      redirect: 'error',
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch {
-    throw new Error('Function App SCM package verification endpoint is unreachable or rejected TLS.');
+  for (let attempt = 0; attempt <= SCM_RETRY_DELAYS_MS.length; attempt += 1) {
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          'cache-control': 'no-store',
+        },
+        redirect: 'error',
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new Error('Function App SCM package verification endpoint is unreachable or rejected TLS.');
+    }
+    if (response.ok) return Buffer.from(await response.arrayBuffer());
+    if (!SCM_RETRYABLE_STATUSES.has(response.status) || attempt === SCM_RETRY_DELAYS_MS.length) {
+      throw new Error(`Function App SCM package verification returned HTTP ${response.status}.`);
+    }
+    const delay = retryAfterDelayMs(response) ?? SCM_RETRY_DELAYS_MS[attempt];
+    await sleepImpl(delay);
   }
-  if (!response.ok) throw new Error(`Function App SCM package verification returned HTTP ${response.status}.`);
-  return Buffer.from(await response.arrayBuffer());
+  throw new Error('Function App SCM package verification exhausted its bounded retries.');
 }
 
-export async function verifyMountedFunctionPackage({ functionApp, accessToken, expectedSha256, fetchImpl = fetch }) {
+export async function verifyMountedFunctionPackage({ functionApp, accessToken, expectedSha256, fetchImpl = fetch, sleepImpl }) {
   const endpoint = getFunctionScmEndpoint(functionApp);
   const pointerUrl = new URL('/api/vfs/data/SitePackages/packagename.txt', endpoint);
-  const firstPointer = parsePackageName((await getScmBytes(pointerUrl, accessToken, fetchImpl)).toString('utf8'));
+  const firstPointer = parsePackageName((await getScmBytes(pointerUrl, accessToken, fetchImpl, sleepImpl)).toString('utf8'));
   const packageUrl = new URL(`/api/vfs/data/SitePackages/${encodeURIComponent(firstPointer)}`, endpoint);
-  const packageBytes = await getScmBytes(packageUrl, accessToken, fetchImpl);
-  const secondPointer = parsePackageName((await getScmBytes(pointerUrl, accessToken, fetchImpl)).toString('utf8'));
+  const packageBytes = await getScmBytes(packageUrl, accessToken, fetchImpl, sleepImpl);
+  const secondPointer = parsePackageName((await getScmBytes(pointerUrl, accessToken, fetchImpl, sleepImpl)).toString('utf8'));
   if (secondPointer !== firstPointer) throw new Error('Function App mounted package pointer changed during verification.');
   return { packageName: firstPointer, packageSha256: verifyFunctionPackageBytes(packageBytes, expectedSha256) };
 }

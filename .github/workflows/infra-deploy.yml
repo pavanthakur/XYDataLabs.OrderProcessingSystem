@@ -1617,7 +1617,7 @@ jobs:
           fi
 
       - name: Restore existing Functions trigger state after routine redeploy
-        if: ${{ steps.params.outputs.deploySql != 'true' && steps.params.outputs.activateExistingFunctionsTriggers != 'true' && steps.function-trigger-state.outputs.existed == 'true' }}
+        if: ${{ always() && steps.deploy.outcome == 'success' && steps.functions-package.outcome == 'success' && steps.params.outputs.cleanupInfra != 'true' && steps.params.outputs.dryRun != 'true' && steps.params.outputs.deploySql != 'true' && steps.params.outputs.activateExistingFunctionsTriggers != 'true' && steps.function-trigger-state.outputs.existed == 'true' }}
         shell: bash
         env:
           RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}

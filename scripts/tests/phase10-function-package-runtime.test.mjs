@@ -56,6 +56,44 @@ test('uses Bearer auth only on the exact HTTPS SCM host and verifies the active 
   assert.ok(calls.every(({ init }) => init.redirect === 'error' && init.signal instanceof AbortSignal));
 });
 
+test('retries a transient SCM 503 within a bounded schedule and then verifies the package', async () => {
+  const bytes = Buffer.from('approved mounted package');
+  const sha = createHash('sha256').update(bytes).digest('hex');
+  const calls = [];
+  const delays = [];
+  const fetchImpl = async () => {
+    calls.push(calls.length + 1);
+    if (calls.length === 1) return new Response('starting', { status: 503, headers: { 'retry-after': '1' } });
+    if (calls.length === 2 || calls.length === 4) return new Response('functions-abc123.zip\n', { status: 200 });
+    return new Response(bytes, { status: 200 });
+  };
+  const result = await verifyMountedFunctionPackage({
+    functionApp: 'orders-functions-dev', accessToken: 'entra-token', expectedSha256: sha,
+    fetchImpl, sleepImpl: async (delay) => delays.push(delay),
+  });
+  assert.deepEqual(result, { packageName: 'functions-abc123.zip', packageSha256: sha });
+  assert.equal(calls.length, 4);
+  assert.deepEqual(delays, [1_000]);
+});
+
+test('does not retry authorization failures and bounds transient SCM retries', async () => {
+  let calls = 0;
+  await assert.rejects(verifyMountedFunctionPackage({
+    functionApp: 'orders-functions-dev', accessToken: 'entra-token', expectedSha256: 'a'.repeat(64),
+    fetchImpl: async () => { calls += 1; return new Response('denied', { status: 403 }); },
+    sleepImpl: async () => assert.fail('authorization errors must not be retried'),
+  }), /returned HTTP 403/);
+  assert.equal(calls, 1);
+
+  calls = 0;
+  await assert.rejects(verifyMountedFunctionPackage({
+    functionApp: 'orders-functions-dev', accessToken: 'entra-token', expectedSha256: 'a'.repeat(64),
+    fetchImpl: async () => { calls += 1; return new Response('temporarily unavailable', { status: 503 }); },
+    sleepImpl: async () => {},
+  }), /returned HTTP 503/);
+  assert.equal(calls, 5);
+});
+
 test('rejects an SCM hostname that cannot be derived from a valid Function App name', async () => {
   await assert.rejects(verifyMountedFunctionPackage({
     functionApp: 'attacker.example', accessToken: 'entra-token', expectedSha256: 'a'.repeat(64),

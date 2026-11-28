@@ -274,7 +274,7 @@ valid.infraDeployWorkflow += [
   '      - name: Run Azure SQL Migrations',
   '      - name: Snapshot existing Functions trigger state before ARM deployment',
   '      - name: Restore existing Functions trigger state after routine redeploy',
-  "        if: ${{ steps.params.outputs.deploySql != 'true' && steps.params.outputs.activateExistingFunctionsTriggers != 'true' }}",
+  "        if: ${{ always() && steps.deploy.outcome == 'success' && steps.functions-package.outcome == 'success' && steps.params.outputs.cleanupInfra != 'true' && steps.params.outputs.dryRun != 'true' && steps.params.outputs.deploySql != 'true' && steps.params.outputs.activateExistingFunctionsTriggers != 'true' }}",
   '        run: AzureWebJobs.DlqIntakeFunction.Disabled=$INTAKE_DISABLED AzureWebJobs.DlqReplayFunction.Disabled=$REPLAY_DISABLED Could not restore existing Functions setting',
 ].join('\n');
 valid.infraDeployWorkflow = valid.infraDeployWorkflow.replace('az sql server ad-admin show', 'az sql server ad-admin list');
