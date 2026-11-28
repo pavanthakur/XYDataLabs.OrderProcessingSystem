@@ -2,9 +2,19 @@
 
 Navigation, not proof. Verify current Git/Azure state against linked artifacts before relying on this checkpoint.
 
+## Checkpoint Provenance
+
+- Review revision: `db8f5494284be35765f5a72a20b452deb5e7f968`
+- Worktree state: `CLEAN`
+- Evidence status: `BLOCKED`
+- Evidence revision: `05c5dd3379ec66d8788c515f3b49c31211dcf602`
+- Evidence environment: `Azure dev`
+- Evidence scope: `read-only replay RBAC/runtime preflight; 22/24 passed, two runner grants blocked`
+- Evidence reference: `TestResults/Phase10/azure-replay-preflight-20261128T095240Z.json`
+
 ## Phase 10 Azure-dev checkpoint — 28 November 2026
 
-- Candidate baseline: `dev` at `05c5dd3379ec66d8788c515f3b49c31211dcf602`, synced with `origin/dev` at last check. The worktree is dirty: it contains the prior OpenPay baseline helper/tests/docs plus new replay-runner RBAC bootstrap workflow, helper, tests and documentation edits. No application image was built; none of these edits are committed or hosted-validated.
+- Deployed application baseline: `dev` at `05c5dd3379ec66d8788c515f3b49c31211dcf602`. The Phase 10 workflow/RBAC and OpenPay fixture changes were committed and pushed in `db8f5494284be35765f5a72a20b452deb5e7f968`; no application image was rebuilt because application code did not change. Local tests pass. On that SHA, documentation links, Drift Scanner and prompt validation passed; AI customization failed because this handoff lacked its required provenance fields. The fields are now restored, and a follow-up CI run is required before treating the candidate as green.
 - Workflow `01` deployment [46118671558](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/46118671558) passed using immutable release run `46117241129`. Existing Redis was selected (`deployRedis=true`); SQL deployment and cleanup were off. Both Functions triggers were intentionally enabled after package/index verification. The generated dev origin was resolved and matched Entra registration during preflight.
 - Workflow `02` runtime smoke [46119473618](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/46119473618) passed. Workflow `03` transport smoke [46119577244](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/46119577244) passed publish/fan-out, Inventory/Notifications effects, DLQ forwarding, Functions quarantine intake and temporary SQL firewall-lease cleanup. Replay-candidate preparation was disabled; this is not replay/recovery evidence.
 - Regular organizational Member isolation passed for TenantA/B/C on this deployment: own-tenant access allowed, other-tenant access denied, forged tenant header/deep link rejected, sign-out/cross-tab clearing passed. Sanitized evidence: `TestResults/Phase10/azure-regular-user-isolation/2026-11-28T07-16-59-154Z-51020/regular-user-isolation.json`. An earlier attempt used the wrong owner/guest identity and failed before access checks; preserve it as failed evidence, not an app defect.
