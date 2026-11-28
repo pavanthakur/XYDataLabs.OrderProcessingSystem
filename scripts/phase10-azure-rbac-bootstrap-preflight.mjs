@@ -5,7 +5,19 @@ import { fileURLToPath } from 'node:url';
 const ROLE_ASSIGNMENT_WRITE = 'Microsoft.Authorization/roleAssignments/write';
 const ROLE_ASSIGNMENT_ADMIN = 'Role Based Access Control Administrator';
 const STORAGE_BLOB_DATA_OWNER_ID = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b';
-const BOOTSTRAP_CONDITION = `((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${STORAGE_BLOB_DATA_OWNER_ID}} AND @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'})) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${STORAGE_BLOB_DATA_OWNER_ID}} AND @Resource[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'}))`;
+const SERVICE_BUS_DATA_RECEIVER_ID = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0';
+const SERVICE_BUS_DATA_SENDER_ID = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39';
+
+export function buildBootstrapCondition(replayRunnerPrincipalId = '') {
+  const storageRule = `(@ATTRIBUTE:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${STORAGE_BLOB_DATA_OWNER_ID}} AND @ATTRIBUTE:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'})`;
+  const replayRule = replayRunnerPrincipalId
+    ? `(@ATTRIBUTE:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${SERVICE_BUS_DATA_RECEIVER_ID}, ${SERVICE_BUS_DATA_SENDER_ID}} AND @ATTRIBUTE:PrincipalId] ForAnyOfAnyValues:GuidEquals {${replayRunnerPrincipalId}} AND @ATTRIBUTE:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'User'})`
+    : '';
+  const allowed = replayRule ? `(${storageRule} OR ${replayRule})` : storageRule;
+  const writeRule = allowed.replaceAll('@ATTRIBUTE:', '@Request[Microsoft.Authorization/roleAssignments:');
+  const deleteRule = allowed.replaceAll('@ATTRIBUTE:', '@Resource[Microsoft.Authorization/roleAssignments:');
+  return `((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR ${writeRule}) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR ${deleteRule})`;
+}
 
 function actionMatches(pattern, action) {
   const escaped = String(pattern).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*');
@@ -22,23 +34,23 @@ function normalizeCondition(value) {
   return String(value ?? '').replace(/\s+/g, '').toLowerCase();
 }
 
-export function hasApprovedBootstrapAssignment(assignments, { principalId, scope }) {
+export function hasApprovedBootstrapAssignment(assignments, { principalId, scope, replayRunnerPrincipalId = '' }) {
   return (assignments ?? []).some((assignment) =>
     String(assignment.principalId ?? '').toLowerCase() === String(principalId ?? '').toLowerCase()
     && String(assignment.roleDefinitionName ?? '').toLowerCase() === ROLE_ASSIGNMENT_ADMIN.toLowerCase()
     && String(assignment.scope ?? '').toLowerCase() === String(scope ?? '').toLowerCase()
     && String(assignment.conditionVersion ?? '') === '2.0'
-    && normalizeCondition(assignment.condition) === normalizeCondition(BOOTSTRAP_CONDITION));
+    && normalizeCondition(assignment.condition) === normalizeCondition(buildBootstrapCondition(replayRunnerPrincipalId)));
 }
 
-export function assessRbacBootstrap({ expectedSubscriptionId, expectedTenantId, expectedClientId, expectedPrincipalId, account, targetScope, permissionResponse, assignments }) {
+export function assessRbacBootstrap({ expectedSubscriptionId, expectedTenantId, expectedClientId, expectedPrincipalId, expectedReplayRunnerPrincipalId = '', account, targetScope, permissionResponse, assignments }) {
   const equalGuid = (left, right) => typeof left === 'string' && typeof right === 'string' && left.toLowerCase() === right.toLowerCase();
   const checks = [
     { id: 'subscription', status: equalGuid(account?.id, expectedSubscriptionId) ? 'PASS' : 'FAIL' },
     { id: 'directory', status: equalGuid(account?.tenantId, expectedTenantId) ? 'PASS' : 'FAIL' },
     { id: 'bootstrap-principal', status: equalGuid(account?.user?.name, expectedClientId) && account?.user?.type === 'servicePrincipal' ? 'PASS' : 'FAIL' },
     { id: 'role-assignment-write', status: hasRoleAssignmentWrite(permissionResponse) ? 'PASS' : 'FAIL', scope: targetScope },
-    { id: 'exact-conditional-bootstrap-grant', status: hasApprovedBootstrapAssignment(assignments, { principalId: expectedPrincipalId, scope: targetScope }) ? 'PASS' : 'FAIL', scope: targetScope },
+    { id: 'exact-conditional-bootstrap-grant', status: hasApprovedBootstrapAssignment(assignments, { principalId: expectedPrincipalId, scope: targetScope, replayRunnerPrincipalId: expectedReplayRunnerPrincipalId }) ? 'PASS' : 'FAIL', scope: targetScope },
   ];
   return { schemaVersion: 1, status: checks.every((check) => check.status === 'PASS') ? 'PASS' : 'FAIL', checks };
 }
@@ -56,9 +68,11 @@ async function main() {
   const expectedTenantId = process.env.AZURE_EXPECTED_TENANT_ID;
   const expectedClientId = process.env.AZURE_RBAC_BOOTSTRAP_CLIENT_ID;
   const expectedPrincipalId = process.env.AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID;
+  const expectedReplayRunnerPrincipalId = process.env.REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID ?? '';
   const resourceGroup = process.env.AZURE_TARGET_RESOURCE_GROUP;
   if (![expectedSubscriptionId, expectedTenantId, expectedClientId, expectedPrincipalId].every((value) => /^[0-9a-f-]{36}$/i.test(value ?? ''))
-    || !/^rg-[a-z0-9-]+$/i.test(resourceGroup ?? '')) {
+    || !/^rg-[a-z0-9-]+$/i.test(resourceGroup ?? '')
+    || (expectedReplayRunnerPrincipalId && !/^[0-9a-f-]{36}$/i.test(expectedReplayRunnerPrincipalId))) {
     throw new Error('Expected subscription, directory, bootstrap principal, or target resource-group input is missing or malformed.');
   }
 
@@ -75,7 +89,7 @@ async function main() {
   const permissionUrl = `https://management.azure.com${targetScope}/providers/Microsoft.Authorization/permissions?api-version=2015-07-01`;
   const permissionResponse = JSON.parse(runAz(['rest', '--method', 'get', '--url', permissionUrl, '--output', 'json']));
   const assignments = JSON.parse(runAz(['role', 'assignment', 'list', '--scope', targetScope, '--include-inherited', '--output', 'json']));
-  const result = assessRbacBootstrap({ expectedSubscriptionId, expectedTenantId, expectedClientId, expectedPrincipalId, account, targetScope, permissionResponse, assignments });
+  const result = assessRbacBootstrap({ expectedSubscriptionId, expectedTenantId, expectedClientId, expectedPrincipalId, expectedReplayRunnerPrincipalId, account, targetScope, permissionResponse, assignments });
   const summary = [
     '## Phase 10 RBAC bootstrap identity preflight',
     '',

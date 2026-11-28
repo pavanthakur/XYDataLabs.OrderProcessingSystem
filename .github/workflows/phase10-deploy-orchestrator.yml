@@ -344,6 +344,7 @@ jobs:
           DEPLOY_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           RBAC_BOOTSTRAP_CLIENT_ID: ${{ secrets.AZURE_RBAC_BOOTSTRAP_CLIENTID }}
           RBAC_BOOTSTRAP_PRINCIPAL_ID: ${{ vars.AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID }}
+          REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID: ${{ vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID }}
         run: |
           set -euo pipefail
           [[ "$RBAC_BOOTSTRAP_CLIENT_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'The environment-specific RBAC bootstrap OIDC client ID is not configured.' >&2; exit 1; }
@@ -364,6 +365,7 @@ jobs:
           AZURE_EXPECTED_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           AZURE_RBAC_BOOTSTRAP_CLIENT_ID: ${{ secrets.AZURE_RBAC_BOOTSTRAP_CLIENTID }}
           AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_RBAC_BOOTSTRAP_PRINCIPAL_OBJECT_ID }}
+          REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID: ${{ vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID }}
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail

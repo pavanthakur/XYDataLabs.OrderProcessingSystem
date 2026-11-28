@@ -169,6 +169,13 @@ export function auditAzureDeployContract({ functionsProject, functionsBicep, fun
     || !/Refresh Azure CLI Login \(OIDC\) as routine deployment identity/.test(infraDeployWorkflow)) {
     failures.push('Functions storage RBAC must use a separate, verified bootstrap OIDC identity and exact storage-account-scoped grant.');
   }
+  if (/Microsoft\.Authorization\/roleAssignments@/.test(serviceBusBicep ?? '')
+    || !/REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID:\s*\$\{\{\s*vars\.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID\s*\}\}/.test(orchestratorWorkflow)
+    || !/REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID/.test(rbacBootstrapPreflightScript)
+    || !/Grant exact dev replay-runner Service Bus roles using bootstrap identity/.test(infraDeployWorkflow)
+    || !/phase10-azure-replay-runner-rbac\.mjs/.test(infraDeployWorkflow)) {
+    failures.push('Replay-runner Service Bus grants must be applied after deployment by the constrained bootstrap identity, not by the routine Contributor Bicep deployment.');
+  }
   if (!/dryRun:[\s\S]*?default:\s*true/.test(orchestratorWorkflow)) failures.push('The manual Azure orchestrator must default to dry-run mode.');
   const imageParameterNames = ['gatewayImage', 'ordersImage', 'paymentsImage', 'inventoryImage', 'notificationsImage', 'uiImage'];
   for (const environment of ['dev', 'staging', 'prod']) {

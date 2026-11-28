@@ -39,17 +39,6 @@ param replayRequestQueueName string = 'dlq-replay-requests'
 @description('Optional isolated replay-drill queue name; supported only in Azure dev')
 param replayDrillRequestQueueName string = ''
 
-@description('Optional operator/test-runner object ID for queue-scoped receive access to the Azure-dev drill queue')
-param replayDrillRunnerPrincipalObjectId string = ''
-
-@allowed([
-  'User'
-  'ServicePrincipal'
-  'Group'
-])
-@description('Principal type for the optional isolated replay-drill receiver grant')
-param replayDrillRunnerPrincipalType string = 'User'
-
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -168,8 +157,6 @@ module serviceBus 'modules/servicebus.bicep' = {
     deadLetterSubscriptionName: deadLetterSubscriptionName
     replayRequestQueueName: replayRequestQueueName
     replayDrillRequestQueueName: replayDrillRequestQueueName
-    replayDrillRunnerPrincipalObjectId: replayDrillRunnerPrincipalObjectId
-    replayDrillRunnerPrincipalType: replayDrillRunnerPrincipalType
     maxDeliveryCount: maxDeliveryCount
     messageTtl: messageTtl
   }
@@ -370,6 +357,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
 
 output resourceGroupName string = appRg.name
 output serviceBusNamespaceName string = serviceBus.outputs.serviceBusNamespaceName
+output orderEventsTopicName string = serviceBus.outputs.orderEventsTopic
 output replayRequestQueueName string = serviceBus.outputs.replayRequestQueueName
 output replayDrillRequestQueueName string = serviceBus.outputs.replayDrillRequestQueueName
 output logAnalyticsWorkspaceName string = logAnalytics.outputs.logAnalyticsWorkspaceName

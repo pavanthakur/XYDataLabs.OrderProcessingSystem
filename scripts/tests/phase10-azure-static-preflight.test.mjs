@@ -278,6 +278,10 @@ valid.infraDeployWorkflow += [
   '        run: AzureWebJobs.DlqIntakeFunction.Disabled=$INTAKE_DISABLED AzureWebJobs.DlqReplayFunction.Disabled=$REPLAY_DISABLED Could not restore existing Functions setting',
 ].join('\n');
 valid.infraDeployWorkflow = valid.infraDeployWorkflow.replace('az sql server ad-admin show', 'az sql server ad-admin list');
+valid.mainBicep += ' output orderEventsTopicName string = serviceBus.outputs.orderEventsTopic';
+valid.infraDeployWorkflow += ' name: Grant exact dev replay-runner Service Bus roles using bootstrap identity phase10-azure-replay-runner-rbac.mjs';
+valid.orchestratorWorkflow += ' REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID: ${{ vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID }}';
+valid.rbacBootstrapPreflightScript += ' REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID';
 
 valid.functionsBicep = `@minLength(1) param sqlServerFqdn string @minLength(1) param sqlDatabaseName string ${valid.functionsBicep} name: 'AzureWebJobs.DlqIntakeFunction.Disabled' value: 'true' name: 'AzureWebJobs.DlqReplayFunction.Disabled' value: 'true'`;
 valid.mainBicep += " param existingFunctionsSqlServerName string param existingFunctionsSqlDatabaseName string var existingFunctionsSqlServerFqdn = replace('${existingFunctionsSqlServerName}.${az.environment().suffixes.sqlServerHostname}', '..', '.') sqlServerFqdn: deploySql ? sql.outputs.sqlServerFqdn : existingFunctionsSqlServerFqdn output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : existingFunctionsSqlServerFqdn sqlDatabaseName: deploySql ? sql.outputs.databaseName : existingFunctionsSqlDatabaseName";

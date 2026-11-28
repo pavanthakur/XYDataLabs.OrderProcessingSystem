@@ -593,8 +593,6 @@ jobs:
             --parameters acrRegistryUsername="$WHAT_IF_ACR_USERNAME" \
             --parameters acrRegistryPassword="$WHAT_IF_ACR_PASSWORD" \
             "${KEYVAULT_POLICY_ARGS[@]}" \
-            --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
-            --parameters replayDrillRunnerPrincipalType=User \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
             --parameters ordersImage="${{ steps.params.outputs.ordersImage }}" \
             --parameters paymentsImage="${{ steps.params.outputs.paymentsImage }}" \
@@ -1141,8 +1139,6 @@ jobs:
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
             "${KEYVAULT_POLICY_ARGS[@]}" \
-            --parameters replayDrillRunnerPrincipalObjectId="$REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID" \
-            --parameters replayDrillRunnerPrincipalType=User \
             --parameters deploymentPrincipalObjectId="${{ steps.deployment_principal.outputs.objectId }}" \
             --parameters acrRegistryUsername="${{ steps.acr_pull_token.outputs.username }}" \
             --parameters acrRegistryPassword="${{ steps.acr_pull_token.outputs.password }}" \
@@ -1192,6 +1188,8 @@ jobs:
 
           RG_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.resourceGroupName.value" -o tsv)
           SB_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.serviceBusNamespaceName.value" -o tsv)
+          ORDER_EVENTS_TOPIC_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.orderEventsTopicName.value" -o tsv)
+          REPLAY_DRILL_REQUEST_QUEUE_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.replayDrillRequestQueueName.value" -o tsv)
           LA_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.logAnalyticsWorkspaceName.value" -o tsv)
           ME_ID=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.managedEnvironmentId.value" -o tsv)
           GW_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.gatewayContainerAppName.value" -o tsv)
@@ -1219,6 +1217,8 @@ jobs:
 
           echo "rg=${RG_NAME}" >> $GITHUB_OUTPUT
           echo "sb=${SB_NAME}" >> $GITHUB_OUTPUT
+          echo "orderEventsTopicName=${ORDER_EVENTS_TOPIC_NAME}" >> $GITHUB_OUTPUT
+          echo "replayDrillRequestQueueName=${REPLAY_DRILL_REQUEST_QUEUE_NAME}" >> $GITHUB_OUTPUT
           echo "la=${LA_NAME}" >> $GITHUB_OUTPUT
           echo "me=${ME_ID}" >> $GITHUB_OUTPUT
           echo "gateway=${GW_NAME}" >> $GITHUB_OUTPUT
@@ -1284,6 +1284,18 @@ jobs:
           VERIFIED="$(az role assignment list --scope "$STORAGE_ACCOUNT_ID" --assignee-object-id "$STORAGE_IDENTITY_PRINCIPAL_ID" --output json --only-show-errors | jq --arg role "$ROLE_ID" --arg scope "${STORAGE_ACCOUNT_ID,,}" --arg principal "${STORAGE_IDENTITY_PRINCIPAL_ID,,}" '[.[] | select((.roleDefinitionId | ascii_downcase | endswith($role)) and (.scope | ascii_downcase) == $scope and (.principalId | ascii_downcase) == $principal and .principalType == "ServicePrincipal")] | length')"
           [[ "$VERIFIED" == '1' ]] || { echo 'Functions host Storage Blob Data Owner assignment could not be verified at exact resource scope.' >&2; exit 1; }
           echo '✅ The dedicated RBAC bootstrap identity verified the Functions host Storage assignment at the exact Storage account scope.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Grant exact dev replay-runner Service Bus roles using bootstrap identity
+        if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false && steps.params.outputs.env == 'dev' && vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID != '' }}
+        shell: bash
+        env:
+          AZURE_EXPECTED_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+          AZURE_TARGET_RESOURCE_GROUP: ${{ steps.outputs.outputs.rg }}
+          SERVICE_BUS_NAMESPACE_NAME: ${{ steps.outputs.outputs.sb }}
+          ORDER_EVENTS_TOPIC_NAME: ${{ steps.outputs.outputs.orderEventsTopicName }}
+          REPLAY_DRILL_REQUEST_QUEUE_NAME: ${{ steps.outputs.outputs.replayDrillRequestQueueName }}
+          REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID: ${{ vars.PHASE10_REPLAY_DRILL_RUNNER_PRINCIPAL_OBJECT_ID }}
+        run: node scripts/phase10-azure-replay-runner-rbac.mjs
 
       - name: Refresh Azure CLI Login (OIDC) as routine deployment identity
         if: ${{ inputs.cleanupInfra == false && inputs.dryRun == false }}

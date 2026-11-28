@@ -33,17 +33,6 @@ param replayRequestQueueName string = 'dlq-replay-requests'
 @description('Optional Azure-dev-only queue used by the isolated duplicate-delivery drill')
 param replayDrillRequestQueueName string = ''
 
-@description('Optional operator/test-runner object ID granted isolated drill receive and business-topic send access')
-param replayDrillRunnerPrincipalObjectId string = ''
-
-@allowed([
-  'User'
-  'ServicePrincipal'
-  'Group'
-])
-@description('Principal type for the optional isolated replay-drill receiver grant')
-param replayDrillRunnerPrincipalType string = 'User'
-
 @description('Maximum delivery count before dead-lettering')
 param maxDeliveryCount int = 10
 
@@ -198,35 +187,6 @@ resource replayDrillRequestQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10
     maxDeliveryCount: maxDeliveryCount
     deadLetteringOnMessageExpiration: true
     requiresDuplicateDetection: false
-  }
-}
-
-var serviceBusDataReceiverRoleDefinitionId = subscriptionResourceId(
-  'Microsoft.Authorization/roleDefinitions',
-  '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
-)
-var serviceBusDataSenderRoleDefinitionId = subscriptionResourceId(
-  'Microsoft.Authorization/roleDefinitions',
-  '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'
-)
-
-resource replayDrillReceiverRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (environment == 'dev' && !empty(replayDrillRequestQueueName) && !empty(replayDrillRunnerPrincipalObjectId)) {
-  name: guid(replayDrillRequestQueue.id, replayDrillRunnerPrincipalObjectId, serviceBusDataReceiverRoleDefinitionId)
-  scope: replayDrillRequestQueue
-  properties: {
-    principalId: replayDrillRunnerPrincipalObjectId
-    principalType: replayDrillRunnerPrincipalType
-    roleDefinitionId: serviceBusDataReceiverRoleDefinitionId
-  }
-}
-
-resource replayDrillBusinessTopicSenderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (environment == 'dev' && !empty(replayDrillRequestQueueName) && !empty(replayDrillRunnerPrincipalObjectId)) {
-  name: guid(orderTopic.id, replayDrillRunnerPrincipalObjectId, serviceBusDataSenderRoleDefinitionId)
-  scope: orderTopic
-  properties: {
-    principalId: replayDrillRunnerPrincipalObjectId
-    principalType: replayDrillRunnerPrincipalType
-    roleDefinitionId: serviceBusDataSenderRoleDefinitionId
   }
 }
 

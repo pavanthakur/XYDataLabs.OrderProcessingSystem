@@ -1,7 +1,7 @@
 #Requires -Version 7.0
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
-    [ValidateSet('Inspect','Prepare','Restore')][string]$Action = 'Inspect',
+    [ValidateSet('Inspect','Prepare','Restore','PlanOpenPayBaseline','ApplyOpenPayBaseline','RestoreOpenPayBaseline')][string]$Action = 'Inspect',
     [ValidateSet('dev')][string]$Environment = 'dev',
     [string]$TenantCode,
     [ValidateSet('OpenPay','Razorpay')][string]$ProviderType,
@@ -9,6 +9,7 @@ param(
     [string]$ManifestPath,
     [string]$ApiBaseUrl,
     [string]$ExpectedSubscriptionId = $env:EXPECTED_AZURE_SUBSCRIPTION_ID,
+    [string]$ApprovalPhrase,
     [switch]$LibraryOnly
 )
 
@@ -19,6 +20,7 @@ $script:AzureFixtureSqlToken = $null
 $script:AzureFixtureTarget = $null
 $script:AzureFixtureSubscription = $null
 $script:AzureFixtureFirewallLease = $null
+$script:AzureFixtureLockPath = $null
 
 function Get-AzureFixtureTarget {
     if ($null -ne $script:AzureFixtureTarget) { return $script:AzureFixtureTarget }
@@ -228,6 +230,156 @@ function Assert-AzureFixtureManifestPath {
     return $fullPath
 }
 
+function Get-AzureOpenPayBaselineEntries {
+    $registryDatabase = [string](Get-AzureFixtureTarget).azureOperationsDatabaseName
+    $active = @(Invoke-AzureFixtureSql -Database $registryDatabase -Query "SELECT Code AS TenantCode FROM dbo.Tenants WHERE Status='Active' ORDER BY Code;")
+    if ($active.Count -eq 0) { throw 'No active Azure dev tenants were found; baseline was not changed.' }
+    $entries = foreach ($row in $active) {
+        $tenant = Get-AzureFixtureTenant -Code ([string]$row.TenantCode)
+        $provider = @($tenant.providers | Where-Object provider -eq 'OpenPay')
+        $razorpay = @($tenant.providers | Where-Object provider -eq 'Razorpay')
+        if ($provider.Count -ne 1 -or $razorpay.Count -ne 1 -or $provider[0].production -or $razorpay[0].production) {
+            throw "Tenant '$($tenant.tenantCode)' must have exactly one sandbox OpenPay and Razorpay record; no baseline changes were made."
+        }
+        $permission = @(Invoke-AzureFixtureSql -Database $tenant.businessDatabase -Query @'
+SELECT CASE WHEN OBJECT_ID(N'payments.PaymentProviders', N'U') IS NULL THEN 0 ELSE 1 END AS PaymentProvidersTableExists,
+       CASE WHEN COL_LENGTH(N'payments.PaymentProviders', N'Use3DSecure') IS NULL THEN 0 ELSE 1 END AS Use3DSecureColumnExists,
+       HAS_PERMS_BY_NAME(N'payments.PaymentProviders', N'OBJECT', N'UPDATE', N'Use3DSecure', N'COLUMN') AS CanUpdateThreeDsFlag;
+'@)
+        if ($permission.Count -ne 1 -or [int]$permission[0].PaymentProvidersTableExists -ne 1 -or [int]$permission[0].Use3DSecureColumnExists -ne 1 -or [string]$permission[0].CanUpdateThreeDsFlag -ne '1') {
+            throw "Tenant '$($tenant.tenantCode)' lacks the required column-scoped OpenPay 3DS update permission; no baseline changes were made."
+        }
+        [ordered]@{
+            tenantCode = $tenant.tenantCode
+            tenantId = $tenant.tenantId
+            tier = $tenant.tier
+            status = $tenant.status
+            registryDatabase = $tenant.registryDatabase
+            registryRoute = $tenant.registryRoute
+            businessDatabase = $tenant.businessDatabase
+            openPayProviderId = [int]$provider[0].id
+            originalThreeDs = [bool]$provider[0].threeDs
+        }
+    }
+    return @($entries)
+}
+
+function Assert-AzureOpenPayBaselineIdentity {
+    param([Parameter(Mandatory)]$Entry)
+    $tenant = Get-AzureFixtureTenant -Code ([string]$Entry.tenantCode)
+    foreach ($field in @('tenantId','tier','status','registryDatabase','businessDatabase','registryRoute')) {
+        if ([string]$tenant[$field] -ne [string]$Entry.$field) { throw 'Azure tenant/database identity or route changed since the baseline snapshot; refusing to overwrite current settings.' }
+    }
+    $provider = @($tenant.providers | Where-Object { $_.provider -eq 'OpenPay' -and [int]$_.id -eq [int]$Entry.openPayProviderId })
+    if ($provider.Count -ne 1 -or $provider[0].production) { throw 'OpenPay provider row identity changed since the baseline snapshot; refusing to update it.' }
+    return $provider[0]
+}
+
+function Invoke-AzureOpenPayBaseline {
+    $fixtureRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'TestResults/Playwright/azure-https/payment-fixtures'
+    $paymentLockPath = if ([string]::IsNullOrWhiteSpace($script:AzureFixtureLockPath)) { Join-Path $fixtureRoot 'azure-payment-fixture.lock' } else { $script:AzureFixtureLockPath }
+    if (Test-Path -LiteralPath $paymentLockPath) { throw 'An Azure payment fixture is active or requires recovery; baseline operation refused.' }
+
+    if ($Action -eq 'PlanOpenPayBaseline') {
+        $entries = @(Get-AzureOpenPayBaselineEntries)
+        [pscustomobject]@{ status='PLAN'; environment='dev'; tenantCount=$entries.Count; changes=@($entries | Where-Object originalThreeDs | ForEach-Object { [pscustomobject]@{tenantCode=$_.tenantCode;businessDatabase=$_.businessDatabase;provider='OpenPay';from=$true;to=$false} }); unchanged=@($entries | Where-Object { -not $_.originalThreeDs } | ForEach-Object tenantCode) } | ConvertTo-Json -Depth 6
+        return
+    }
+
+    $fullManifestPath = Assert-AzureFixtureManifestPath
+    $script:ManifestPath = $fullManifestPath
+    if ($Action -eq 'ApplyOpenPayBaseline') {
+        if (Test-Path -LiteralPath $fullManifestPath) { throw 'Manifest already exists; choose a new unique path.' }
+        [void][IO.Directory]::CreateDirectory($fixtureRoot)
+        $lock = [IO.File]::Open($paymentLockPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        $bytes = [Text.Encoding]::UTF8.GetBytes($fullManifestPath)
+        $lock.Write($bytes,0,$bytes.Length)
+        $snapshot = $null
+        try {
+            $entries = @(Get-AzureOpenPayBaselineEntries)
+            $snapshot = [ordered]@{
+                schemaVersion=1; environment='dev'; scope='azure-dev-openpay-3ds-baseline'
+                subscriptionId=$script:AzureFixtureSubscription
+                resourceGroup=[string](Get-AzureFixtureTarget).azureResourceGroupName
+                sqlServer=[string](Get-AzureFixtureTarget).azureSqlServerName
+                createdAtUtc=[DateTime]::UtcNow.ToString('o'); status='snapshot'
+                policy='Set only sandbox OpenPay Use3DSecure=false for every active tenant. Preserve routes, Razorpay flags, and all other provider fields.'
+                entries=$entries
+            }
+            Save-AzureFixtureManifest $snapshot
+            foreach ($entry in $entries) {
+                if (-not $entry.originalThreeDs) { continue }
+                [void](Assert-AzureOpenPayBaselineIdentity $entry)
+                $update = 'UPDATE payments.PaymentProviders SET Use3DSecure=0 WHERE Id=@id AND TenantId=@tenantId AND ProviderType=''OpenPay'' AND IsProduction=0 AND Use3DSecure=1;'
+                [void](Invoke-AzureFixtureSql -Database ([string]$entry.businessDatabase) -Query $update -Parameters @{id=[string]$entry.openPayProviderId;tenantId=[string]$entry.tenantId} -NonQuery)
+            }
+            foreach ($entry in $entries) {
+                $provider = Assert-AzureOpenPayBaselineIdentity $entry
+                if ($provider.threeDs) { throw "OpenPay 3DS-off verification failed for tenant '$($entry.tenantCode)'." }
+            }
+            $snapshot.status='applied-and-verified'; $snapshot.appliedAtUtc=[DateTime]::UtcNow.ToString('o'); Save-AzureFixtureManifest $snapshot
+            [pscustomobject]@{status='PASS';environment='dev';tenantCount=$entries.Count;openPayThreeDs='disabled';manifestPath=$fullManifestPath;routesPreserved=$true;razorpaySettingsPreserved=$true} | ConvertTo-Json -Compress
+        }
+        catch {
+            $originalError = $_
+            $recoveryFailures = @()
+            if ($null -ne $snapshot) {
+                foreach ($entry in @($snapshot.entries)) {
+                    try {
+                        [void](Assert-AzureOpenPayBaselineIdentity $entry)
+                        $restore = 'UPDATE payments.PaymentProviders SET Use3DSecure=@value WHERE Id=@id AND TenantId=@tenantId AND ProviderType=''OpenPay'' AND IsProduction=0;'
+                        [void](Invoke-AzureFixtureSql -Database ([string]$entry.businessDatabase) -Query $restore -Parameters @{value=$(if ([bool]$entry.originalThreeDs) {'1'} else {'0'});id=[string]$entry.openPayProviderId;tenantId=[string]$entry.tenantId} -NonQuery)
+                    } catch { $recoveryFailures += [string]$entry.tenantCode }
+                }
+                if ($recoveryFailures.Count -gt 0) {
+                    $snapshot.status='recovery-required'; $snapshot.recoveryFailures=$recoveryFailures; Save-AzureFixtureManifest $snapshot
+                    throw 'OpenPay baseline failed and exact recovery could not be proven. Preserve the manifest and payment-fixture lock; stop payment testing.'
+                }
+                $snapshot.status='failed-restored'; Save-AzureFixtureManifest $snapshot
+            }
+            Remove-Item -LiteralPath $paymentLockPath -ErrorAction SilentlyContinue
+            throw $originalError
+        }
+        finally { $lock.Dispose() }
+        Remove-Item -LiteralPath $paymentLockPath
+        return
+    }
+
+    if ($Action -eq 'RestoreOpenPayBaseline') {
+        if (-not (Test-Path -LiteralPath $fullManifestPath)) { throw 'The exact OpenPay baseline snapshot is required for restore.' }
+        if ((Test-Path -LiteralPath $paymentLockPath) -and (Get-Content -LiteralPath $paymentLockPath -Raw).Trim() -ne $fullManifestPath) { throw 'Another Azure payment fixture or recovery owns the lock.' }
+        $restoreLock = $null
+        if (-not (Test-Path -LiteralPath $paymentLockPath)) {
+            $restoreLock = [IO.File]::Open($paymentLockPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+            $bytes=[Text.Encoding]::UTF8.GetBytes($fullManifestPath)
+            $restoreLock.Write($bytes,0,$bytes.Length)
+        }
+        try {
+            $snapshot = Get-Content -LiteralPath $fullManifestPath -Raw | ConvertFrom-Json -ErrorAction Stop
+            if ($snapshot.schemaVersion -ne 1 -or $snapshot.environment -ne 'dev' -or $snapshot.scope -ne 'azure-dev-openpay-3ds-baseline' -or $snapshot.status -notin @('applied-and-verified','recovery-required')) { throw 'Snapshot is not eligible for OpenPay baseline restoration.' }
+            if ($snapshot.subscriptionId -ne $script:AzureFixtureSubscription -or $snapshot.resourceGroup -ne (Get-AzureFixtureTarget).azureResourceGroupName -or $snapshot.sqlServer -ne (Get-AzureFixtureTarget).azureSqlServerName) { throw 'Azure subscription/resource identity no longer matches the baseline snapshot.' }
+            foreach ($entry in $snapshot.entries) {
+                $currentProvider = Assert-AzureOpenPayBaselineIdentity $entry
+                $allowedCurrentFlags = if ($snapshot.status -eq 'applied-and-verified') { @($false) } else { @($false,[bool]$entry.originalThreeDs) }
+                if ([bool]$currentProvider.threeDs -notin $allowedCurrentFlags) { throw "Current OpenPay 3DS state for '$($entry.tenantCode)' no longer matches the applied baseline/recovery snapshot; refusing to overwrite it." }
+                $restore = 'UPDATE payments.PaymentProviders SET Use3DSecure=@value WHERE Id=@id AND TenantId=@tenantId AND ProviderType=''OpenPay'' AND IsProduction=0;'
+                [void](Invoke-AzureFixtureSql -Database ([string]$entry.businessDatabase) -Query $restore -Parameters @{value=$(if ([bool]$entry.originalThreeDs) {'1'} else {'0'});id=[string]$entry.openPayProviderId;tenantId=[string]$entry.tenantId} -NonQuery)
+            }
+            foreach ($entry in $snapshot.entries) {
+                $provider = Assert-AzureOpenPayBaselineIdentity $entry
+                if ([bool]$provider.threeDs -ne [bool]$entry.originalThreeDs) { throw "OpenPay baseline restoration could not be proven for tenant '$($entry.tenantCode)'." }
+            }
+            $snapshot.status='restored-original'
+            $snapshot | Add-Member -NotePropertyName restoredAtUtc -NotePropertyValue ([DateTime]::UtcNow.ToString('o')) -Force
+            Save-AzureFixtureManifest $snapshot
+            if ($null -ne $restoreLock) { $restoreLock.Dispose(); $restoreLock = $null }
+            Remove-Item -LiteralPath $paymentLockPath
+            [pscustomobject]@{status='RESTORED';tenantCount=@($snapshot.entries).Count;manifestPath=$fullManifestPath} | ConvertTo-Json -Compress
+        }
+        finally { if ($null -ne $restoreLock) { $restoreLock.Dispose() } }
+    }
+}
+
 function Restore-AzureFixtureSnapshot {
     param([Parameter(Mandatory)]$Snapshot)
     if ($Snapshot.schemaVersion -ne 1 -or $Snapshot.environment -ne 'dev') { throw 'Fixture manifest schema/environment is unsupported.' }
@@ -273,6 +425,10 @@ function Wait-AzureFixtureRuntimeRoute {
 function Invoke-AzurePaymentFixture {
     Initialize-AzureFixtureSql
     Initialize-AzureFixtureTopology
+    if ($Action -in @('PlanOpenPayBaseline','ApplyOpenPayBaseline','RestoreOpenPayBaseline')) {
+        Invoke-AzureOpenPayBaseline
+        return
+    }
     if ($Action -eq 'Inspect') {
         $fixtureLock = Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'TestResults/Playwright/azure-https/payment-fixtures') 'azure-payment-fixture.lock'
         if (Test-Path -LiteralPath $fixtureLock) { throw 'An Azure payment fixture lock already exists. Review its manifest and recover it before starting another run.' }
@@ -357,11 +513,23 @@ function Invoke-AzurePaymentFixture {
 }
 
 if (-not $LibraryOnly) {
+    $priorConfirmPreference = $ConfirmPreference
     try {
+        if ($Action -eq 'ApplyOpenPayBaseline') {
+            if ($ApprovalPhrase -cne 'SET AZURE DEV OPENPAY 3DS OFF') { throw 'ApplyOpenPayBaseline requires -ApprovalPhrase "SET AZURE DEV OPENPAY 3DS OFF".' }
+            if (-not $PSCmdlet.ShouldProcess('Azure dev sandbox OpenPay Use3DSecure for all active tenants', 'Apply snapshotted 3DS-off baseline')) { return }
+            $ConfirmPreference = 'None'
+        }
+        elseif ($Action -eq 'RestoreOpenPayBaseline') {
+            if ($ApprovalPhrase -cne 'RESTORE AZURE DEV OPENPAY 3DS BASELINE') { throw 'RestoreOpenPayBaseline requires -ApprovalPhrase "RESTORE AZURE DEV OPENPAY 3DS BASELINE".' }
+            if (-not $PSCmdlet.ShouldProcess('Azure dev sandbox OpenPay Use3DSecure', 'Restore exact pre-baseline values from the selected manifest')) { return }
+            $ConfirmPreference = 'None'
+        }
         Open-AzureFixtureFirewall
         Invoke-AzurePaymentFixture
     }
     finally {
-        Close-AzureFixtureFirewall
+        try { Close-AzureFixtureFirewall }
+        finally { $ConfirmPreference = $priorConfirmPreference }
     }
 }

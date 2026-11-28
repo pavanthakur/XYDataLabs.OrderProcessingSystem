@@ -16,6 +16,7 @@ $script:ThreeDs = 'false'
 $script:ApiBaseUrl = 'https://fixture.azurecontainerapps.io'
 $selfTestDirectory = Join-Path $repoRoot ('TestResults/Playwright/azure-https/fixture-selftest-' + [guid]::NewGuid().ToString('N'))
 $script:ManifestPath = Join-Path $selfTestDirectory 'fixture.json'
+$script:AzureFixtureLockPath = Join-Path $selfTestDirectory 'azure-payment-fixture.lock'
 
 function Get-AzureFixtureTarget {
     return [pscustomobject]@{
@@ -46,6 +47,7 @@ function Get-AzureFixtureTenant {
 function Invoke-AzureFixtureSql {
     param([string]$Database,[string]$Query,[hashtable]$Parameters,[switch]$NonQuery)
     $script:fixtureCalls.Add([pscustomobject]@{ Database = $Database; Query = $Query; Parameters = $Parameters })
+    if ($Query -match "SELECT Code AS TenantCode FROM dbo\.Tenants WHERE Status='Active'") { return @([pscustomobject]@{TenantCode='Clinic-West-47'}) }
     if ($Query -match 'CanUpdatePaymentProviderRoute;') { return @([pscustomobject]@{ TenantTableExists = 1; PaymentProviderCodeColumnExists = 1; CanUpdatePaymentProviderRoute = 1 }) }
     if ($Query -match 'CanUpdateThreeDsFlag;') { return @([pscustomobject]@{ PaymentProvidersTableExists = 1; Use3DSecureColumnExists = 1; CanUpdateThreeDsFlag = 1 }) }
     if ($Query -match 'UPDATE dbo\.Tenants SET PaymentProviderCode') {
@@ -55,7 +57,8 @@ function Invoke-AzureFixtureSql {
     }
     if ($Query -match 'UPDATE payments\.PaymentProviders SET Use3DSecure') {
         if ($Database -ne 'BusinessFixture') { throw 'Provider flag update used the wrong business database.' }
-        $script:fixtureFlags[[string]$Parameters.provider] = ([string]$Parameters.value -eq '1')
+        $providerType = if ($Parameters.ContainsKey('provider')) { [string]$Parameters.provider } else { 'OpenPay' }
+        $script:fixtureFlags[$providerType] = if ($Parameters.ContainsKey('value')) { [string]$Parameters.value -eq '1' } else { $false }
         return 1
     }
     throw 'Unexpected SQL in fixture test.'
@@ -90,12 +93,33 @@ try {
     if ((Get-Content -LiteralPath $script:ManifestPath -Raw | ConvertFrom-Json).status -ne 'restored') { throw 'Restoration evidence was not retained.' }
     if (Test-Path -LiteralPath (Join-Path $selfTestDirectory 'azure-payment-fixture.lock')) { throw 'Successful restore did not release its owned lock.' }
 
+    # The persistent Azure-dev OpenPay baseline must update only OpenPay's flag,
+    # preserve the authoritative route and Razorpay flag, and retain exact recovery.
+    $script:Action = 'PlanOpenPayBaseline'
+    Invoke-AzurePaymentFixture | Out-Null
+    if ($script:fixtureRoute -ne 'OpenPay' -or -not $script:fixtureFlags.OpenPay -or $script:fixtureFlags.Razorpay) { throw 'OpenPay baseline plan unexpectedly mutated provider settings.' }
+
+    $baselineManifest = Join-Path $selfTestDirectory 'openpay-baseline.json'
+    $script:Action = 'ApplyOpenPayBaseline'
+    $script:ManifestPath = $baselineManifest
+    Invoke-AzurePaymentFixture | Out-Null
+    if ($script:fixtureRoute -ne 'OpenPay' -or $script:fixtureFlags.OpenPay -or $script:fixtureFlags.Razorpay) { throw 'OpenPay baseline did not change only the OpenPay 3DS flag.' }
+    $baselineSnapshot = Get-Content -LiteralPath $baselineManifest -Raw | ConvertFrom-Json
+    if ($baselineSnapshot.status -ne 'applied-and-verified' -or -not $baselineSnapshot.entries[0].originalThreeDs) { throw 'OpenPay baseline snapshot does not preserve original state and successful verification.' }
+    if (Test-Path -LiteralPath $script:AzureFixtureLockPath) { throw 'Successful OpenPay baseline left the payment-fixture lock in place.' }
+
+    $script:Action = 'RestoreOpenPayBaseline'
+    Invoke-AzurePaymentFixture | Out-Null
+    if ($script:fixtureRoute -ne 'OpenPay' -or -not $script:fixtureFlags.OpenPay -or $script:fixtureFlags.Razorpay) { throw 'OpenPay baseline recovery did not restore the exact original 3DS values while preserving route/Razorpay state.' }
+    if ((Get-Content -LiteralPath $baselineManifest -Raw | ConvertFrom-Json).status -ne 'restored-original') { throw 'OpenPay baseline restoration evidence was not retained.' }
+    if (Test-Path -LiteralPath $script:AzureFixtureLockPath) { throw 'Successful OpenPay baseline recovery did not release its owned lock.' }
+
     $outside = Join-Path ([IO.Path]::GetTempPath()) ('phase10-fixture-' + [guid]::NewGuid().ToString('N') + '.json')
     $rejected = $false
     $script:ManifestPath = $outside
     try { Assert-AzureFixtureManifestPath | Out-Null } catch { $rejected = $true }
     if (-not $rejected) { throw 'Fixture path traversal/out-of-root manifest was accepted.' }
-    Write-Host 'PASS Azure SQL tag discovery, fixture prepare/restore, shared registry vs dedicated business DB, exact restoration, lock release, and manifest boundary.'
+    Write-Host 'PASS Azure SQL tag discovery, per-case fixture prepare/restore, persistent OpenPay baseline plan/apply/recovery, route and Razorpay preservation, exact restoration, lock release, and manifest boundary.'
 }
 finally {
     if (Test-Path -LiteralPath $selfTestDirectory) { Remove-Item -LiteralPath $selfTestDirectory -Recurse -Force }
